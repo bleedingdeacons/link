@@ -18,9 +18,23 @@
 	              ContentTemplate="{DataTemplate views:SignInPage}"
 	              Route="signin" />
 
+	<!--
+		Text-only tabs, and deliberately so rather than by omission.
+
+		Messages carried Icon="ic_message.png", which does not exist and
+		never did — no such file was ever added under Resources/Images. It
+		failed the way a missing Android drawable always does: silently on
+		screen, and loudly only in logcat, where Glide reported
+		FileNotFoundException on every render. Settings never had one, so
+		the tab bar looked intentional and the log was the only tell.
+
+		Removed rather than replaced. Two text labels read perfectly well,
+		and half an icon set is worse than none; adding real artwork is a
+		design decision, not a fix for a broken reference. If icons are
+		wanted later, both tabs get one in the same change.
+	-->
 	<TabBar x:Name="Tabs">
 		<ShellContent Title="Messages"
-		              Icon="{OnPlatform Android='ic_message.png'}"
 		              ContentTemplate="{DataTemplate views:MessagesPage}"
 		              Route="messages" />
 		<ShellContent Title="Settings"
