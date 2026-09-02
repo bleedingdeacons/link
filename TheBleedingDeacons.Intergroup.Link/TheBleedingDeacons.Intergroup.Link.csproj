@@ -1,0 +1,116 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!--
+			<b>Android only, deliberately, and this is not a placeholder.</b>
+
+			Android was asked for first and the whole push path is built
+			for it: a data-only FCM message the app wakes to and decrypts
+			itself. The iOS head is not merely unbuilt — it needs the
+			Firebase iOS SDK, an APNs key on the Firebase project, the
+			background-fetch entitlement, and Sign in with Apple wired to
+			the platform sheet. Listing `net10.0-ios` here before any of
+			that exists would produce a head that compiles and does not
+			work, which is worse than one that is honestly absent.
+
+			The code is written for both. `Platforms/iOS/PushRegistrar.ios.cs`
+			is already here and the Apple sign-in path already exists in
+			DeviceAuthService and in Fellowship. Adding the TFM back is the
+			last step, not the first. See README.md, "What is not done".
+		-->
+		<TargetFramework>net10.0-android</TargetFramework>
+
+		<OutputType>Exe</OutputType>
+		<RootNamespace>TheBleedingDeacons.Intergroup.Link</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<ApplicationTitle>Link</ApplicationTitle>
+		<ApplicationId>com.thebleedingdeacons.intergroup.link</ApplicationId>
+		<ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>
+	</PropertyGroup>
+
+	<!--
+		Ship one ABI on Release. The Android SDK defaults RuntimeIdentifiers
+		to arm64 plus x64, which nearly doubles the APK for an emulator
+		architecture no member's phone runs. Override on the command line
+		when an x64 emulator build is actually wanted.
+	-->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<MauiXaml Update="**\*.xaml">
+			<Generator>MSBuild:Compile</Generator>
+		</MauiXaml>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The suite's green, not Hand's alert red: Link is the quiet one. -->
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" ForegroundScale="0.65" Color="#2E5E4E" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2E5E4E" BaseSize="128,128" />
+		<MauiImage Include="Resources\Images\*" />
+		<MauiFont Include="Resources\Fonts\*" />
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			appsettings.json says which intergroup this build talks to.
+			Embedded rather than copied, so it cannot be edited on a device
+			to point the app at somebody else's server.
+		-->
+		<EmbeddedResource Include="appsettings.json" LogicalName="appsettings.json" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<!--
+		Firebase Cloud Messaging, Android only. This is what wakes the app
+		for a message it then decrypts itself; see
+		LinkFirebaseMessagingService.
+	-->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<PackageReference Include="Xamarin.Firebase.Messaging" Version="125.1.1" />
+
+		<!--
+			The Firebase project this build registers with.
+
+			<b>Conditional on its own existence, deliberately.</b> The file
+			carries a project's API key and is not committed to a public
+			repository, so a checkout without it must still build — CI has
+			no business depending on a file it cannot have.
+
+			A build without it produces an app that never receives a push.
+			That is a degraded app, not a broken one: every message is
+			collected on the next poll, which is the same guarantee Link
+			gives a phone in a tunnel. Failing the build instead would
+			trade a real, documented limitation for an imaginary one.
+		-->
+		<GoogleServicesJson Include="Platforms\Android\google-services.json" Condition="Exists('Platforms\Android\google-services.json')" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TheBleedingDeacons.Intergroup.Link.Core\TheBleedingDeacons.Intergroup.Link.Core.csproj" />
+	</ItemGroup>
+
+</Project>

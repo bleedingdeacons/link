@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		Unit tests for Link.Core. Same arrangement as Hand's test project,
+		down to the runner: xUnit v3 on Microsoft.Testing.Platform, with
+		coverage collected in CI by the coverlet.console tool.
+
+		It references Link.Core and not the app, because it cannot reference
+		the app — see the note at the top of Link.Core's project file.
+	-->
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- xUnit v3 test projects are executables that host Microsoft.Testing.Platform. -->
+		<OutputType>Exe</OutputType>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<!-- Run through Microsoft.Testing.Platform (not VSTest) under `dotnet test`. -->
+		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+		<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+		<!-- Test project: exempt from the repo's strict analyzer gate. -->
+		<RunAnalyzers>false</RunAnalyzers>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="xunit.v3" Version="3.2.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TheBleedingDeacons.Intergroup.Link.Core\TheBleedingDeacons.Intergroup.Link.Core.csproj" />
+	</ItemGroup>
+
+	<!--
+		The cross-language fixture, copied beside the test binary so
+		MessagePayloadCipherTests can read it at AppContext.BaseDirectory.
+
+		It is real output from Fellowship's PHP sealer rather than
+		something this project built, which is the entire reason it is a
+		file on disk instead of a const in a test. make-fixture.php sits
+		beside it and regenerates it.
+	-->
+	<ItemGroup>
+		<None Include="Fixtures\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>

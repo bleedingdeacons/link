@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:TheBleedingDeacons.Intergroup.Link.Models;assembly=TheBleedingDeacons.Intergroup.Link.Core"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagesPage"
+             x:DataType="vm:MessagesViewModel"
+             Title="Messages">
+
+	<ContentPage.ToolbarItems>
+		<ToolbarItem Text="New" Clicked="OnComposeClicked" />
+	</ContentPage.ToolbarItems>
+
+	<Grid RowDefinitions="Auto,Auto,*">
+
+		<!--
+			The member is looking at a list that is missing something, and
+			without being told they would conclude the message was never
+			sent. The recovery is on Settings.
+		-->
+		<Border Grid.Row="0"
+		        IsVisible="{Binding KeyFault}"
+		        BackgroundColor="{StaticResource Warning}"
+		        Padding="14"
+		        StrokeThickness="0">
+			<Label TextColor="White"
+			       Text="Some messages could not be opened on this phone. Go to Settings and choose 'Fix messages that will not open'." />
+		</Border>
+
+		<Label Grid.Row="1"
+		       IsVisible="{Binding Offline}"
+		       Style="{StaticResource Secondary}"
+		       Padding="16,8"
+		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
+
+		<RefreshView Grid.Row="2"
+		             IsRefreshing="{Binding Busy}"
+		             Command="{Binding RefreshCommand}">
+
+			<CollectionView ItemsSource="{Binding Messages}"
+			                SelectionMode="None">
+
+				<CollectionView.EmptyView>
+					<Grid Padding="32">
+						<Label Style="{StaticResource Secondary}"
+						       HorizontalTextAlignment="Center"
+						       VerticalOptions="Center"
+						       Text="No messages yet. Pull down to check for new ones." />
+					</Grid>
+				</CollectionView.EmptyView>
+
+				<CollectionView.ItemTemplate>
+					<DataTemplate x:DataType="models:LinkMessage">
+						<Border Style="{StaticResource Card}" Margin="12,6" StrokeShape="RoundRectangle 10">
+
+							<Border.GestureRecognizers>
+								<TapGestureRecognizer
+									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenCommand}"
+									CommandParameter="{Binding .}" />
+							</Border.GestureRecognizers>
+
+							<VerticalStackLayout Spacing="4">
+
+								<Grid ColumnDefinitions="*,Auto">
+									<!--
+										Unread is weight, not a coloured dot.
+										It survives being read in sunlight and
+										by someone who cannot distinguish the
+										dot from the background.
+									-->
+									<Label Grid.Column="0"
+									       Text="{Binding Subject}"
+									       LineBreakMode="TailTruncation">
+										<Label.Triggers>
+											<DataTrigger TargetType="Label" Binding="{Binding IsRead}" Value="False">
+												<Setter Property="FontAttributes" Value="Bold" />
+											</DataTrigger>
+										</Label.Triggers>
+									</Label>
+
+									<Label Grid.Column="1"
+									       Style="{StaticResource Secondary}"
+									       Text="{Binding Sent, StringFormat='{0:d MMM}'}" />
+								</Grid>
+
+								<Label Style="{StaticResource Secondary}" Text="{Binding Sender}" />
+
+								<Label Text="{Binding Body}"
+								       MaxLines="3"
+								       LineBreakMode="TailTruncation" />
+
+							</VerticalStackLayout>
+
+						</Border>
+					</DataTemplate>
+				</CollectionView.ItemTemplate>
+
+			</CollectionView>
+
+		</RefreshView>
+
+	</Grid>
+
+</ContentPage>

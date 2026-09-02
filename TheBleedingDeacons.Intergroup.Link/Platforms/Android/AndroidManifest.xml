@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application android:allowBackup="false"
+	             android:icon="@mipmap/appicon"
+	             android:roundIcon="@mipmap/appicon_round"
+	             android:supportsRtl="true">
+		<!--
+			allowBackup is false deliberately.
+
+			Android's auto-backup would copy this app's private data —
+			including the SecureStorage-backed preferences holding the
+			device token and the private key — into the member's Google
+			account, and restore it onto a different handset. That would
+			put a working credential for one member's Fellowship account
+			onto a device the intergroup never enrolled, which is precisely
+			what the enrolment flow exists to prevent.
+
+			The cost is that a member restoring a phone signs in again.
+			That is the correct trade, and it is also the honest one: the
+			private key is device-bound by design, so a restored copy
+			would not be able to open anything anyway.
+		-->
+	</application>
+
+	<!--
+		Push, and the network to poll over. INTERNET is the only permission
+		Link needs to do its job.
+	-->
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+	<!--
+		Android 13 and later ask the member before an app may post a
+		notification. Declared here; MainActivity asks for it at a moment
+		when the request makes sense rather than on first launch.
+	-->
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

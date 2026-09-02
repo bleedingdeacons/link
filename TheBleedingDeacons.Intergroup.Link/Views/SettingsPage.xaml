@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.SettingsPage"
+             x:DataType="vm:SettingsViewModel"
+             Title="Settings">
+
+	<ScrollView>
+		<VerticalStackLayout Padding="16" Spacing="18">
+
+			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+				<VerticalStackLayout Spacing="4">
+					<Label Text="Signed in as" Style="{StaticResource Secondary}" />
+					<Label Text="{Binding MemberName}" FontSize="18" />
+				</VerticalStackLayout>
+			</Border>
+
+			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+				<VerticalStackLayout Spacing="8">
+					<Label Text="Messages on this phone" />
+					<Label Style="{StaticResource Secondary}"
+					       Text="{Binding Held, StringFormat='{0} kept on this handset, encrypted.'}" />
+					<!--
+						The wording matters. "Clear history" reads to most
+						people as "delete the messages", and it is not that.
+						The confirmation says so too.
+					-->
+					<Label Style="{StaticResource Secondary}"
+					       Text="Clearing removes only this phone's copies. Nothing is unsent, and recent messages come back on the next sync." />
+					<Button Text="Clear messages on this phone"
+					        Style="{StaticResource Quiet}"
+					        Command="{Binding ClearHistoryCommand}" />
+				</VerticalStackLayout>
+			</Border>
+
+			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+				<VerticalStackLayout Spacing="8">
+					<Label Text="Messages will not open?" />
+					<Label Style="{StaticResource Secondary}"
+					       Text="This can happen after a phone is restored from a backup, or after the screen lock changes. Getting a new key fixes messages sent from now on." />
+					<Button Text="Fix messages that will not open"
+					        Style="{StaticResource Quiet}"
+					        Command="{Binding ReplaceKeyCommand}" />
+				</VerticalStackLayout>
+			</Border>
+
+			<Button Text="Sign out" Command="{Binding SignOutCommand}" />
+
+			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
+
+			<Label Text="{Binding Notice}"
+			       IsVisible="{Binding HasNotice}"
+			       Style="{StaticResource Secondary}" />
+
+		</VerticalStackLayout>
+	</ScrollView>
+
+</ContentPage>

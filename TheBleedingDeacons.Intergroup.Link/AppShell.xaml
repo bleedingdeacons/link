@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
+       x:Class="TheBleedingDeacons.Intergroup.Link.AppShell"
+       Shell.FlyoutBehavior="Disabled"
+       Title="Link">
+
+	<!--
+		The sign-in page is a ShellContent rather than a modal, and the
+		tab bar below it is hidden until there is a session. A member who
+		is not enrolled has nothing to look at in Messages and nothing to
+		put in Compose, and offering them empty screens is a worse answer
+		than not offering them.
+	-->
+	<ShellContent x:Name="SignIn"
+	              Title="Sign in"
+	              ContentTemplate="{DataTemplate views:SignInPage}"
+	              Route="signin" />
+
+	<TabBar x:Name="Tabs">
+		<ShellContent Title="Messages"
+		              Icon="{OnPlatform Android='ic_message.png'}"
+		              ContentTemplate="{DataTemplate views:MessagesPage}"
+		              Route="messages" />
+		<ShellContent Title="Settings"
+		              ContentTemplate="{DataTemplate views:SettingsPage}"
+		              Route="settings" />
+	</TabBar>
+
+</Shell>

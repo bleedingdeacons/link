@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj" />
+  <Project Path="TheBleedingDeacons.Intergroup.Link.Core/TheBleedingDeacons.Intergroup.Link.Core.csproj" />
+  <Project Path="TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj" />
+</Solution>
