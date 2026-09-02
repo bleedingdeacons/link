@@ -1,12 +1,14 @@
 name: CI
 
-# Four jobs: compile the Android head, run the unit tests, scan, and — only on
-# a green main — cut a version.
+# Five jobs: compile each head, run the unit tests, scan, and — only on a
+# green main — cut a version.
 #
 #  * build    — compile the Android head and run the StyleCop / Meziantou /
 #               Sonar analyzers. Rules escalated to "error" in .editorconfig
 #               fail the build, so this is a real quality gate rather than a
-#               compile check.
+#               compile check. Then builds a Release APK and uploads it.
+#  * ios      — the same for the iOS head, on macOS because nothing else can
+#               build one, and archives an unsigned .ipa.
 #  * test     — run the xUnit v3 suite over Link.Core (the MAUI-free half of
 #               the app) with Coverlet coverage, and upload to Coveralls.
 #               Ubuntu, no workload: Link.Core and its tests are plain
@@ -16,10 +18,27 @@ name: CI
 #               install a JDK and the MAUI workload and Semgrep needs neither.
 #  * version  — bumps the version, and only after all three have passed.
 #
-# <b>Android is the only head, and this workflow does not pretend otherwise.</b>
-# There is no iOS job because there is no iOS head yet — the TFM is not in the
-# csproj. When it goes in, this file gains a macOS job; nothing here is
-# arranged to make that difficult.
+# <b>Both heads are built, and both produce something installable-shaped.</b>
+# This file used to say there was no iOS job because there was no iOS head;
+# there is one now. What the iOS head does *not* have is push — no Firebase
+# iOS SDK, no APNs key — so an iOS build polls, which is a documented working
+# state rather than a broken one. The csproj says the same thing at more
+# length.
+#
+# <b>Neither artifact is a shipping artifact, and both are easy to mistake for
+# one.</b>
+#
+#  * The .ipa is unsigned. An installable one needs an Apple Developer
+#    Program membership, a distribution certificate and a provisioning
+#    profile, none of which exist. It is a compile gate and a re-signable
+#    input, and it installs on nothing as it stands.
+#  * The APK is signed with the runner's throwaway debug keystore, which is
+#    generated fresh and is not the one on any developer machine. It will
+#    therefore refuse to install over a locally built Link with
+#    INSTALL_FAILED_UPDATE_INCOMPATIBLE, and getting past that means
+#    uninstalling — which destroys the handset's private key and takes every
+#    message ever sealed to it with it, permanently. Use a local build for a
+#    handset that is already enrolled.
 #
 # Ported from Hand's ci.yml, deliberately: the two apps are maintained by the
 # same people, share .editorconfig, stylecop.json and Directory.Build.props,
@@ -105,11 +124,117 @@ jobs:
       # Debug config: no code signing (no keystore in the repo) and no release
       # trimming. Analyzer errors from .editorconfig break the build here.
       #
+      #
+      # LinkAndroidOnly narrows TargetFrameworks to the Android head. On a
+      # Linux runner the csproj already resolves to Android alone — only
+      # macOS gets both — so this is belt and braces rather than load-bearing,
+      # and it documents the intent at the call site. It is also a property
+      # that now exists: an earlier version of this step passed it when
+      # nothing defined it, so it narrowed nothing and the comment claiming
+      # otherwise was wrong.
       - name: Build & analyze
         run: >
           dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
           -c Debug
+          -p:LinkAndroidOnly=true
           -p:ContinuousIntegrationBuild=true
+
+      # A separate Release build rather than uploading the Debug output.
+      # Debug means Fast Deployment, which leaves the managed assemblies out
+      # of the APK unless EmbedAssembliesIntoApk is forced — an artifact that
+      # installs, launches and immediately aborts. Release embeds them by
+      # default and strips to one ABI (see the csproj), so it is both correct
+      # and a third the size.
+      - name: Build the APK
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Release
+          -p:LinkAndroidOnly=true
+          -p:ContinuousIntegrationBuild=true
+
+      # -Signed.apk is the one to keep: .NET Android emits an unsigned
+      # intermediate alongside it, and uploading both would leave whoever
+      # downloads them to guess.
+      - name: Upload the APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: link-apk
+          path: TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-android/*-Signed.apk
+          if-no-files-found: error
+          retention-days: 30
+
+  ios:
+    name: Build & archive (net10.0-ios)
+
+    # macOS is not a preference here: the iOS toolchain will not run anywhere
+    # else. Public repository, so GitHub-hosted macOS minutes are free; on a
+    # private one this job would be the expensive part of the workflow.
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      # maui-ios, not maui: the full workload would pull in the Android SDK
+      # and MacCatalyst for a job that builds neither.
+      - name: Install MAUI iOS workload
+        run: dotnet workload install maui-ios
+
+      # Release for a device (ios-arm64), unsigned.
+      #
+      # LinkIosOnly narrows TargetFrameworks to the iOS head. Do NOT reach
+      # for -f net10.0-ios instead: that sets TargetFramework as a global
+      # property and forces it onto Link.Core, which is plain net10.0, and
+      # its restore fails with NU1105.
+      #
+      # LinkUnsigned switches off code signing in the csproj. The device RID
+      # rather than a simulator one is deliberate — a simulator build needs
+      # no signing at all and would be an easier green, but it produces a
+      # .app for an architecture no phone runs, and calling that an iOS
+      # artifact would be a lie the badge could not tell apart.
+      - name: Build the iOS head, unsigned
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Release
+          -p:LinkIosOnly=true
+          -p:LinkUnsigned=true
+          -p:RuntimeIdentifier=ios-arm64
+          -p:ContinuousIntegrationBuild=true
+
+      # An .ipa is a zip with the .app inside a Payload/ directory, and that
+      # is the whole format. Assembled by hand rather than with
+      # ArchiveOnBuild=true, which drives Xcode's archive step and wants a
+      # signing identity — the one thing this job does not have.
+      #
+      # -y keeps symlinks as symlinks. A framework bundle is full of them,
+      # and following them produces an archive that is larger and, on iOS,
+      # wrong.
+      - name: Assemble the .ipa
+        run: |
+          set -euo pipefail
+          app=$(find TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-ios                 -maxdepth 3 -type d -name '*.app' | head -1)
+          if [ -z "$app" ]; then
+            echo 'No .app was produced; nothing to archive.' >&2
+            exit 1
+          fi
+          echo "Archiving $app"
+          mkdir -p archive/Payload
+          cp -R "$app" archive/Payload/
+          (cd archive && zip -qry ../link-unsigned.ipa Payload)
+          ls -la link-unsigned.ipa
+
+      - name: Upload the .ipa
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: link-ipa-unsigned
+          path: link-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
 
   test:
     name: Test & coverage
@@ -209,7 +334,15 @@ jobs:
     # this lived in its own workflow triggered by `push` with no `needs:` at
     # all, so a version was cut whether or not the build, the tests or Semgrep
     # had passed. `needs:` makes a version something only green code gets.
-    needs: [build, test, semgrep]
+    #
+    # `ios` is in here on purpose, and it is the one entry worth arguing
+    # about: a broken iOS head now stops an Android release. That is the
+    # right way round while the two heads share every line of code above the
+    # platform folders — a compile error in Link.Core would break both, and
+    # releasing Android from a tree that does not build is how the iOS head
+    # would quietly rot back to the state this change took it out of. Drop it
+    # from this list the day the iOS head has its own version.
+    needs: [build, ios, test, semgrep]
 
     # main only, and only for a real push - not for pull_request runs of this
     # same workflow, and not for workflow_dispatch.

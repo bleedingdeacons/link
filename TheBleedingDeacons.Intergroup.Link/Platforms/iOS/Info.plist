@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIDeviceFamily</key>
+	<array>
+		<!-- iPhone and iPad. The UI is a two-tab Shell; it does not
+		     assume a phone-sized screen. -->
+		<integer>1</integer>
+		<integer>2</integer>
+	</array>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>XSAppIconAssets</key>
+	<string>Assets.xcassets/appicon.appiconset</string>
+
+	<!--
+		The return leg of Google sign-in.
+
+		This is the iOS half of what WebAuthenticatorCallbackActivity does
+		on Android: it claims the `link` scheme so the system browser can
+		hand `link://auth?...` back to this app. AppDelegate.OpenUrl
+		forwards it to WebAuthenticator from there.
+
+		`link://auth` is internal to Link and Fellowship and is never
+		registered with Google — Google only ever sees Fellowship's HTTPS
+		callback, and would reject a custom scheme on a Web client. See
+		README.md, "The four places `link://auth` is written", which this
+		file is one of.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.thebleedingdeacons.intergroup.link</string>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>link</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -2,23 +2,56 @@
 
 	<PropertyGroup>
 		<!--
-			<b>Android only, deliberately, and this is not a placeholder.</b>
+			<b>Two heads, and the iOS one is honestly partial.</b>
 
 			Android was asked for first and the whole push path is built
 			for it: a data-only FCM message the app wakes to and decrypts
-			itself. The iOS head is not merely unbuilt — it needs the
-			Firebase iOS SDK, an APNs key on the Firebase project, the
-			background-fetch entitlement, and Sign in with Apple wired to
-			the platform sheet. Listing `net10.0-ios` here before any of
-			that exists would produce a head that compiles and does not
-			work, which is worse than one that is honestly absent.
+			itself. The iOS head listed here does <i>not</i> have that. It
+			has no Firebase iOS SDK, no APNs key and no background-fetch
+			entitlement, so an iOS build collects its messages by polling —
+			which is a documented, working state, the same one an Android
+			build without google-services.json is in, and the same one a
+			phone in a tunnel is in. It is not a broken app; it is a slower
+			one. `Platforms/iOS/PushRegistrar.ios.cs` says so at the point
+			where the difference lives.
 
-			The code is written for both. `Platforms/iOS/PushRegistrar.ios.cs`
-			is already here and the Apple sign-in path already exists in
-			DeviceAuthService and in Fellowship. Adding the TFM back is the
-			last step, not the first. See README.md, "What is not done".
+			Sign in with Apple is the sharper gap: `DeviceAuthService` and
+			Fellowship both have the path, but nothing on this side raises
+			the platform sheet to get the token it needs, so an iOS member
+			signs in with Google. That works — WebAuthenticator and the
+			`link` URL scheme are wired in Info.plist below.
+
+			This file previously carried TargetFramework *singular* and an
+			argument for why: listing the TFM before the work was done
+			would produce a head that compiles and does not work. The
+			answer to that objection is that it compiles and does work, at
+			polling speed, and the alternative was an iOS build nobody
+			could produce at all. See README.md, "What is not done", which
+			now states the gap rather than the absence.
+
+			<b>The default is host-aware, so nothing local changes.</b>
+			Only macOS can build an iOS head, so Windows and Linux get
+			Android alone and a bare `dotnet build` behaves exactly as it
+			did. The two narrowing properties are for CI, which wants one
+			head per job; `-f` is still forbidden, because it sets
+			TargetFramework globally and forces the TFM onto Link.Core,
+			breaking its restore with NU1105.
+
+			Order matters below — the last matching condition wins, so an
+			explicit narrowing property beats the host default.
+
+			LinkIosOnly on Windows is more useful than it sounds: the
+			managed half of the iOS head compiles there quite happily
+			(against iossimulator-x64, the Debug default), because only the
+			.app bundle and its native link step need a Mac. So the C# in
+			Platforms/iOS is checkable on a Windows machine even though the
+			artifact is not buildable on one — which is how AppDelegate and
+			Program were verified before CI ever saw them.
 		-->
-		<TargetFramework>net10.0-android</TargetFramework>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('OSX'))">net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">net10.0-android;net10.0-ios</TargetFrameworks>
+		<TargetFrameworks Condition="'$(LinkAndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
+		<TargetFrameworks Condition="'$(LinkIosOnly)' == 'true'">net10.0-ios</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>TheBleedingDeacons.Intergroup.Link</RootNamespace>
@@ -45,6 +78,26 @@
 	<PropertyGroup Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
+	</PropertyGroup>
+
+	<!--
+		Unsigned device builds, for CI.
+
+		An .ipa that anybody can install needs an Apple Developer Program
+		membership, a distribution certificate and a provisioning profile.
+		There is none, so CI archives an unsigned build: a real compile
+		gate and a real artifact, which installs on nothing until it is
+		re-signed. Switching it on later means supplying a certificate and
+		profile to the build, not rearranging it.
+
+		Set by the CI job rather than defaulted here, so a local macOS
+		build with a real signing identity is unaffected.
+	-->
+	<PropertyGroup Condition="'$(LinkUnsigned)' == 'true'">
+		<EnableCodeSigning>false</EnableCodeSigning>
+		<CodesignKey></CodesignKey>
+		<CodesignProvision></CodesignProvision>
+		<DisableCodesignVerification>true</DisableCodesignVerification>
 	</PropertyGroup>
 
 	<ItemGroup>
