@@ -496,7 +496,7 @@ Properties/launchSettings.json
 # not contain a profile with commandName 'MsixPackage'", so a fresh clone
 # cannot debug Windows until someone works out what to write. Register
 # tracks its copy for the same reason.
-!TheBleedingDeacons.Intergroup.Hand/Properties/launchSettings.json
+!TheBleedingDeacons.Intergroup.Link/Properties/launchSettings.json
 
 # google-services.json is ignored by default.
 #
@@ -510,4 +510,4 @@ Properties/launchSettings.json
 # and the build treats it as optional. Un-ignore it deliberately if you
 # would rather CI produce a push-capable APK - and check the key's
 # restrictions in the Google Cloud console first.
-TheBleedingDeacons.Intergroup.Hand/Platforms/Android/google-services.json
+TheBleedingDeacons.Intergroup.Link/Platforms/Android/google-services.json
