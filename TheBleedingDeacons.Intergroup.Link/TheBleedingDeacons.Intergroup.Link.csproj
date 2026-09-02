@@ -67,8 +67,27 @@
 			appsettings.json says which intergroup this build talks to.
 			Embedded rather than copied, so it cannot be edited on a device
 			to point the app at somebody else's server.
+
+			<b>Conditional, and git-ignored, and that is not a convenience.</b>
+			This is the production settings file — the place a credential
+			naturally gets typed. Hand tracked its equivalent on the
+			reasoning that the committed copy held nothing secret, which was
+			true of the file at that moment and wrong about it over time: the
+			first person to configure the app for real put a Better Stack
+			token in it and the next `git add -A` published it. A file that
+			is safe to commit today and is also where secrets get typed is
+			not safe to commit.
+
+			So the build must not require it. LinkServices answers an
+			unconfigured object when the resource is absent and the sign-in
+			screen says the app has not been set up — which is exactly what
+			CI builds, and what proved this was unconditional in the first
+			place.
+
+			appsettings.example.json is tracked instead: same shape, no
+			values.
 		-->
-		<EmbeddedResource Include="appsettings.json" LogicalName="appsettings.json" />
+		<EmbeddedResource Include="appsettings.json" LogicalName="appsettings.json" Condition="Exists('appsettings.json')" />
 	</ItemGroup>
 
 	<ItemGroup>

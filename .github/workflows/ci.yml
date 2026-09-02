@@ -29,14 +29,23 @@ name: CI
 #  * No UseDevCredentials flag. Hand embeds a devsettings.json for a
 #    convenience sign-in path and CI has to switch it off so the shipping path
 #    is what gets analysed. Link has no such path — appsettings.json is the
-#    only configuration and it is embedded unconditionally.
+#    only configuration, and there is one of it.
 #  * No Windows or MacCatalyst jobs. Hand has those heads; Link does not.
 #
-# The one file CI builds without is Platforms/Android/google-services.json,
-# which is git-ignored and guarded with Condition="Exists(...)" in the csproj.
-# A build without it produces an app that polls rather than receiving pushes,
-# which is a documented degraded state rather than a broken build — see the
-# README.
+# CI builds without two git-ignored files, both guarded with
+# Condition="Exists(...)" in the csproj:
+#
+#  * Platforms/Android/google-services.json — the build succeeds and produces
+#    an app that polls rather than receiving pushes, which is a documented
+#    degraded state rather than a broken build.
+#  * appsettings.json — the build succeeds and produces an app whose sign-in
+#    screen says it has not been set up. It holds no secret today, but it is
+#    the file a credential naturally gets typed into, and Hand published a
+#    Better Stack token that way; .gitignore carries the full account.
+#
+# That second guard was missing when this repo was first pushed, and this job
+# is what found it — CS1566, "Error reading resource appsettings.json". Worth
+# recording, because the comment here claimed the guard existed before it did.
 
 on:
   push:
@@ -257,9 +266,32 @@ jobs:
           git commit -am "chore: version ${{ steps.bump.outputs.version }} [skip ci]"
           git push
 
+      # The tag is not decoration: it is how bump-version.sh knows whether
+      # anything has shipped, which is what lets the first release keep the
+      # version in the csproj instead of bumping past it. Written after the
+      # commit so it points at the version it names.
+      #
+      # Guarded against existing, so a re-run of a green release is a no-op
+      # rather than a failure.
+      - name: Tag the release
+        if: steps.bump.outputs.version != ''
+        run: |
+          tag="v${{ steps.bump.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to tag."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "$tag"
+          git push origin "$tag"
+
       - name: Summary
         run: |
-          if [ "${{ steps.bump.outputs.changed }}" = "true" ]; then
+          if [ "${{ steps.bump.outputs.first }}" = "true" ]; then
+            echo "### Version ${{ steps.bump.outputs.version }} (first release)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Adopted from the csproj rather than bumped; tagged v${{ steps.bump.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.bump.outputs.changed }}" = "true" ]; then
             echo "### Version ${{ steps.bump.outputs.version }} (${{ steps.bump.outputs.bump }} bump)" >> "$GITHUB_STEP_SUMMARY"
             echo "Android versionCode ${{ steps.bump.outputs.code }}." >> "$GITHUB_STEP_SUMMARY"
           else

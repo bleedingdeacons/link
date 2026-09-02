@@ -76,6 +76,29 @@ if ! [[ "$base_code" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
+# The first release ships the version already in the csproj rather than
+# bumping past it.
+#
+# Without this the first merge of a `feat:` PR turns 1.0.0 into 1.1.0, and
+# the app's first ever release is a version nobody chose. Fellowship's
+# release job has the same rule for the same reason; the difference is only
+# how "has anything shipped?" is answered, and here it is the tag this
+# workflow writes.
+#
+# Tags are what make this durable. A marker based on "is there a version
+# commit in history" would be wrong on the second run, because the first
+# run makes no commit — there is nothing to commit when the version does
+# not change.
+if [ -z "$(git tag --list 'v[0-9]*')" ]; then
+    echo "No release tag yet; adopting $base_version as the first release."
+    emit changed false
+    emit first true
+    emit version "$base_version"
+    emit code "$base_code"
+    emit bump none
+    exit 0
+fi
+
 # Subjects only. Scanning bodies too would let prose like "reverts the feat:
 # commit" trigger a minor bump.
 subjects="$(git log --no-merges --format='%s' "$RANGE" 2>/dev/null || true)"
@@ -111,6 +134,7 @@ sed -i "s|<ApplicationDisplayVersion>[^<]*</ApplicationDisplayVersion>|<Applicat
 sed -i "s|<ApplicationVersion>[^<]*</ApplicationVersion>|<ApplicationVersion>$new_code</ApplicationVersion>|" "$CSPROJ"
 
 emit changed true
+emit first false
 emit version "$new_version"
 emit code "$new_code"
 emit bump "$bump"
