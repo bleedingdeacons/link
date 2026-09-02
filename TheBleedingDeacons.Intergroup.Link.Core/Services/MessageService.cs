@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging;
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -89,10 +90,20 @@ public sealed class MessageService : IMessageService
 			await _history.SaveAsync(opened, cancellationToken).ConfigureAwait(false);
 		}
 
+		if (opened.Count > 0)
+		{
+			Log.Information("Sync stored {Count} message(s); {Unread} unread", opened.Count, page.Unread);
+		}
+
 		if (unopened > 0)
 		{
 			// Told once per sync, not once per message: a handset whose
 			// key has gone reports a fault, it does not report fifty.
+			Log.Error(
+				"{Unopened} of {Total} message(s) could not be opened; reporting a key fault",
+				unopened,
+				page.Messages.Count);
+
 			await _client.ReportKeyFaultAsync(session.Token, cancellationToken).ConfigureAwait(false);
 		}
 
@@ -116,11 +127,18 @@ public sealed class MessageService : IMessageService
 			privateKey);
 		if (message is null)
 		{
-			// Deliberately quiet. A push that will not open is not a
-			// notification worth raising — the member would get "New
+			// Quiet on screen, not quiet in the log — those are different
+			// decisions, and only the first one was ever intended. A push
+			// that will not open is not a notification worth raising — the member would get "New
 			// message" for something the app cannot show them — and the
 			// next sync reports the key fault properly, with a session
-			// token to hand.
+			// token to hand. But it is the clearest evidence there is that
+			// this handset's key and the intergroup's copy have parted
+			// company, and before there was a log it left none.
+			Log.Error(
+				"A pushed message could not be opened{Detail}",
+				string.IsNullOrEmpty(privateKey) ? "; this handset holds no private key" : string.Empty);
+
 			return null;
 		}
 

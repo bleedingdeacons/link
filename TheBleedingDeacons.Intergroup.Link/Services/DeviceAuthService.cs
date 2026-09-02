@@ -1,3 +1,4 @@
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -37,6 +38,65 @@ public sealed class DeviceAuthService
 		_sessions = sessions;
 		_push = push;
 		_configuration = configuration;
+	}
+
+	/// <summary>
+	/// Re-send this handset's push token, if it has one and is signed in.
+	///
+	/// <para>Called at every launch. See <see cref="App.OnStart"/> for why
+	/// a handset that enrolled before Firebase issued a token would
+	/// otherwise stay poll-only permanently.</para>
+	///
+	/// <para>Sent unconditionally rather than only when it has changed:
+	/// this side cannot know what the server last stored, the call is one
+	/// request at startup, and the failure it guards against is silent and
+	/// permanent. Answers whether anything was sent, for the log.</para>
+	/// </summary>
+	public async Task<bool> RestoreAsync(CancellationToken cancellationToken = default)
+	{
+		var session = await _sessions.LoadAsync().ConfigureAwait(false);
+		if (session is null || !session.IsSignedIn)
+		{
+			return false;
+		}
+
+		var pushToken = await _push.CurrentTokenAsync().ConfigureAwait(false);
+		if (string.IsNullOrEmpty(pushToken))
+		{
+			// Normal on a handset with no Play Services, and normal on one
+			// where Firebase has simply not finished yet. Either way it
+			// polls, and the next launch tries again.
+			Log.Information("No push token available at launch; this handset will poll");
+			return false;
+		}
+
+		return await RegisterPushTokenAsync(pushToken, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Tell Fellowship a push token, from the launch backstop or from a
+	/// rotation the Firebase service heard about.
+	/// </summary>
+	public async Task<bool> RegisterPushTokenAsync(string pushToken, CancellationToken cancellationToken = default)
+	{
+		var session = await _sessions.LoadAsync().ConfigureAwait(false);
+		if (session is null || !session.IsSignedIn)
+		{
+			return false;
+		}
+
+		var ok = await _client.UpdatePushTokenAsync(session.Token, pushToken, cancellationToken).ConfigureAwait(false);
+
+		if (ok)
+		{
+			Log.Information("Push token registered with the intergroup");
+		}
+		else
+		{
+			Log.Warning("Push token could not be registered; this handset will poll until the next attempt");
+		}
+
+		return ok;
 	}
 
 	/// <summary>
@@ -196,9 +256,17 @@ public sealed class DeviceAuthService
 		if (result.Succeeded && result.Session is not null)
 		{
 			await _sessions.SaveAsync(result.Session).ConfigureAwait(false);
+
+			Log.Information(
+				"Enrolled as device {DeviceId} for member {MemberId}; push {Push}",
+				result.Session.DeviceId,
+				result.Session.MemberId,
+				string.IsNullOrEmpty(pushToken) ? "unavailable (polling)" : "registered");
 		}
 		else
 		{
+			Log.Warning("Enrolment refused: {Reason}", string.IsNullOrEmpty(result.Error) ? "cancelled" : result.Error);
+
 			// Enrolment failed after a keypair was generated. Clearing it
 			// keeps "has a key" and "is enrolled" in step, so a retry does
 			// not present a key the server never accepted.
