@@ -185,13 +185,29 @@ history over the same file, whose write lock is per-instance.
 
 Stated plainly rather than left to be discovered.
 
-**iOS.** The TFM is not in the csproj — deliberately, because listing it
-before the work is done produces a head that compiles and does not work.
-`Platforms/iOS/PushRegistrar.ios.cs` is already here and answers "poll
-only", and the Apple sign-in path exists in `DeviceAuthService` and in
-Fellowship. What is missing: the Firebase iOS SDK, an APNs key on the
-Firebase project, the background-fetch entitlement, and Sign in with
-Apple wired to the platform sheet.
+**iOS push, and Sign in with Apple.** The TFM is in the csproj now and CI
+builds the head, so this entry is about what that head lacks rather than
+about its absence.
+
+It does not push. There is no Firebase iOS SDK, no APNs key on the
+Firebase project and no background-fetch entitlement, so
+`PushRegistrar.ios.cs` answers empty and an iOS build collects its
+messages by polling. That is the same documented state as an Android
+build without `google-services.json`, and the same one a phone in a
+tunnel is in: every message arrives, on the poll interval rather than at
+once.
+
+It does not offer Sign in with Apple. `DeviceAuthService.SignInWithAppleAsync`
+and Fellowship's half both exist, but nothing on this side raises the
+platform sheet to get the identity token they need, so an iOS member
+signs in with Google — which works, because WebAuthenticator and the
+`link` scheme are wired in `Platforms/iOS/Info.plist` and `AppDelegate`.
+
+**A signed .ipa.** CI archives an unsigned one. Making it installable
+needs an Apple Developer Program membership, a distribution certificate
+and a provisioning profile; the csproj's `LinkUnsigned` property is the
+switch, and turning it off means supplying those to the build rather than
+rearranging anything.
 
 **Hardware-backed keys.** `DeviceKeyStore` generates the keypair in
 managed code and keeps the private half in `SecureStorage`, which on
@@ -259,6 +275,24 @@ had before any of this existed.
 dotnet build TheBleedingDeacons.Intergroup.Link -p:LinkAndroidOnly=true -p:EmbedAssembliesIntoApk=true
 ```
 
+`LinkAndroidOnly` narrows the build to the Android head. It is belt and
+braces on Windows and Linux, where the csproj already resolves to Android
+alone — only macOS gets both heads by default — and it is load-bearing on
+a Mac. `LinkIosOnly` is its opposite number. Do **not** reach for
+`-f net10.0-ios` instead: that sets `TargetFramework` as a global
+property, forces the TFM onto `Link.Core`, and breaks its restore with
+NU1105.
+
+The property is new. This command has carried `-p:LinkAndroidOnly=true`
+since the repo was ported from Hand, where nothing defined it and it
+narrowed nothing at all — the same silent no-op the CI workflow was
+caught passing. It does something now.
+
+A Windows machine can compile the managed half of the iOS head
+(`-p:LinkIosOnly=true`) but cannot produce the `.app` bundle, which needs
+a Mac. That is enough to catch a compile error in `Platforms/iOS`, and
+not enough to produce an artifact.
+
 `EmbedAssembliesIntoApk=true` is not optional for a Debug device build.
 Fast Deployment — the .NET Android default in Debug — leaves the managed
 assemblies out of the APK, and Hand documents at length how that produces
@@ -279,6 +313,24 @@ dotnet test TheBleedingDeacons.Intergroup.Link.Tests
 
 No workload needed — the test project and Link.Core are plain net10.0.
 
+### What CI produces
+
+Two artifacts on every run, `link-apk` and `link-ipa-unsigned`, kept for
+30 days. **Neither is a shipping artifact**, and both are easy to mistake
+for one:
+
+* **The .ipa is unsigned.** It installs on nothing until it is re-signed.
+  It is a compile gate for the iOS head and an input to whatever does the
+  signing later.
+* **The APK is signed with the runner's throwaway debug keystore**, which
+  is generated fresh on each run and is not the one on any developer
+  machine. It will refuse to install over a locally built Link with
+  `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, and the only way past that is
+  `adb uninstall` — **which destroys the handset's private key**, and with
+  it every message ever sealed to that handset, permanently. Nobody can
+  re-seal them: Fellowship holds only the public half. Use a local build
+  for a handset that is already enrolled.
+
 ## The four places `link://auth` is written
 
 The custom scheme has to agree in four places, and a mismatch shows up as
@@ -287,8 +339,19 @@ say why:
 
 1. `appsettings.json` → `CallbackUrl`
 2. `Platforms/Android/WebAuthenticatorCallbackActivity.cs` → the intent filter
-3. Fellowship's `DeviceRedirectValidator` → the allow-list
-4. The redirect URI registered with Google
+3. `Platforms/iOS/Info.plist` → `CFBundleURLTypes`
+4. Fellowship's `DeviceRedirectValidator` → the allow-list
+
+**Google is not one of them, and this list used to say it was.** The
+redirect URI registered with the OAuth client is Fellowship's own HTTPS
+callback; Google never sees `link://auth` and would reject a custom
+scheme on a Web application client if offered one. The scheme is internal
+to Link and Fellowship, and only the last leg — Fellowship handing the
+one-time code back to the handset — travels over it.
+
+Entry 3 is why an iOS build can sign in at all. It is the platform
+counterpart of entry 2, and without it the browser leg completes and the
+answer lands nowhere.
 
 What travels that way is a one-time code, never a token. A custom scheme
 can in principle be claimed by another app on the device, which is
