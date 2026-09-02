@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
@@ -150,6 +151,61 @@ public sealed class MessageServiceTests
 		Assert.NotNull(message);
 		Assert.Equal(Sealing.ExpectedId, message.Id);
 		Assert.Single(history.Held);
+	}
+
+	[Fact]
+	public async Task APushedMessageAnnouncesItselfSoTheListCanRedraw()
+	{
+		// The list only reloads on OnAppearing or a pull, so without this
+		// announcement a message arriving while somebody is looking at the
+		// list leaves the screen stale — which is what happened on a real
+		// handset: notification posted, message stored, list still saying
+		// "No messages yet".
+		var sealed_ = Sealing.Seal();
+		var history = new FakeHistory();
+
+		MessageReceived? heard = null;
+		var token = new object();
+		WeakReferenceMessenger.Default.Register<MessageReceived>(token, (_, m) => heard = m);
+
+		try
+		{
+			await Service(new FakeClient(), history, sealed_.PrivateKeyPem)
+				.ReceivePushAsync(sealed_.WrappedKey, sealed_.Payload);
+
+			Assert.NotNull(heard);
+			Assert.Equal(Sealing.ExpectedId, heard.Message.Id);
+
+			// Announced only after the save, so a subscriber that reloads
+			// from the history finds it there rather than racing it.
+			Assert.Single(history.Held);
+		}
+		finally
+		{
+			WeakReferenceMessenger.Default.UnregisterAll(token);
+		}
+	}
+
+	[Fact]
+	public async Task APushThatCannotBeOpenedAnnouncesNothing()
+	{
+		var sealed_ = Sealing.Seal();
+
+		var heard = 0;
+		var token = new object();
+		WeakReferenceMessenger.Default.Register<MessageReceived>(token, (_, _) => heard++);
+
+		try
+		{
+			await Service(new FakeClient(), new FakeHistory(), privateKey: string.Empty)
+				.ReceivePushAsync(sealed_.WrappedKey, sealed_.Payload);
+
+			Assert.Equal(0, heard);
+		}
+		finally
+		{
+			WeakReferenceMessenger.Default.UnregisterAll(token);
+		}
 	}
 
 	[Fact]

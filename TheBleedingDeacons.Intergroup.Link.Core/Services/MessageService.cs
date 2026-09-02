@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -124,6 +125,18 @@ public sealed class MessageService : IMessageService
 		}
 
 		await _history.SaveAsync([message], cancellationToken).ConfigureAwait(false);
+
+		// Tell whoever is on screen. Without this the list goes on showing
+		// what it loaded when the page appeared, which is wrong in exactly
+		// the case that matters most — a message arriving while somebody is
+		// looking at it.
+		//
+		// Sent after the save, so a subscriber that reloads from the history
+		// finds the message there. Sent on this thread, which is a
+		// background one and possibly the push service's: subscribers
+		// marshal to the UI themselves rather than this guessing there is a
+		// UI to marshal to.
+		WeakReferenceMessenger.Default.Send(new MessageReceived(message));
 
 		return message;
 	}

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -20,11 +21,23 @@ public sealed partial class MessagesViewModel : ObservableObject
 {
 	private readonly IMessageService _messages;
 	private readonly IMessageHistory _history;
+	private readonly IUiDispatcher _dispatcher;
 
-	public MessagesViewModel(IMessageService messages, IMessageHistory history)
+	public MessagesViewModel(IMessageService messages, IMessageHistory history, IUiDispatcher dispatcher)
 	{
 		_messages = messages;
 		_history = history;
+		_dispatcher = dispatcher;
+
+		// A pushed message announces itself; see MessageReceived. The
+		// handler arrives on whichever thread the push service used, so it
+		// hops to the UI before touching an ObservableCollection.
+		//
+		// WeakReferenceMessenger holds this only weakly, and this view model
+		// is a singleton for the app's lifetime, so there is nothing to
+		// unregister and no leak to create by not doing so.
+		WeakReferenceMessenger.Default.Register<MessageReceived>(this, (_, _) =>
+			_dispatcher.Invoke(() => _ = LoadAsync()));
 	}
 
 	public ObservableCollection<LinkMessage> Messages { get; } = [];
@@ -116,7 +129,7 @@ public sealed partial class MessagesViewModel : ObservableObject
 		}
 	}
 
-	private async Task LoadAsync()
+	internal async Task LoadAsync()
 	{
 		var held = await _history.AllAsync().ConfigureAwait(true);
 
