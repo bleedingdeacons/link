@@ -91,13 +91,16 @@ jobs:
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
 
-      # Single build with implicit restore. LinkAndroidOnly=true trims the app
-      # to just the net10.0-android head, so only the Android graph is restored
-      # and built — no iOS/MacCatalyst workloads needed on this runner. Still do
-      # NOT pass -f net10.0-android instead: that sets TargetFramework as a
-      # global property, which would force the TFM onto any net10.0-only project
-      # in the tree and break its restore (NU1105). The flag narrows only this
-      # project's TargetFrameworks.
+      # Single build with implicit restore. No narrowing flag is needed or
+      # accepted: the csproj carries TargetFramework *singular*, net10.0-android,
+      # because the iOS head is deliberately not listed until it works. An
+      # earlier version of this step passed -p:LinkAndroidOnly=true, copied from
+      # Hand — a property this project does not define, so it narrowed nothing
+      # and the comment claiming it did was wrong.
+      #
+      # Still do NOT pass -f net10.0-android: that sets TargetFramework as a
+      # global property, which would force the TFM onto Link.Core and break its
+      # restore (NU1105). Nothing needs it here anyway.
       #
       # Debug config: no code signing (no keystore in the repo) and no release
       # trimming. Analyzer errors from .editorconfig break the build here.
@@ -106,7 +109,6 @@ jobs:
         run: >
           dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
           -c Debug
-          -p:LinkAndroidOnly=true
           -p:ContinuousIntegrationBuild=true
 
   test:
