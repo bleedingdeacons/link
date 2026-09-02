@@ -1,3 +1,4 @@
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -36,15 +37,31 @@ internal static class HeadlessMessages
 
 	/// <summary>
 	/// Tell Fellowship this handset's new FCM registration token.
+	///
+	/// <para>Built here rather than resolved, for the reason this whole
+	/// class exists: there may be no MAUI host. Constructed from
+	/// <see cref="LinkServices"/> so it is the same graph the app has —
+	/// <see cref="DeviceAuthService"/> holds no state of its own, so a
+	/// second one costs nothing and disagrees with the first about
+	/// nothing.</para>
+	///
+	/// <para>Delegating rather than repeating the two lines it takes is
+	/// the point. The launch backstop and this rotation callback are the
+	/// two ways a token reaches Fellowship, and they must not drift —
+	/// this one used to be its own copy, which is how it came to lack the
+	/// logging the other has.</para>
 	/// </summary>
-	public static async Task ReportPushToken(string token)
+	public static Task ReportPushToken(string token)
 	{
-		var session = await LinkServices.Sessions.LoadAsync().ConfigureAwait(false);
-		if (session is null || !session.IsSignedIn)
-		{
-			return;
-		}
+		Log.Information("Firebase issued a new push token; registering it");
 
-		await LinkServices.Client.UpdatePushTokenAsync(session.Token, token).ConfigureAwait(false);
+		var auth = new DeviceAuthService(
+			LinkServices.Client,
+			LinkServices.Keys,
+			LinkServices.Sessions,
+			LinkServices.Push,
+			LinkServices.Configuration);
+
+		return auth.RegisterPushTokenAsync(token);
 	}
 }

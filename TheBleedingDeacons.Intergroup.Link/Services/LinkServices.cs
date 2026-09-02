@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -167,6 +168,8 @@ public static class LinkServices
 			// unconfigured object rather than throwing means the sign-in
 			// screen can say "this app has not been set up" instead of the
 			// app failing to start.
+			Log.Error(e, "appsettings.json could not be read; this build has no intergroup to talk to");
+
 			return new FellowshipConfiguration();
 		}
 	}
@@ -197,13 +200,14 @@ public static class LinkServices
 				SecureStorage.SetAsync(HistoryKeyName, toStore).GetAwaiter().GetResult();
 			}
 #pragma warning disable CA1031 // Deliberately broad: see below.
-			catch (Exception)
+			catch (Exception e)
 #pragma warning restore CA1031
 			{
 				// A key that cannot be stored means a history that does not
 				// survive a restart — the next launch generates a new key and
 				// the old file reads as empty. That is a lost cache, not a
 				// crash, and refusing to start over it would be worse.
+				Log.Warning(e, "The history key could not be stored; this device's message history will not survive a restart");
 			}
 		}
 
@@ -217,13 +221,15 @@ public static class LinkServices
 			return SecureStorage.GetAsync(HistoryKeyName).GetAwaiter().GetResult();
 		}
 #pragma warning disable CA1031 // Deliberately broad: see BuildHistory.
-		catch (Exception)
+		catch (Exception e)
 #pragma warning restore CA1031
 		{
 			// Unreadable for any reason — a keystore whose key was
 			// invalidated, a platform that threw rather than answering null.
 			// All of them mean "no usable key", and BuildHistory makes a new
 			// one.
+			Log.Warning(e, "The history key could not be read; the stored history will read as empty");
+
 			return null;
 		}
 	}

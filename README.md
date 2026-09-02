@@ -100,7 +100,22 @@ something the rest of the app has to know.
 
 The message list is drawn from the local history first and synced
 afterwards, so the app opens instantly, works offline, and does not blank
-itself when a poll fails.
+itself when a poll fails. A message that arrives by push while the list
+is on screen redraws it, which it did not originally — the notification
+appeared, the message was stored, and the list went on saying "No
+messages yet" until the page was navigated away from and back.
+
+**The token is re-registered at every launch**, and that backstop is not
+decoration. Enrolment sends whatever token Firebase has issued by then
+and proceeds happily without one, because a handset with no Play Services
+must still be able to enrol and poll. Nothing afterwards ever sent it:
+`OnNewToken` fires on *rotation*, and a handset whose token simply was
+not ready at enrolment never heard from it. That handset stayed poll-only
+permanently while looking perfectly healthy from both ends — enrolled in
+Fellowship's device list, collecting its messages, just always a poll
+interval late. `App.OnStart` now calls `DeviceAuthService.RestoreAsync`,
+which sends the current token unconditionally rather than trying to guess
+what the server last stored.
 
 ## The clearable history
 
@@ -203,6 +218,40 @@ every existing message.
 photo cannot travel in the envelope at all, so it would need a
 fetch-on-open path — a sealed blob the app collects over HTTPS after
 being told about it — which does not exist yet.
+
+## What it says about itself
+
+Serilog, to a rolling daily file under the app's data directory
+(`logs/link-<date>.log`, seven days kept) and, in Debug, to the IDE.
+
+Link shipped without any of this and the first real fault proved the
+cost: the evidence available was a screenshot and Android's own log,
+because the app had no account of itself. Several paths swallow
+exceptions on purpose — throwing out of `OnMessageReceived` kills the
+process Android started to deliver the message, and the message is safe
+on the server either way — and "swallowed" had quietly come to mean
+"swallowed without trace". The catches still swallow; they no longer do
+it silently.
+
+Deliberately **no remote sink**, which is where this differs from Hand.
+Hand's failure is a helpline alert that does not ring, and somebody who
+is not holding the phone needs to see that. Link's failure is a late
+message. Shipping a log-ingestion token in the app to watch for one would
+be a credential in every APK for no proportionate benefit, so the file is
+pulled with adb when somebody is diagnosing:
+
+```
+adb -s <serial> exec-out run-as com.thebleedingdeacons.intergroup.link cat files/logs/link-<date>.log
+```
+
+`run-as` works because Debug builds are debuggable; a Release build's
+logs are not reachable this way.
+
+The one thing the logger must never do is become a source of failure
+itself, so `SetupSerilog` cannot throw: a sink that will not build leaves
+Serilog's silent default, and every `Log.*` call downstream becomes a
+no-op rather than a null reference — which is exactly the behaviour Link
+had before any of this existed.
 
 ## Building
 

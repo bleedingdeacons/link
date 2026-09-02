@@ -3,6 +3,7 @@ using Android.Content;
 using Android.OS;
 using AndroidX.Core.App;
 using Firebase.Messaging;
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 using AndroidApp = Android.App.Application;
@@ -110,20 +111,28 @@ public sealed class LinkFirebaseMessagingService : FirebaseMessagingService
 
 			Notify(stored);
 		}
-		catch (TimeoutException)
+		catch (TimeoutException ex)
 		{
 			// Past the budget. The message is on the server and the next
 			// poll will fetch it.
+			Log.Warning(ex, "A pushed message took longer than {Budget} to deliver; leaving it for the poll", DeliveryBudget);
 		}
 #pragma warning disable CA1031 // Deliberately broad: see below.
-		catch (Exception)
+		catch (Exception ex)
 #pragma warning restore CA1031
 		{
-			// Swallowed on purpose. Throwing out of OnMessageReceived kills
-			// the process Android started to deliver this message, and the
-			// message is already safe on the server — the next poll fetches
-			// it. There is nowhere to report to from here that is not itself
-			// a thing that can throw.
+			// Still swallowed, and for the unchanged reason: throwing out
+			// of OnMessageReceived kills the process Android started to
+			// deliver this message, and the message is already safe on the
+			// server — the next poll fetches it.
+			//
+			// What has changed is that it is no longer swallowed *without
+			// trace*. The original comment said there was nowhere to report
+			// to that was not itself a thing that can throw, and that was
+			// true when it was written; the sink built in
+			// MauiProgram.SetupSerilog cannot throw back at us, so writing
+			// here does not reintroduce the hazard it was guarding against.
+			Log.Error(ex, "A pushed message could not be delivered; the poll will collect it");
 		}
 	}
 
@@ -146,7 +155,10 @@ public sealed class LinkFirebaseMessagingService : FirebaseMessagingService
 		// Deprecated upstream with no replacement in this binding.
 		// Overriding it is the only way to hear about a rotation promptly;
 		// the backstop is that DeviceAuthService sends the current token
-		// at every enrolment, and the poll covers the gap either way.
+		// at every enrolment *and at every launch*, and the poll covers
+		// the gap either way. The launch half matters more than it looks:
+		// this callback fires on rotation, so a handset whose token was
+		// simply not ready at enrolment never heard from it at all.
 #pragma warning disable CS0618
 		base.OnNewToken(token);
 #pragma warning restore CS0618
@@ -156,13 +168,15 @@ public sealed class LinkFirebaseMessagingService : FirebaseMessagingService
 			HeadlessMessages.ReportPushToken(token).WaitAsync(DeliveryBudget).GetAwaiter().GetResult();
 		}
 #pragma warning disable CA1031 // Deliberately broad: see below.
-		catch (Exception)
+		catch (Exception ex)
 #pragma warning restore CA1031
 		{
-			// Swallowed for the same reason as above. A token that did not
-			// reach Fellowship means pushes go to the old one and stop
-			// arriving; polling covers it until the next enrolment or the
-			// next rotation.
+			// Swallowed for the same reason as above, and now recorded for
+			// the same reason too. A token that did not reach Fellowship
+			// means pushes go to the old one and stop arriving; polling
+			// covers it, and the next launch retries it — which is what
+			// App.OnStart is for.
+			Log.Error(ex, "A rotated push token could not be registered; this handset will poll until the next launch");
 		}
 	}
 
