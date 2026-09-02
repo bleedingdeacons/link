@@ -1,0 +1,8 @@
+# Shell scripts must be LF whatever the checkout platform does. CI runs
+# .github/scripts/*.sh through bash, and a CRLF line ending there fails with
+# a carriage return in every command ("command not found" on a line that
+# plainly exists), which is a miserable thing to debug from a runner log.
+#
+# Scoped to *.sh deliberately: a repo-wide `* text=auto`, as Register has,
+# would renormalise every file in the repo in one unrelated commit.
+*.sh text eol=lf
