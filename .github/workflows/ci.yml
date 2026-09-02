@@ -169,7 +169,13 @@ jobs:
     # macOS is not a preference here: the iOS toolchain will not run anywhere
     # else. Public repository, so GitHub-hosted macOS minutes are free; on a
     # private one this job would be the expensive part of the workflow.
-    runs-on: macos-15
+    #
+    # macos-26, not macos-15. The .NET for iOS SDK pins the Xcode it will
+    # build against and refuses anything older -- 26.5.10315 wants Xcode 26.6,
+    # and the macos-15 image tops out at 16.4, which fails at the first
+    # target with a clear message and no build. macos-26 ships 26.6 as its
+    # default.
+    runs-on: macos-26
 
     steps:
       - name: Checkout
@@ -179,6 +185,28 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+
+      # Pinned rather than left to the image default, which is 26.6 today
+      # and is not promised to stay there. The .NET for iOS SDK refuses an
+      # Xcode older than it expects, so the day the image moves this job
+      # either keeps working or says exactly which version it wanted --
+      # `xcodebuild -version` in the log is what makes that readable.
+      #
+      # Falls back to the newest installed Xcode rather than failing, so an
+      # image that has moved on gets one honest attempt before the .NET SDK
+      # gives its own verdict.
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          wanted=/Applications/Xcode_26.6.app
+          if [ ! -d "$wanted" ]; then
+            echo "Xcode 26.6 is not on this image; falling back to the newest installed."
+            ls -d /Applications/Xcode*.app || true
+            wanted=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          fi
+          echo "Selecting $wanted"
+          sudo xcode-select -s "$wanted"
+          xcodebuild -version
 
       # maui-ios, not maui: the full workload would pull in the Android SDK
       # and MacCatalyst for a job that builds neither.
