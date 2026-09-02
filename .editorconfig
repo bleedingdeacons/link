@@ -1,0 +1,122 @@
+# EditorConfig for the register-owned projects.
+# https://editorconfig.org  +  Roslyn analyzer severity overrides.
+#
+# Enforcement policy (set up alongside CI):
+#   * StyleCop.Analyzers + Meziantou.Analyzer run on every build (see
+#     Directory.Build.props).
+#   * A small, curated set of high-value, behaviour-safe rules is escalated
+#     to *error* so CI fails on them.
+#   * Purely cosmetic / convention-conflicting rules are turned off (the
+#     codebase deliberately uses tabs and _camelCase fields, and does not
+#     use file headers, this.-prefixes or mandatory XML docs).
+#   * A few correctness rules that need per-call-site judgement are left at
+#     *warning* so they stay visible without breaking the build.
+
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+end_of_line = crlf
+
+# ─────────────────────────────────────────────────────────────────────────
+# ENFORCED — build-breaking errors (curated, behaviour-safe when fixed)
+# ─────────────────────────────────────────────────────────────────────────
+
+# Meziantou
+dotnet_diagnostic.MA0002.severity = error   # Use an overload with IEqualityComparer/IComparer<string>
+dotnet_diagnostic.MA0009.severity = error   # Add a regex timeout (ReDoS protection)
+dotnet_diagnostic.MA0049.severity = error   # Type name should not match its namespace
+dotnet_diagnostic.MA0074.severity = error   # Use an explicit StringComparison
+
+# StyleCop
+dotnet_diagnostic.SA1400.severity = error   # Access modifier must be declared explicitly
+
+# ─────────────────────────────────────────────────────────────────────────
+# VISIBLE — correctness rules kept as warnings (need per-site judgement)
+# ─────────────────────────────────────────────────────────────────────────
+dotnet_diagnostic.MA0011.severity = warning # Use an explicit IFormatProvider
+
+# ─────────────────────────────────────────────────────────────────────────
+# DISABLED — cosmetic / convention-conflicting StyleCop rules
+# ─────────────────────────────────────────────────────────────────────────
+dotnet_diagnostic.SA1027.severity = none    # Tabs — this codebase uses tabs by design
+dotnet_diagnostic.SA1101.severity = none    # Prefix local calls with this.
+dotnet_diagnostic.SA1309.severity = none    # Field must not begin with _ (we use _camelCase)
+dotnet_diagnostic.SA1600.severity = none    # Elements should be documented
+dotnet_diagnostic.SA1601.severity = none    # Partial elements should be documented
+dotnet_diagnostic.SA1602.severity = none    # Enumeration items should be documented
+dotnet_diagnostic.SA1611.severity = none    # Element parameters should be documented
+dotnet_diagnostic.SA1615.severity = none    # Element return value should be documented
+dotnet_diagnostic.SA1618.severity = none    # Generic type parameters should be documented
+dotnet_diagnostic.SA1623.severity = none    # Property summary wording
+dotnet_diagnostic.SA1629.severity = none    # Documentation should end with a period
+dotnet_diagnostic.SA1633.severity = none    # File header
+dotnet_diagnostic.SA0001.severity = none    # XML comment analysis disabled
+dotnet_diagnostic.SA1005.severity = none    # Single line comment spacing
+dotnet_diagnostic.SA1009.severity = none    # Closing parenthesis spacing
+dotnet_diagnostic.SA1012.severity = none    # Opening brace spacing
+dotnet_diagnostic.SA1013.severity = none    # Closing brace spacing
+dotnet_diagnostic.SA1025.severity = none    # Consecutive whitespace
+dotnet_diagnostic.SA1028.severity = none    # Trailing whitespace
+dotnet_diagnostic.SA1107.severity = none    # Multiple statements on one line
+dotnet_diagnostic.SA1111.severity = none    # Closing parenthesis placement
+dotnet_diagnostic.SA1116.severity = none    # Split parameters onto their own lines
+dotnet_diagnostic.SA1117.severity = none    # Parameters all on one/separate lines
+dotnet_diagnostic.SA1118.severity = none    # Parameter spans multiple lines
+dotnet_diagnostic.SA1122.severity = none    # Use string.Empty instead of ""
+dotnet_diagnostic.SA1124.severity = none    # Do not use regions
+dotnet_diagnostic.SA1127.severity = none    # Generic constraints on own line
+dotnet_diagnostic.SA1128.severity = none    # Constructor initializer on own line
+dotnet_diagnostic.SA1133.severity = none    # Each attribute on its own line
+dotnet_diagnostic.SA1136.severity = none    # Enum values on separate lines
+dotnet_diagnostic.SA1201.severity = none    # Elements ordering (kind)
+dotnet_diagnostic.SA1202.severity = none    # Elements ordering (access)
+dotnet_diagnostic.SA1203.severity = none    # Constants before fields
+dotnet_diagnostic.SA1204.severity = none    # Static before instance
+dotnet_diagnostic.SA1208.severity = none    # System usings first
+dotnet_diagnostic.SA1210.severity = none    # Usings ordered alphabetically
+dotnet_diagnostic.SA1211.severity = none    # Using aliases ordering
+dotnet_diagnostic.SA1300.severity = none    # Element must begin with uppercase
+dotnet_diagnostic.SA1307.severity = none    # Field must begin with uppercase
+dotnet_diagnostic.SA1310.severity = none    # Field must not contain underscore
+dotnet_diagnostic.SA1316.severity = none    # Tuple element names
+dotnet_diagnostic.SA1401.severity = none    # Fields must be private
+dotnet_diagnostic.SA1402.severity = none    # One type per file
+dotnet_diagnostic.SA1413.severity = none    # Trailing comma in multi-line initializers
+dotnet_diagnostic.SA1500.severity = none    # Braces for multi-line statements
+dotnet_diagnostic.SA1501.severity = none    # Statement must not be on single line
+dotnet_diagnostic.SA1502.severity = none    # Element must not be on single line
+dotnet_diagnostic.SA1503.severity = none    # Braces must not be omitted
+dotnet_diagnostic.SA1505.severity = none    # Opening brace not followed by blank line
+dotnet_diagnostic.SA1507.severity = none    # No multiple blank lines
+dotnet_diagnostic.SA1508.severity = none    # Closing brace not preceded by blank line
+dotnet_diagnostic.SA1512.severity = none    # Single-line comment not followed by blank line
+dotnet_diagnostic.SA1513.severity = none    # Closing brace followed by blank line
+dotnet_diagnostic.SA1514.severity = none    # Doc header preceded by blank line
+dotnet_diagnostic.SA1515.severity = none    # Single-line comment preceded by blank line
+dotnet_diagnostic.SA1516.severity = none    # Blank lines between elements
+dotnet_diagnostic.SA1518.severity = none    # Newline at end of file
+dotnet_diagnostic.SA1519.severity = none    # Braces for multi-line blocks
+dotnet_diagnostic.SA1649.severity = none    # File name must match first type
+
+# ─────────────────────────────────────────────────────────────────────────
+# DISABLED — Meziantou rules that don't fit this codebase / are opinionated
+# ─────────────────────────────────────────────────────────────────────────
+dotnet_diagnostic.MA0004.severity = none    # ConfigureAwait(false) — not wanted in MAUI UI code
+dotnet_diagnostic.MA0006.severity = none    # Use string.Equals instead of ==/!=
+dotnet_diagnostic.MA0016.severity = none    # Prefer returning a collection abstraction
+dotnet_diagnostic.MA0023.severity = none    # Add RegexOptions.ExplicitCapture
+dotnet_diagnostic.MA0025.severity = none    # NotImplementedException placeholders (intentional)
+dotnet_diagnostic.MA0048.severity = none    # File name must match type name
+dotnet_diagnostic.MA0051.severity = none    # Method is too long
+dotnet_diagnostic.MA0055.severity = none    # Do not use finalizer
+dotnet_diagnostic.MA0134.severity = none    # Observe result of Task-returning method
+dotnet_diagnostic.MA0147.severity = none    # Avoid async void handler
+dotnet_diagnostic.MA0158.severity = none    # Use System.Threading.Lock

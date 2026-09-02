@@ -1,0 +1,300 @@
+name: CI
+
+# Four jobs: compile the Android head, run the unit tests, scan, and — only on
+# a green main — cut a version.
+#
+#  * build    — compile the Android head and run the StyleCop / Meziantou /
+#               Sonar analyzers. Rules escalated to "error" in .editorconfig
+#               fail the build, so this is a real quality gate rather than a
+#               compile check.
+#  * test     — run the xUnit v3 suite over Link.Core (the MAUI-free half of
+#               the app) with Coverlet coverage, and upload to Coveralls.
+#               Ubuntu, no workload: Link.Core and its tests are plain
+#               net10.0, which is the entire reason that split exists — see
+#               Link.Core's project file.
+#  * semgrep  — a job of its own rather than a step, because the other jobs
+#               install a JDK and the MAUI workload and Semgrep needs neither.
+#  * version  — bumps the version, and only after all three have passed.
+#
+# <b>Android is the only head, and this workflow does not pretend otherwise.</b>
+# There is no iOS job because there is no iOS head yet — the TFM is not in the
+# csproj. When it goes in, this file gains a macOS job; nothing here is
+# arranged to make that difficult.
+#
+# Ported from Hand's ci.yml, deliberately: the two apps are maintained by the
+# same people, share .editorconfig, stylecop.json and Directory.Build.props,
+# and a second CI dialect would only mean two sets of habits. Two things
+# Hand's workflow carries that are absent here, so nobody "restores parity":
+#
+#  * No UseDevCredentials flag. Hand embeds a devsettings.json for a
+#    convenience sign-in path and CI has to switch it off so the shipping path
+#    is what gets analysed. Link has no such path — appsettings.json is the
+#    only configuration, and there is one of it.
+#  * No Windows or MacCatalyst jobs. Hand has those heads; Link does not.
+#
+# CI builds without two git-ignored files, both guarded with
+# Condition="Exists(...)" in the csproj:
+#
+#  * Platforms/Android/google-services.json — the build succeeds and produces
+#    an app that polls rather than receiving pushes, which is a documented
+#    degraded state rather than a broken build.
+#  * appsettings.json — the build succeeds and produces an app whose sign-in
+#    screen says it has not been set up. It holds no secret today, but it is
+#    the file a credential naturally gets typed into, and Hand published a
+#    Better Stack token that way; .gitignore carries the full account.
+#
+# That second guard was missing when this repo was first pushed, and this job
+# is what found it — CS1566, "Error reading resource appsettings.json". Worth
+# recording, because the comment here claimed the guard existed before it did.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Pull request runs share one group per ref, so pushing again cancels the
+# superseded run and saves runner minutes. Runs on main get a group of their
+# own (run_id is unique) and so cancel nothing: the version job below lives
+# in this workflow now, and a cancelled run would drop a version bump
+# entirely. Same shape the PHP plugin suite uses.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & analyze (net10.0-android)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # JDK 21: what .NET 10's Android SDK builds against, and what the Android
+      # SDK's API 36 tooling expects.
+      - name: Setup JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      # Single build with implicit restore. LinkAndroidOnly=true trims the app
+      # to just the net10.0-android head, so only the Android graph is restored
+      # and built — no iOS/MacCatalyst workloads needed on this runner. Still do
+      # NOT pass -f net10.0-android instead: that sets TargetFramework as a
+      # global property, which would force the TFM onto any net10.0-only project
+      # in the tree and break its restore (NU1105). The flag narrows only this
+      # project's TargetFrameworks.
+      #
+      # Debug config: no code signing (no keystore in the repo) and no release
+      # trimming. Analyzer errors from .editorconfig break the build here.
+      #
+      - name: Build & analyze
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Debug
+          -p:LinkAndroidOnly=true
+          -p:ContinuousIntegrationBuild=true
+
+  test:
+    name: Test & coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore local tools (coverlet.console)
+        run: dotnet tool restore
+
+      # No MAUI workload and no JDK: Link.Core and its test project are plain
+      # net10.0. Building the test project pulls Link.Core in with it.
+      - name: Build tests
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj
+          -c Debug
+
+      # xUnit v3 runs on Microsoft.Testing.Platform, so the test project is an
+      # executable. coverlet.console instruments Link.Core and runs that test
+      # host, producing a Cobertura report. (coverlet's collector / msbuild
+      # integrations hook VSTest, which MTP does not use — hence the tool.)
+      #
+      # --include narrows the report to Link.Core: the test assembly and the
+      # NuGet dependencies are not what this number is about. The app project
+      # is not in it either, because nothing can reference it — that is what
+      # the split is for, and what the README says the badge covers.
+      #
+      # --exclude-by-attribute Obsolete leaves deprecated code out of the
+      # figure. Writing tests for something already marked for removal would
+      # move the number without improving anything, and leaving it in would
+      # penalise the deprecation instead of the debt.
+      - name: Test with coverage
+        run: >
+          dotnet coverlet TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll
+          --target dotnet
+          --targetargs "TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll"
+          --format cobertura
+          --output coverage/coverage.cobertura.xml
+          --include "[TheBleedingDeacons.Intergroup.Link.Core]*"
+          --exclude-by-attribute Obsolete
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+        with:
+          # Public repo: the built-in GITHUB_TOKEN authenticates the upload,
+          # so no separate Coveralls token/secret is required.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: coverage/coverage.cobertura.xml
+          format: cobertura
+          fail-on-error: false
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+
+    # A job of its own, rather than a step inside the build as the PHP plugins
+    # do it. There the scan is a step because it has to fail before
+    # `composer install`; here the surrounding jobs install a JDK, the .NET SDK
+    # and the MAUI Android workload, none of which Semgrep needs. A
+    # separate job runs in parallel and reports on its own terms.
+    #
+    # `semgrep ci` is diff-aware on a pull request, so it fails only on what
+    # that PR introduces. Which findings are fatal is decided by the Block
+    # remediation policy in Semgrep - currently Critical or High severity Code
+    # findings - not by anything in this file.
+    #
+    # The version job below has this job in its `needs:`, so a red Semgrep on
+    # main stops a version being cut, the same way `release: needs: ci` works
+    # in the PHP plugin suite.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Semgrep
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          if [ -z "${SEMGREP_APP_TOKEN:-}" ]; then
+            echo 'SEMGREP_APP_TOKEN is not set - skipping the scan.'
+            echo 'Set it as an organisation secret to enable this gate.'
+            exit 0
+          fi
+          python3 -m pip install --quiet semgrep==1.174.0
+          semgrep ci
+
+  version:
+    name: Bump version
+    # The whole point of this change: the bump now waits on every gate. Before,
+    # this lived in its own workflow triggered by `push` with no `needs:` at
+    # all, so a version was cut whether or not the build, the tests or Semgrep
+    # had passed. `needs:` makes a version something only green code gets.
+    needs: [build, test, semgrep]
+
+    # main only, and only for a real push - not for pull_request runs of this
+    # same workflow, and not for workflow_dispatch.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    runs-on: ubuntu-latest
+
+    # The workflow default is contents: read; pushing the version commit needs
+    # write, asked for here so nothing else in this file gets it.
+    permissions:
+      contents: write
+
+    # Serialise. Two merges landing close together must not race to compute the
+    # same next version. Deliberately not cancel-in-progress: a cancelled run
+    # would drop a bump entirely.
+    concurrency:
+      group: version-main
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the bump is derived by walking the commits this push
+          # brought in.
+          fetch-depth: 0
+
+      - name: Compute and apply the bump
+        id: bump
+        # Invoked through bash rather than directly: this repo is authored on
+        # Windows, where git frequently does not record the executable bit, and
+        # a missing +x would fail the run for a reason nothing in the diff shows.
+        #
+        # github.event.before is the tip main had before this push. It is
+        # all-zeros on a branch's first push, and can point at a commit this
+        # clone does not have after a force-push, so fall back to HEAD~1.
+        run: |
+          before="${{ github.event.before }}"
+          if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${before}^{commit}" 2>/dev/null; then
+            echo "No usable github.event.before; falling back to HEAD~1."
+            before="HEAD~1"
+          fi
+          bash .github/scripts/bump-version.sh "${before}..HEAD"
+
+      - name: Commit the new version
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # [skip ci] so this push does not re-run the build jobs against a
+          # commit whose only change is a version string. The script also
+          # refuses to bump when HEAD is already a version commit, so the loop
+          # is closed twice over — belt and braces, because a runaway here
+          # would bump on every iteration.
+          git commit -am "chore: version ${{ steps.bump.outputs.version }} [skip ci]"
+          git push
+
+      # The tag is not decoration: it is how bump-version.sh knows whether
+      # anything has shipped, which is what lets the first release keep the
+      # version in the csproj instead of bumping past it. Written after the
+      # commit so it points at the version it names.
+      #
+      # Guarded against existing, so a re-run of a green release is a no-op
+      # rather than a failure.
+      - name: Tag the release
+        if: steps.bump.outputs.version != ''
+        run: |
+          tag="v${{ steps.bump.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists; nothing to tag."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "$tag"
+          git push origin "$tag"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.bump.outputs.first }}" = "true" ]; then
+            echo "### Version ${{ steps.bump.outputs.version }} (first release)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Adopted from the csproj rather than bumped; tagged v${{ steps.bump.outputs.version }}." >> "$GITHUB_STEP_SUMMARY"
+          elif [ "${{ steps.bump.outputs.changed }}" = "true" ]; then
+            echo "### Version ${{ steps.bump.outputs.version }} (${{ steps.bump.outputs.bump }} bump)" >> "$GITHUB_STEP_SUMMARY"
+            echo "Android versionCode ${{ steps.bump.outputs.code }}." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### Version unchanged" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing to version in this push." >> "$GITHUB_STEP_SUMMARY"
+          fi

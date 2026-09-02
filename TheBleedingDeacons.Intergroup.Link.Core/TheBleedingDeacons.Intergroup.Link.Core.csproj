@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		The half of Link that has nothing to do with MAUI.
+
+		Everything here is plain .NET: the wire models, the Fellowship REST
+		client, the payload cipher, the message store. It exists as its own
+		net10.0 library for one reason — a test project cannot reference the
+		app. The app's target frameworks are net10.0-android and -ios; a
+		net10.0 test host has no compatible framework to resolve against,
+		and there is no such thing as a net10.0 head of a MAUI app. So the
+		testable code has to live somewhere a test project can actually see
+		it, and this is that somewhere. Hand reached the same arrangement
+		for the same reason.
+
+		<b>What may live here: anything that does not touch MAUI.</b> The
+		line is not stylistic — the moment a file references Preferences,
+		SecureStorage, FileSystem, MainThread, WebAuthenticator or any
+		Microsoft.Maui type it stops compiling here, because those
+		assemblies come from the MAUI workload and this project does not
+		have it.
+
+		That constraint is why the interesting parts came across. The cipher
+		takes a PEM string rather than reaching into SecureStorage; the
+		message store takes a directory path rather than FileSystem; the
+		client takes an HttpMessageHandler. Each of those seams exists so a
+		test can drive it, and each of them is the seam a platform detail
+		would otherwise have been welded across.
+
+		What deliberately stayed in the app:
+
+		  * ConfigurationService  — Preferences and SecureStorage.
+		  * DeviceAuthService     — WebAuthenticator and DeviceInfo.
+		  * DeviceKeyStore        — SecureStorage for the private key.
+		  * PushRegistrar         — partial, per-head Firebase.
+		  * Views, ViewModels, MauiProgram — MAUI by definition.
+	-->
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<RootNamespace>TheBleedingDeacons.Intergroup.Link</RootNamespace>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<IsPackable>false</IsPackable>
+	</PropertyGroup>
+
+	<!--
+		The same package versions the app pins. They are not inherited —
+		this project is referenced by the app, so a lower version here would
+		be lifted by the app's own reference and a higher one would silently
+		raise the app's. Keeping them written out means a bump has to be
+		made in both places on purpose rather than happening as a side
+		effect, and NuGet says so if they ever disagree.
+	-->
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+</Project>

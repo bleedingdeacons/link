@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.SignInPage"
+             x:DataType="vm:SignInViewModel"
+             Title="Link">
+
+	<ContentPage.Resources>
+		<toolkit:InvertedBoolConverter x:Key="Not" />
+	</ContentPage.Resources>
+
+	<Grid RowDefinitions="*,Auto,*" Padding="28">
+
+		<VerticalStackLayout Grid.Row="1" Spacing="18">
+
+			<Label Text="Link" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+
+			<Label Style="{StaticResource Secondary}"
+			       HorizontalTextAlignment="Center"
+			       Text="Messages from your intergroup, and to the members and committees in it." />
+
+			<!--
+				Said before the button, not after a failure. Sign-in
+				matches on the address the intergroup already holds, and a
+				member who signs in with a different Google account will
+				be refused — which is far less annoying to read here than
+				to discover.
+			-->
+			<Label Style="{StaticResource Secondary}"
+			       HorizontalTextAlignment="Center"
+			       Text="Sign in with the email address your intergroup has for you." />
+
+			<Button Text="Sign in with Google"
+			        Command="{Binding SignInWithGoogleCommand}"
+			        IsVisible="{Binding IsConfigured}" />
+
+			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
+
+			<Label Text="{Binding Error}"
+			       IsVisible="{Binding HasError}"
+			       TextColor="{StaticResource Warning}"
+			       HorizontalTextAlignment="Center" />
+
+			<Label IsVisible="{Binding IsConfigured, Converter={StaticResource Not}}"
+			       TextColor="{StaticResource Warning}"
+			       HorizontalTextAlignment="Center"
+			       Text="This copy of Link has not been set up with an intergroup address. Ask whoever gave it to you for a configured build." />
+
+		</VerticalStackLayout>
+
+	</Grid>
+
+</ContentPage>

@@ -486,7 +486,7 @@ Properties/launchSettings.json
 # nothing left to trade off.
 #
 # appsettings.example.json is tracked instead: same shape, no values.
-!TheBleedingDeacons.Intergroup.Hand/appsettings.example.json
+!TheBleedingDeacons.Intergroup.Link/appsettings.example.json
 
 # launchSettings.json is normally ignored (line 427) because it usually
 # holds developer-local settings - ports, environment variables, machine
