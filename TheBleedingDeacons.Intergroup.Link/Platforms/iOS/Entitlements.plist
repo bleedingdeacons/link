@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		Sign in with Apple.
+
+		Only applied when the build asks for it (-p:LinkAppleSignIn=true),
+		because a free personal team cannot sign an app that requests this
+		entitlement — the install fails outright rather than degrading. A
+		sideloaded build is signed by exactly such a team, so applying it
+		unconditionally would break the only route Link currently has onto
+		an iPhone.
+	-->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

@@ -128,6 +128,19 @@ public sealed record EnrolmentResult
 
 	public static EnrolmentResult Failed(string error) => new() { Error = error };
 
+	/// <summary>
+	/// The member changed their mind, which is not a failure.
+	///
+	/// <para>An empty error has always meant this — the sign-in screen
+	/// shows nothing rather than accusing somebody of a fault they did
+	/// not commit — but it meant it by convention, discoverable only from
+	/// a comment in one view model. Apple's sheet made cancelling common
+	/// enough to be worth naming, since it is the ordinary way to back
+	/// out of a system dialog rather than the rare way to abandon a
+	/// browser tab.</para>
+	/// </summary>
+	public static EnrolmentResult Cancelled() => new();
+
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
 }
 

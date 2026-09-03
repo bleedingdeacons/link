@@ -24,6 +24,7 @@ public sealed class DeviceAuthService
 	private readonly IDeviceKeyStore _keys;
 	private readonly ISessionStore _sessions;
 	private readonly IPushRegistrar _push;
+	private readonly IAppleSignIn _apple;
 	private readonly FellowshipConfiguration _configuration;
 
 	public DeviceAuthService(
@@ -31,8 +32,10 @@ public sealed class DeviceAuthService
 		IDeviceKeyStore keys,
 		ISessionStore sessions,
 		IPushRegistrar push,
+		IAppleSignIn apple,
 		FellowshipConfiguration configuration)
 	{
+		_apple = apple;
 		_client = client;
 		_keys = keys;
 		_sessions = sessions;
@@ -192,6 +195,47 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public Task<SignInStart?> StartAppleAsync(CancellationToken cancellationToken = default) =>
 		_client.StartSignInAsync("apple", cancellationToken);
+
+	/// <summary>
+	/// Whether this build can offer Sign in with Apple at all.
+	/// </summary>
+	public bool IsAppleAvailable => _apple.IsAvailable;
+
+	/// <summary>
+	/// Sign in with Apple, end to end: ask Fellowship for a nonce, raise
+	/// the platform sheet, enrol with what it hands back.
+	///
+	/// <para>The counterpart of <see cref="SignInWithGoogleAsync"/>, and
+	/// deliberately the same shape despite having no browser leg — the
+	/// caller should not have to know which provider needs one.</para>
+	///
+	/// <para><b>Cancelling is not an error.</b> The sheet returning
+	/// nothing is overwhelmingly a member changing their mind, and the
+	/// screen says nothing rather than accusing them of a failure. That is
+	/// why this returns a distinct silent result instead of reusing
+	/// <c>EnrolmentResult.Failed</c> with an empty message.</para>
+	/// </summary>
+	public async Task<EnrolmentResult> SignInWithAppleAsync(CancellationToken cancellationToken = default)
+	{
+		if (!_apple.IsAvailable)
+		{
+			return EnrolmentResult.Failed("This device cannot sign in with Apple.");
+		}
+
+		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
+		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
+		{
+			return EnrolmentResult.Failed("The intergroup is not set up for Apple sign-in.");
+		}
+
+		var idToken = await _apple.GetIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
+		if (string.IsNullOrEmpty(idToken))
+		{
+			return EnrolmentResult.Cancelled();
+		}
+
+		return await SignInWithAppleAsync(idToken, start.State, cancellationToken).ConfigureAwait(false);
+	}
 
 	/// <summary>
 	/// Sign out: tell the server, then forget everything.

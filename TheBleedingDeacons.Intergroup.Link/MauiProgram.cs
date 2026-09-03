@@ -42,6 +42,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton(LinkServices.Messages);
 		builder.Services.AddSingleton(LinkServices.Push);
 		builder.Services.AddSingleton<IUiDispatcher, MainThreadDispatcher>();
+		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
 
 		builder.Services.AddSingleton<SignInViewModel>();

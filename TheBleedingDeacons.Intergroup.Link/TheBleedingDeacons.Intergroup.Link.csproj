@@ -87,6 +87,28 @@
 	</PropertyGroup>
 
 	<!--
+		Sign in with Apple, off by default.
+
+		<b>The entitlement is the whole reason this is a switch.</b>
+		com.apple.developer.applesignin is only grantable to a paid Apple
+		Developer Program team. A free personal team — which is what signs
+		a sideloaded build, and currently the only way Link reaches an
+		iPhone at all — cannot sign an app that requests it, and the
+		install fails outright rather than degrading. So asking for it
+		unconditionally would trade a working sideload for a feature that
+		still would not work.
+
+		LINK_APPLE_SIGNIN also decides whether AppleSignIn reports itself
+		available, so the button is absent from a build that could not
+		honour it rather than present and permanently broken. The two must
+		move together, which is why one property sets both.
+	-->
+	<PropertyGroup Condition="'$(LinkAppleSignIn)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
+		<DefineConstants>$(DefineConstants);LINK_APPLE_SIGNIN</DefineConstants>
+	</PropertyGroup>
+
+	<!--
 		Unsigned device builds, for CI.
 
 		An .ipa that anybody can install needs an Apple Developer Program
