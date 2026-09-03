@@ -275,10 +275,11 @@ had before any of this existed.
 dotnet build TheBleedingDeacons.Intergroup.Link -p:LinkAndroidOnly=true -p:EmbedAssembliesIntoApk=true
 ```
 
-`LinkAndroidOnly` narrows the build to the Android head. It is belt and
-braces on Windows and Linux, where the csproj already resolves to Android
-alone — only macOS gets both heads by default — and it is load-bearing on
-a Mac. `LinkIosOnly` is its opposite number. Do **not** reach for
+`LinkAndroidOnly` narrows the build to the Android head, and on Windows
+and macOS it is load-bearing rather than decorative: both resolve to
+*both* heads by default, so a bare `dotnet build` builds each of them.
+Only Linux gets Android alone, because there is no maui-ios workload for
+it. `LinkIosOnly` is the opposite number. Do **not** reach for
 `-f net10.0-ios` instead: that sets `TargetFramework` as a global
 property, forces the TFM onto `Link.Core`, and breaks its restore with
 NU1105.
@@ -288,10 +289,11 @@ since the repo was ported from Hand, where nothing defined it and it
 narrowed nothing at all — the same silent no-op the CI workflow was
 caught passing. It does something now.
 
-A Windows machine can compile the managed half of the iOS head
-(`-p:LinkIosOnly=true`) but cannot produce the `.app` bundle, which needs
-a Mac. That is enough to catch a compile error in `Platforms/iOS`, and
-not enough to produce an artifact.
+A Windows machine compiles the managed half of the iOS head but cannot
+produce the `.app` bundle, which needs a Mac for the native link and the
+asset catalog. That is enough to catch a compile error in
+`Platforms/iOS`, and not enough to produce an artifact — see Hot Restart
+below for what it *can* do.
 
 `EmbedAssembliesIntoApk=true` is not optional for a Debug device build.
 Fast Deployment — the .NET Android default in Debug — leaves the managed
@@ -312,6 +314,40 @@ dotnet test TheBleedingDeacons.Intergroup.Link.Tests
 ```
 
 No workload needed — the test project and Link.Core are plain net10.0.
+
+### Running on a real iPhone from Windows
+
+There is no Mac in this setup, so the iOS dev loop is **Visual Studio's
+iOS Hot Restart**: VS compiles the managed code on Windows and pushes it
+into an app bundle on a tethered device, signed with a free Apple ID. No
+Mac, no `.ipa`, no Developer Program.
+
+It needs, all of which are checkable before you start:
+
+* Visual Studio with the .NET MAUI workload, and the `ios` workload in
+  `dotnet workload list`
+* **Desktop iTunes, the 64-bit build from Apple** — not the Microsoft
+  Store version, which does not install the device drivers
+* Apple Mobile Device Support (comes with the above)
+* An Apple ID added to Visual Studio, and the iPhone trusted to this PC
+
+Then: select the tethered device from the debug target dropdown and run.
+VS registers the bundle id under your personal team and provisions it the
+first time.
+
+**What it costs, and none of it is a surprise once said out loud:**
+
+* **Debug only.** Hot Restart cannot produce a Release build.
+* **The signature expires after 7 days** on a free Apple ID. The app
+  stops launching until it is deployed again. This is Apple's limit, not
+  a Link one.
+* **No push, ever, on a free account.** APNs keys need a paid Developer
+  Program membership, so an iOS build signed this way polls — which is
+  what the iOS head does anyway today, for the separate reason that there
+  is no Firebase iOS SDK in it. The two limits happen to agree.
+* **The tab bar and sign-in are the point.** What Hot Restart is good for
+  is proving the UI, the Google browser leg and the `link` scheme return
+  work on a real handset. It is not a way to hand Link to a member.
 
 ### What CI produces
 
