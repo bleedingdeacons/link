@@ -316,8 +316,23 @@ No workload needed — the test project and Link.Core are plain net10.0.
 ### What CI produces
 
 Two artifacts on every run, `link-apk` and `link-ipa-unsigned`, kept for
-30 days. **Neither is a shipping artifact**, and both are easy to mistake
-for one:
+30 days.
+
+Both are built against the **`LINK_BASE_URL`** repository variable, which
+CI writes into `appsettings.json` before compiling. Without it the
+artifacts came out with no idea which intergroup they belonged to — which
+is fine for a build nobody installs and useless the moment one reaches a
+phone, as the first sideloaded `.ipa` demonstrated by opening, offering
+Google sign-in, and failing on every call after it. Only `BaseUrl` is
+written; `CallbackUrl` and `PollSeconds` come from the defaults in
+`FellowshipConfiguration`, so the callback scheme gains no fifth place to
+disagree with itself. The file still never enters git.
+
+Unset the variable and the old behaviour returns: a build that succeeds
+and a sign-in screen that says the app has not been set up. That is what
+a fork gets.
+
+**Neither is a shipping artifact**, and both are easy to mistake for one:
 
 * **The .ipa is unsigned.** It installs on nothing until it is re-signed.
   It is a compile gate for the iOS head and an input to whatever does the
