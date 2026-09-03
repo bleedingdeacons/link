@@ -57,14 +57,22 @@ name: CI
 #  * Platforms/Android/google-services.json — the build succeeds and produces
 #    an app that polls rather than receiving pushes, which is a documented
 #    degraded state rather than a broken build.
-#  * appsettings.json — the build succeeds and produces an app whose sign-in
-#    screen says it has not been set up. It holds no secret today, but it is
-#    the file a credential naturally gets typed into, and Hand published a
-#    Better Stack token that way; .gitignore carries the full account.
+#  * appsettings.json — **written by the build now**, from the LINK_BASE_URL
+#    repository variable, because an artifact somebody installs has to know
+#    which intergroup it belongs to. Without the variable the behaviour is
+#    the old one: the build succeeds and the sign-in screen says the app has
+#    not been set up. The file still never enters git — it is where a
+#    credential naturally gets typed, and Hand published a Better Stack token
+#    exactly that way; .gitignore carries the full account.
 #
 # That second guard was missing when this repo was first pushed, and this job
 # is what found it — CS1566, "Error reading resource appsettings.json". Worth
 # recording, because the comment here claimed the guard existed before it did.
+#
+# The unconfigured artifact was found the same way: by installing one. It
+# reached a real iPhone, opened, offered Google sign-in and then failed on
+# every call, because nothing had ever needed CI's output to be a working
+# app before.
 
 on:
   push:
@@ -124,6 +132,50 @@ jobs:
       # Debug config: no code signing (no keystore in the repo) and no release
       # trimming. Analyzer errors from .editorconfig break the build here.
       #
+      # appsettings.json is git-ignored, so a checkout never has one, and
+      # until now neither did any artifact CI produced. That was correct for
+      # a build nobody installed and wrong the moment these artifacts became
+      # something to put on a phone: the app came up with no idea which
+      # intergroup it belonged to, and every call that needed a server URL
+      # failed after sign-in rather than before it.
+      #
+      # Written from a repository *variable*, not a secret. The test bed's
+      # address is public and appears in this repo's README; pretending
+      # otherwise would buy nothing and make it harder to change. What the
+      # variable buys is that the file still never enters git -- which is the
+      # actual rule, because appsettings.json is where a credential naturally
+      # gets typed and Hand published a Better Stack token exactly that way.
+      #
+      # Only BaseUrl is written. CallbackUrl defaults to link://auth in
+      # FellowshipConfiguration and PollSeconds to 120, so naming them here
+      # would add a fifth place for the callback scheme to disagree with
+      # itself -- see README.md, "The four places link://auth is written".
+      #
+      # Unset is not a failure. A fork, or this repo before the variable
+      # existed, builds exactly as it did before and produces an artifact
+      # whose sign-in screen says the app has not been set up.
+      - name: Write appsettings.json
+        env:
+          BASE_URL: ${{ vars.LINK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo 'LINK_BASE_URL is not set; building unconfigured.'
+            echo 'The artifact will run, and its sign-in screen will say so.'
+            exit 0
+          fi
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
+          esac
+          case "$BASE_URL" in
+            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
+          esac
+          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
+            > TheBleedingDeacons.Intergroup.Link/appsettings.json
+          echo 'Wrote:'
+          cat TheBleedingDeacons.Intergroup.Link/appsettings.json
+
       #
       # LinkAndroidOnly narrows TargetFrameworks to the Android head. On a
       # Linux runner the csproj already resolves to Android alone — only
@@ -212,6 +264,50 @@ jobs:
       # and MacCatalyst for a job that builds neither.
       - name: Install MAUI iOS workload
         run: dotnet workload install maui-ios
+
+      # appsettings.json is git-ignored, so a checkout never has one, and
+      # until now neither did any artifact CI produced. That was correct for
+      # a build nobody installed and wrong the moment these artifacts became
+      # something to put on a phone: the app came up with no idea which
+      # intergroup it belonged to, and every call that needed a server URL
+      # failed after sign-in rather than before it.
+      #
+      # Written from a repository *variable*, not a secret. The test bed's
+      # address is public and appears in this repo's README; pretending
+      # otherwise would buy nothing and make it harder to change. What the
+      # variable buys is that the file still never enters git -- which is the
+      # actual rule, because appsettings.json is where a credential naturally
+      # gets typed and Hand published a Better Stack token exactly that way.
+      #
+      # Only BaseUrl is written. CallbackUrl defaults to link://auth in
+      # FellowshipConfiguration and PollSeconds to 120, so naming them here
+      # would add a fifth place for the callback scheme to disagree with
+      # itself -- see README.md, "The four places link://auth is written".
+      #
+      # Unset is not a failure. A fork, or this repo before the variable
+      # existed, builds exactly as it did before and produces an artifact
+      # whose sign-in screen says the app has not been set up.
+      - name: Write appsettings.json
+        env:
+          BASE_URL: ${{ vars.LINK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo 'LINK_BASE_URL is not set; building unconfigured.'
+            echo 'The artifact will run, and its sign-in screen will say so.'
+            exit 0
+          fi
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
+          esac
+          case "$BASE_URL" in
+            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
+          esac
+          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
+            > TheBleedingDeacons.Intergroup.Link/appsettings.json
+          echo 'Wrote:'
+          cat TheBleedingDeacons.Intergroup.Link/appsettings.json
 
       # Release for a device (ios-arm64), unsigned.
       #
