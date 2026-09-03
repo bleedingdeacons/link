@@ -29,27 +29,33 @@
 			could produce at all. See README.md, "What is not done", which
 			now states the gap rather than the absence.
 
-			<b>The default is host-aware, so nothing local changes.</b>
-			Only macOS can build an iOS head, so Windows and Linux get
-			Android alone and a bare `dotnet build` behaves exactly as it
-			did. The two narrowing properties are for CI, which wants one
-			head per job; `-f` is still forbidden, because it sets
-			TargetFramework globally and forces the TFM onto Link.Core,
-			breaking its restore with NU1105.
+			<b>The default is host-aware, and the line is Linux, not
+			Windows.</b> Windows has a real iOS toolchain: it compiles the
+			managed half unaided, and Visual Studio's iOS Hot Restart
+			deploys a Debug build to a tethered iPhone using a free Apple
+			ID and no Mac at all. What Windows cannot do is produce the
+			.app bundle — the native link and the asset catalog need one.
+			Linux has nothing; there is no maui-ios workload for it.
+
+			This briefly excluded Windows too, on the reasoning that only
+			macOS can build an iOS head. That is true of the *artifact* and
+			false of everything else, and it had a consequence worth
+			recording: with the TFM absent on Windows, Visual Studio could
+			not see the iOS head at all, so Hot Restart had nothing to
+			offer and the one route from this machine to an iPhone was
+			closed by a condition meant to be conservative.
+
+			The cost is that a bare `dotnet build` on Windows now builds
+			both heads. Pass LinkAndroidOnly for the Android-only loop —
+			/kick does, and the README's build command always did.
 
 			Order matters below — the last matching condition wins, so an
-			explicit narrowing property beats the host default.
-
-			LinkIosOnly on Windows is more useful than it sounds: the
-			managed half of the iOS head compiles there quite happily
-			(against iossimulator-x64, the Debug default), because only the
-			.app bundle and its native link step need a Mac. So the C# in
-			Platforms/iOS is checkable on a Windows machine even though the
-			artifact is not buildable on one — which is how AppDelegate and
-			Program were verified before CI ever saw them.
+			explicit narrowing property beats the host default. `-f` is
+			still forbidden: it sets TargetFramework globally and forces
+			the TFM onto Link.Core, breaking its restore with NU1105.
 		-->
-		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('OSX'))">net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('OSX'))">net10.0-android;net10.0-ios</TargetFrameworks>
+		<TargetFrameworks>net10.0-android;net10.0-ios</TargetFrameworks>
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(LinkAndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(LinkIosOnly)' == 'true'">net10.0-ios</TargetFrameworks>
 
