@@ -30,8 +30,8 @@ public class AppDelegate : MauiUIApplicationDelegate
 	/// The custom-scheme return leg: <c>link://auth</c> coming back from
 	/// the system browser.
 	/// </summary>
-	public override bool OpenUrl(UIApplication app, NSUrl url, NSDictionary options) =>
-		Platform.OpenUrl(app, url, options);
+	public override bool OpenUrl(UIApplication application, NSUrl url, NSDictionary options) =>
+		Platform.OpenUrl(application, url, options);
 
 	/// <summary>
 	/// The universal-link return leg. Nothing uses it today — the callback

@@ -30,7 +30,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed partial class AppleSignIn
 {
-	private static partial bool PlatformIsAvailable =>
+	private static partial bool PlatformIsAvailable() =>
 #if LINK_APPLE_SIGNIN
 		OperatingSystem.IsIOSVersionAtLeast(13);
 #else

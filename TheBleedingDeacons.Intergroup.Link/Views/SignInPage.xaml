@@ -11,9 +11,14 @@
 		<toolkit:InvertedBoolConverter x:Key="Not" />
 	</ContentPage.Resources>
 
-	<Grid RowDefinitions="*,Auto,*" Padding="28">
-
-		<VerticalStackLayout Grid.Row="1" Spacing="18">
+	<!--
+		Scrollable now that there is more than one button. Five sign-in
+		methods plus a set-password section does not fit on a small phone
+		in landscape, and a screen that cannot be scrolled to its own
+		submit button is worse than a slightly longer one.
+	-->
+	<ScrollView>
+		<VerticalStackLayout Spacing="18" Padding="28">
 
 			<Label Text="Link" Style="{StaticResource Heading}" HorizontalOptions="Center" />
 
@@ -22,7 +27,7 @@
 			       Text="Messages from your intergroup, and to the members and committees in it." />
 
 			<!--
-				Said before the button, not after a failure. Sign-in
+				Said before the buttons, not after a failure. Sign-in
 				matches on the address the intergroup already holds, and a
 				member who signs in with a different Google account will
 				be refused — which is far less annoying to read here than
@@ -32,29 +37,119 @@
 			       HorizontalTextAlignment="Center"
 			       Text="Sign in with the email address your intergroup has for you." />
 
-			<Button Text="Sign in with Google"
-			        Command="{Binding SignInWithGoogleCommand}"
+			<!--
+				One command with a parameter, three buttons. The provider
+				name goes straight to Fellowship, which is the side that
+				knows how each of them works and refuses one it does not.
+			-->
+			<Button Text="Continue with Google"
+			        Command="{Binding SignInWithProviderCommand}"
+			        CommandParameter="google"
+			        IsVisible="{Binding IsConfigured}" />
+
+			<Button Text="Continue with Microsoft"
+			        Command="{Binding SignInWithProviderCommand}"
+			        CommandParameter="microsoft"
+			        IsVisible="{Binding IsConfigured}" />
+
+			<Button Text="Continue with Facebook"
+			        Command="{Binding SignInWithProviderCommand}"
+			        CommandParameter="facebook"
 			        IsVisible="{Binding IsConfigured}" />
 
 			<!--
-				Hidden unless the platform can actually raise Apple's sheet
+				Apple is not one of the three above: its sheet hands the
+				app a signed token with no browser leg at all, so it has
+				its own command.
+
+				Hidden unless the platform can actually raise that sheet
 				and this build has an intergroup to enrol against. On
-				Android and on any iOS build without the entitlement it is
-				simply not there, which is better than a button that always
+				Android, and on any iOS build without the entitlement, it
+				is simply not there — better than a button that always
 				fails.
 
-				A plain Button, not Apple's own ASAuthorizationAppleIDButton.
-				Apple's guidelines require their button's exact appearance
-				for an App Store release, so this needs revisiting if Link
-				ever goes to the store — which it cannot until there is a
-				paid team anyway, and that is the same purchase that makes
-				this button appear at all.
+				A plain Button, not Apple's ASAuthorizationAppleIDButton.
+				Apple's guidelines require their own button's exact
+				appearance for an App Store release, so this needs
+				revisiting if Link ever goes to the store — which it
+				cannot until there is a paid team anyway, and that is the
+				same purchase that makes this button appear at all.
 			-->
-			<Button Text="Sign in with Apple"
+			<Button Text="Continue with Apple"
 			        Command="{Binding SignInWithAppleCommand}"
 			        IsVisible="{Binding CanOfferApple}" />
 
+			<!--
+				Below the providers, and deliberately so. Nearly every
+				member signs in with one of the buttons above and never
+				has a password at all; this is here for the member whose
+				intergroup address is not one of those accounts, who would
+				otherwise have no way in.
+			-->
+			<Label Style="{StaticResource Secondary}"
+			       HorizontalTextAlignment="Center"
+			       IsVisible="{Binding IsConfigured}"
+			       Text="— or sign in with a password —" />
+
+			<Entry Placeholder="Email address"
+			       Keyboard="Email"
+			       Text="{Binding Email}"
+			       IsVisible="{Binding IsConfigured}" />
+
+			<Entry Placeholder="Password"
+			       IsPassword="True"
+			       Text="{Binding Password}"
+			       IsVisible="{Binding IsConfigured}" />
+
+			<Button Text="Sign in"
+			        Command="{Binding SignInWithPasswordCommand}"
+			        IsVisible="{Binding IsConfigured}" />
+
+			<Button Text="Set or reset a password"
+			        Style="{StaticResource Secondary}"
+			        Command="{Binding ToggleSettingPasswordCommand}"
+			        IsVisible="{Binding IsConfigured}" />
+
+			<!--
+				Collapsed until asked for. It is the least-used part of
+				the least-used sign-in method, and showing it permanently
+				would suggest a password is expected — which for nearly
+				every member it is not.
+			-->
+			<VerticalStackLayout Spacing="12" IsVisible="{Binding SettingPassword}">
+
+				<Label Style="{StaticResource Secondary}"
+				       Text="Enter your email address above, then ask for a code. It arrives by email and lasts an hour." />
+
+				<Button Text="Email me a code"
+				        Command="{Binding RequestPasswordLinkCommand}" />
+
+				<Entry Placeholder="Code from the email"
+				       Text="{Binding ResetCode}" />
+
+				<Entry Placeholder="New password"
+				       IsPassword="True"
+				       Text="{Binding NewPassword}" />
+
+				<Label Style="{StaticResource Secondary}"
+				       Text="At least 14 characters. A few random words make a strong password that is easy to remember." />
+
+				<Button Text="Set password"
+				        Command="{Binding SetPasswordCommand}" />
+
+			</VerticalStackLayout>
+
 			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
+
+			<!--
+				Two messages, two colours. "Check your email" is not a
+				failure and must not be painted as one — and it is what
+				the app has to say whether or not a code was actually
+				sent, since the server will not reveal which.
+			-->
+			<Label Text="{Binding Notice}"
+			       IsVisible="{Binding HasNotice}"
+			       HorizontalTextAlignment="Center" />
 
 			<Label Text="{Binding Error}"
 			       IsVisible="{Binding HasError}"
@@ -67,7 +162,6 @@
 			       Text="This copy of Link has not been set up with an intergroup address. Ask whoever gave it to you for a configured build." />
 
 		</VerticalStackLayout>
-
-	</Grid>
+	</ScrollView>
 
 </ContentPage>
