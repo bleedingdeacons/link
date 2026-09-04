@@ -80,10 +80,23 @@ public sealed class FellowshipClient : IFellowshipClient
 			["push_token"] = request.PushToken,
 		};
 
-		// One of the two credential shapes, never both. The server refuses
-		// a request carrying neither, and sending an empty one alongside a
-		// real one would look to it like the wrong flow.
-		if (!string.IsNullOrEmpty(request.Code))
+		// One credential shape, never two. The server refuses a request
+		// carrying none, and sending an empty one alongside a real one
+		// would look to it like the wrong flow.
+		//
+		// The password path is a different route rather than a third
+		// branch of the same one: it is the only shape where this app
+		// hands over a secret rather than relaying a proof, and the
+		// server rate-limits and audits it accordingly.
+		var route = "auth/device/exchange";
+
+		if (!string.IsNullOrEmpty(request.Password))
+		{
+			route = "auth/device/password";
+			body["email"] = request.Email;
+			body["password"] = request.Password;
+		}
+		else if (!string.IsNullOrEmpty(request.Code))
 		{
 			body["code"] = request.Code;
 		}
@@ -93,7 +106,7 @@ public sealed class FellowshipClient : IFellowshipClient
 			body["id_token"] = request.IdToken;
 		}
 
-		using var response = await PostAsync("auth/device/exchange", token: null, body, cancellationToken).ConfigureAwait(false);
+		using var response = await PostAsync(route, token: null, body, cancellationToken).ConfigureAwait(false);
 		if (response is null)
 		{
 			return EnrolmentResult.Failed("Could not reach the intergroup. Check your connection and try again.");
@@ -136,6 +149,54 @@ public sealed class FellowshipClient : IFellowshipClient
 			MemberId = member is null ? 0 : Number(member.Value, "id"),
 			MemberName = member is null ? string.Empty : Text(member.Value, "name"),
 		});
+	}
+
+	public async Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default)
+	{
+		var body = new Dictionary<string, string>(StringComparer.Ordinal)
+		{
+			["email"] = email ?? string.Empty,
+		};
+
+		using var response = await PostAsync("auth/password/request", token: null, body, cancellationToken).ConfigureAwait(false);
+
+		// A false here means the request never arrived, not that the
+		// address was refused — the server answers 200 either way, on
+		// purpose.
+		return response is not null && response.IsSuccessStatusCode;
+	}
+
+	public async Task<PasswordSetResult> SetPasswordAsync(
+		string code,
+		string password,
+		CancellationToken cancellationToken = default)
+	{
+		var body = new Dictionary<string, string>(StringComparer.Ordinal)
+		{
+			["token"] = code ?? string.Empty,
+			["password"] = password ?? string.Empty,
+		};
+
+		using var response = await PostAsync("auth/password/complete", token: null, body, cancellationToken).ConfigureAwait(false);
+		if (response is null)
+		{
+			return PasswordSetResult.Failed("Could not reach the intergroup. Check your connection and try again.");
+		}
+
+		if (response.IsSuccessStatusCode)
+		{
+			return PasswordSetResult.Ok();
+		}
+
+		var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+		var message = json is null ? string.Empty : Text(json.Value, "message");
+
+		// The server's own wording. It distinguishes an expired code from
+		// a password its policy refuses, and those need different things
+		// from whoever is reading them.
+		return PasswordSetResult.Failed(string.IsNullOrEmpty(message)
+			? "That did not work. Please ask for a new link and try again."
+			: message);
 	}
 
 	public async Task<InboxPage> FetchInboxAsync(string token, long sinceId, CancellationToken cancellationToken = default)

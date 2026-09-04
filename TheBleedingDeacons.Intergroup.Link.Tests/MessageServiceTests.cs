@@ -311,6 +311,14 @@ public sealed class MessageServiceTests
 		public Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken = default) =>
 			Task.FromResult(EnrolmentResult.Failed("not used"));
 
+		// Sign-in surface, present to satisfy the interface. These tests are
+		// about what happens to messages once a handset is already enrolled.
+		public Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default) =>
+			Task.FromResult(false);
+
+		public Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default) =>
+			Task.FromResult(PasswordSetResult.Failed("not used"));
+
 		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default) =>
 			Task.FromResult(FellowshipDirectory.Empty);
 

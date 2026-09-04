@@ -109,12 +109,36 @@ public sealed class DeviceAuthService
 	/// Fellowship's <c>DeviceCodeStore</c> for why. This method's job is
 	/// to spend that code, in this process, over TLS.</para>
 	/// </summary>
-	public async Task<EnrolmentResult> SignInWithGoogleAsync(CancellationToken cancellationToken = default)
+	/// <summary>
+	/// Sign in with Google, kept as its own name because it is the path
+	/// most members take and the one every caller already knew about.
+	/// </summary>
+	public Task<EnrolmentResult> SignInWithGoogleAsync(CancellationToken cancellationToken = default) =>
+		SignInWithProviderAsync("google", cancellationToken);
+
+	/// <summary>
+	/// Sign in through any of the browser-leg providers.
+	///
+	/// <para>Google, Microsoft and Facebook differ only in a string. The
+	/// flow — a system browser, a one-time code caught on the custom
+	/// scheme, an exchange over TLS — is identical, because it is
+	/// Fellowship that knows how each provider works and this side never
+	/// needs to. Apple is the exception and has its own method: its sheet
+	/// hands over a token with no browser involved at all.</para>
+	///
+	/// <para>The provider name is passed straight through to the server,
+	/// which refuses one it does not know. Validating the list here as
+	/// well would mean two places to update when a fifth arrives, and the
+	/// server is the one that has to be right.</para>
+	/// </summary>
+	public async Task<EnrolmentResult> SignInWithProviderAsync(
+		string provider,
+		CancellationToken cancellationToken = default)
 	{
-		var start = await _client.StartSignInAsync("google", cancellationToken).ConfigureAwait(false);
+		var start = await _client.StartSignInAsync(provider, cancellationToken).ConfigureAwait(false);
 		if (start is null || !start.IsBrowserFlow)
 		{
-			return EnrolmentResult.Failed("This intergroup is not set up for Google sign-in.");
+			return EnrolmentResult.Failed($"This intergroup is not set up for {Describe(provider)} sign-in.");
 		}
 
 		string code;
@@ -191,17 +215,6 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
-	/// Begin an Apple sign-in, to get the nonce the platform sheet needs.
-	/// </summary>
-	public Task<SignInStart?> StartAppleAsync(CancellationToken cancellationToken = default) =>
-		_client.StartSignInAsync("apple", cancellationToken);
-
-	/// <summary>
-	/// Whether this build can offer Sign in with Apple at all.
-	/// </summary>
-	public bool IsAppleAvailable => _apple.IsAvailable;
-
-	/// <summary>
 	/// Sign in with Apple, end to end: ask Fellowship for a nonce, raise
 	/// the platform sheet, enrol with what it hands back.
 	///
@@ -236,6 +249,71 @@ public sealed class DeviceAuthService
 
 		return await SignInWithAppleAsync(idToken, start.State, cancellationToken).ConfigureAwait(false);
 	}
+
+	/// <summary>
+	/// Sign in with an email and a password.
+	///
+	/// <para>No browser and no provider. This is the only path where the
+	/// app handles a secret rather than relaying somebody else's proof of
+	/// one, which is why the password is passed straight through to the
+	/// request and never kept: there is no "remember me", because a
+	/// password stored on a handset to save typing is a password waiting
+	/// to be read off it.</para>
+	/// </summary>
+	public async Task<EnrolmentResult> SignInWithPasswordAsync(
+		string email,
+		string password,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+		{
+			return EnrolmentResult.Failed("Please enter your email address and password.");
+		}
+
+		return await EnrolAsync(new EnrolmentRequest
+		{
+			Email = email.Trim(),
+			Password = password,
+			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+			Platform = PlatformName(),
+			Label = DeviceLabel(),
+		}, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Ask the intergroup to email a code for setting a password.
+	///
+	/// <para>Answers only whether the request arrived. Whether a mail was
+	/// actually sent is deliberately not knowable from here — that would
+	/// say which addresses belong to members — so the screen must say
+	/// the same thing either way.</para>
+	/// </summary>
+	public Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default) =>
+		_client.RequestPasswordLinkAsync((email ?? string.Empty).Trim(), cancellationToken);
+
+	/// <summary>
+	/// Set a password with the code from that email.
+	///
+	/// <para>Does not sign anybody in. Setting a password and using one
+	/// are separate acts, and keeping them separate means a code that
+	/// reaches the wrong handset cannot enrol it.</para>
+	/// </summary>
+	public Task<PasswordSetResult> SetPasswordAsync(
+		string code,
+		string password,
+		CancellationToken cancellationToken = default) =>
+		_client.SetPasswordAsync((code ?? string.Empty).Trim(), password ?? string.Empty, cancellationToken);
+
+	/// <summary>
+	/// Begin an Apple sign-in, to get the nonce the platform sheet needs.
+	/// </summary>
+	public Task<SignInStart?> StartAppleAsync(CancellationToken cancellationToken = default) =>
+		_client.StartSignInAsync("apple", cancellationToken);
+
+	/// <summary>
+	/// Whether this build can offer Sign in with Apple at all.
+	/// </summary>
+	public bool IsAppleAvailable => _apple.IsAvailable;
 
 	/// <summary>
 	/// Sign out: tell the server, then forget everything.
@@ -331,6 +409,19 @@ public sealed class DeviceAuthService
 		"declined" => "Sign-in was cancelled.",
 		"verification" => "That sign-in could not be verified. Please try again.",
 		_ => "The sign-in did not complete. Please try again.",
+	};
+
+	/// <summary>
+	/// A provider's name as a member would write it, for the one message
+	/// that has to name it.
+	/// </summary>
+	private static string Describe(string provider) => provider switch
+	{
+		"google" => "Google",
+		"microsoft" => "Microsoft",
+		"facebook" => "Facebook",
+		"apple" => "Apple",
+		_ => provider,
 	};
 
 	private static string PlatformName() =>

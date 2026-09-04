@@ -11,7 +11,13 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed partial class AppleSignIn
 {
-	private static partial bool PlatformIsAvailable => false;
+	// S3400 wants a constant instead of a method returning one. It cannot
+	// be a constant: this is one half of a partial whose other half, on
+	// iOS, does real work. The rule is right in general and wrong about
+	// the one shape that makes a cross-platform seam.
+#pragma warning disable S3400
+	private static partial bool PlatformIsAvailable() => false;
+#pragma warning restore S3400
 
 	private partial Task<string?> PlatformGetIdTokenAsync(string nonce, CancellationToken cancellationToken) =>
 		Task.FromResult<string?>(null);
