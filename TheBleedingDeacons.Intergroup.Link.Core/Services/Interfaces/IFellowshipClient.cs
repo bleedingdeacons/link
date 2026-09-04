@@ -27,6 +27,23 @@ public interface IFellowshipClient
 	Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Ask for a link to set or reset a password.
+	///
+	/// <para>Answers true for any address the server accepted the request
+	/// for, which is every syntactically valid one. It deliberately does
+	/// not say whether a link was actually sent — that would reveal which
+	/// addresses belong to members, which is the thing the endpoint is
+	/// careful about. The app must not try to be more helpful than the
+	/// server is being.</para>
+	/// </summary>
+	Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Set a password, using the code from that email.
+	/// </summary>
+	Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Messages newer than the id this handset already holds, still
 	/// sealed. Opening them is the caller's job — see
 	/// <see cref="MessagePayloadCipher"/> — because only the caller has
@@ -96,6 +113,19 @@ public sealed record EnrolmentRequest
 	/// <summary>The platform-issued ID token (Apple).</summary>
 	public string IdToken { get; init; } = string.Empty;
 
+	/// <summary>The address, for the password flow.</summary>
+	public string Email { get; init; } = string.Empty;
+
+	/// <summary>
+	/// The password, for the password flow.
+	///
+	/// <para>The one credential this app ever holds in memory that is not
+	/// a token. It is sent once and never stored: there is no
+	/// "remember me", because a password kept on a handset to save typing
+	/// is a password waiting to be read off it.</para>
+	/// </summary>
+	public string Password { get; init; } = string.Empty;
+
 	/// <summary>Base64 SubjectPublicKeyInfo for this handset's new keypair.</summary>
 	public required string PublicKey { get; init; }
 
@@ -142,6 +172,26 @@ public sealed record EnrolmentResult
 	public static EnrolmentResult Cancelled() => new();
 
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
+}
+
+/// <summary>What setting a password answered.</summary>
+public sealed record PasswordSetResult
+{
+	public bool Succeeded { get; init; }
+
+	/// <summary>
+	/// Why not, in words a member can act on.
+	///
+	/// <para>The server distinguishes a spent or expired code from a
+	/// password its policy refuses, and says so — "that link has
+	/// expired" and "please use at least 14 characters" call for
+	/// completely different responses from whoever is reading them.</para>
+	/// </summary>
+	public string Error { get; init; } = string.Empty;
+
+	public static PasswordSetResult Ok() => new() { Succeeded = true };
+
+	public static PasswordSetResult Failed(string error) => new() { Error = error };
 }
 
 /// <summary>One sealed envelope, exactly as the server sends it.</summary>
