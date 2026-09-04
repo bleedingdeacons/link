@@ -36,6 +36,24 @@
 			        Command="{Binding SignInWithGoogleCommand}"
 			        IsVisible="{Binding IsConfigured}" />
 
+			<!--
+				Hidden unless the platform can actually raise Apple's sheet
+				and this build has an intergroup to enrol against. On
+				Android and on any iOS build without the entitlement it is
+				simply not there, which is better than a button that always
+				fails.
+
+				A plain Button, not Apple's own ASAuthorizationAppleIDButton.
+				Apple's guidelines require their button's exact appearance
+				for an App Store release, so this needs revisiting if Link
+				ever goes to the store — which it cannot until there is a
+				paid team anyway, and that is the same purchase that makes
+				this button appear at all.
+			-->
+			<Button Text="Sign in with Apple"
+			        Command="{Binding SignInWithAppleCommand}"
+			        IsVisible="{Binding CanOfferApple}" />
+
 			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
 
 			<Label Text="{Binding Error}"

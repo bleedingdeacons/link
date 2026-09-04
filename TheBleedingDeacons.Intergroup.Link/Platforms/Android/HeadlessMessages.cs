@@ -60,6 +60,10 @@ internal static class HeadlessMessages
 			LinkServices.Keys,
 			LinkServices.Sessions,
 			LinkServices.Push,
+			// Never used on this path — the push service registers a token,
+			// it does not sign anybody in — and unavailable on Android in
+			// any case.
+			new AppleSignIn(),
 			LinkServices.Configuration);
 
 		return auth.RegisterPushTokenAsync(token);
