@@ -58,5 +58,37 @@
 			</array>
 		</dict>
 	</array>
+
+	<!--
+		App Transport Security: deliberately left at its defaults, and
+		deliberately not pinned.
+
+		There is no NSAppTransportSecurity key anywhere in this file, and that
+		is the strict setting rather than a gap — ATS defaults to requiring
+		HTTPS with modern TLS and refusing arbitrary loads. Nothing here
+		weakens it, and nothing should: the app talks to exactly one host.
+
+		Semgrep reports this file under
+		swift.insecure-communication.ats.ats-pinning.ATS-consider-pinning,
+		which flags the *absence* of NSPinnedDomains. That finding is
+		accepted, on purpose, and is expected to stay open. It is advice, not
+		a defect.
+
+		Why not pin. Pinning binds the app to a specific public key for
+		aa-bristol.org. The certificate is renewed on the intergroup's own
+		hosting on a schedule nobody here controls, and a renewal that changes
+		the key would leave every installed copy unable to reach the server —
+		silently, and for as long as it took to ship and for members to
+		install an update. That is a worse failure than the one pinning
+		prevents: the attack it defends against needs a CA to mis-issue for
+		this domain, while the outage it risks needs only an ordinary
+		certificate rotation.
+
+		What would change the answer: pinning becomes reasonable alongside a
+		backup pin for the next key and a release process that rotates the two
+		together, which is a real piece of operational work rather than a
+		plist entry. Revisit it then, and not by adding NSPinnedDomains here
+		on its own.
+	-->
 </dict>
 </plist>
