@@ -453,7 +453,7 @@ jobs:
           semgrep ci
 
   version:
-    name: Bump version
+    name: Bump version & publish the release
     # The whole point of this change: the bump now waits on every gate. Before,
     # this lived in its own workflow triggered by `push` with no `needs:` at
     # all, so a version was cut whether or not the build, the tests or Semgrep
@@ -544,6 +544,156 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "$tag"
           git push origin "$tag"
+
+      # ---------------------------------------------------------------
+      # Publish a GitHub Release, with an APK built at the version it names.
+      #
+      # Until now this job tagged and stopped. A tag is enough for
+      # bump-version.sh to do its arithmetic, but it is not something anyone
+      # can download: every build this repo has ever produced lived in a
+      # workflow artifact that expires after 30 days, so a version older than
+      # a month had nothing to show for itself at all. Hand is in the same
+      # state — this is new for both apps rather than Link catching up.
+      #
+      # THE REBUILD IS THE POINT, and it is why this is not a
+      # download-artifact from the build job. That artifact was built from
+      # the commit *before* the bump, so its manifest carries the previous
+      # version; attaching it to a tag naming the new one would ship an APK
+      # that disagrees with its own release. That is precisely the drift the
+      # AssemblyVersion change removed from the csproj, reintroduced one
+      # level up. Fellowship's release job pays the same cost for the same
+      # reason — it re-runs its production build after writing the version
+      # rather than reusing anything earlier in the run.
+      #
+      # Android only. The .ipa is built on macOS and this job is ubuntu, and
+      # plumbing it across would buy nothing: it is unsigned, so it installs
+      # on precisely nothing until somebody with an Apple Developer Program
+      # certificate re-signs it.
+      - name: Setup JDK 21
+        if: steps.bump.outputs.version != ''
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup .NET
+        if: steps.bump.outputs.version != ''
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install MAUI Android workload
+        if: steps.bump.outputs.version != ''
+        run: dotnet workload install maui-android
+
+      # Same file, same rules, and the same silence when unset as the build
+      # job — see the long comment there for why this is a variable and not a
+      # secret. Repeated rather than shared: a composite action for four
+      # lines would hide the one thing worth reading.
+      - name: Write appsettings.json
+        if: steps.bump.outputs.version != ''
+        env:
+          BASE_URL: ${{ vars.LINK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo 'LINK_BASE_URL is not set; releasing an unconfigured build.'
+            echo 'It will run, and its sign-in screen will say it is not set up.'
+            exit 0
+          fi
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
+          esac
+          case "$BASE_URL" in
+            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
+          esac
+          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
+            > TheBleedingDeacons.Intergroup.Link/appsettings.json
+
+      # Builds the working tree, which by this point carries the bumped
+      # csproj written by the commit step above.
+      - name: Build the release APK
+        if: steps.bump.outputs.version != ''
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Release
+          -p:LinkAndroidOnly=true
+          -p:ContinuousIntegrationBuild=true
+
+      # -Signed.apk is the one to keep: .NET Android emits an unsigned
+      # intermediate alongside it. Renamed for the version so a downloaded
+      # file still says what it is once it is sitting in somebody's downloads
+      # folder next to four others.
+      - name: Name the APK for its version
+        id: apk
+        if: steps.bump.outputs.version != ''
+        run: |
+          set -euo pipefail
+          src=$(ls TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-android/*-Signed.apk 2>/dev/null | head -1)
+          if [ -z "$src" ]; then
+            echo 'No -Signed.apk was produced. bin/Release/net10.0-android holds:' >&2
+            ls -l TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-android || true
+            exit 1
+          fi
+          out="link-${{ steps.bump.outputs.version }}.apk"
+          cp "$src" "$out"
+          echo "apk=$out" >> "$GITHUB_OUTPUT"
+          ls -l "$out"
+
+      # The body is not decoration. This APK is signed with the runner's
+      # throwaway debug keystore, and somebody will eventually find this page
+      # without having read a line of ci.yml — at which point the difference
+      # between "a build you can try" and "a build that costs you every
+      # message on that handset" needs to be on the page they are looking at.
+      - name: Write the release notes
+        if: steps.bump.outputs.version != ''
+        run: |
+          cat > release-notes.md <<'EOF'
+          ### What this APK is
+
+          A **Debug-keystore-signed** Android build, produced on a GitHub runner
+          from the commit this tag names. It is a compile gate and a
+          convenience — not a shipping artifact.
+
+          ### Before you install it
+
+          It is signed with the runner's own throwaway key, which is not the key
+          on any developer machine. If you already have a locally built Link on
+          the handset, it will refuse to install over it with
+          `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
+
+          **Do not uninstall to get past that.** Link's device token and its RSA
+          private key live in `SecureStorage`, and Fellowship holds only the
+          public half — so uninstalling makes every message already sealed to
+          that handset permanently unreadable, by everyone, with no way back.
+          The encrypted local history goes with it. Build locally instead.
+
+          ### iOS
+
+          Not attached. The `.ipa` this workflow archives is unsigned and
+          installs on nothing until it is re-signed with an Apple Developer
+          Program certificate.
+          EOF
+
+      # Guarded against existing so a re-run of a green release is a no-op
+      # rather than a failure, matching the tag step above.
+      - name: Publish the GitHub Release
+        if: steps.bump.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="v${{ steps.bump.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag is already released; nothing to publish."
+            exit 0
+          fi
+          gh release create "$tag" \
+            "${{ steps.apk.outputs.apk }}" \
+            --title "$tag" \
+            --notes-file release-notes.md \
+            --generate-notes
 
       - name: Summary
         run: |
