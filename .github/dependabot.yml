@@ -1,0 +1,64 @@
+# Dependabot configuration.
+#
+# The same file Hand carries, and for the same reasons — the two apps share
+# .editorconfig, stylecop.json and Directory.Build.props, and a second
+# dialect of dependency management would only mean two sets of habits.
+#
+# github-actions — every workflow here pins actions to a commit SHA. That is
+# safe against a tag being silently repointed, but a pinned SHA also never
+# picks up an upstream fix on its own: without this file the pins simply rot.
+# Dependabot rewrites the SHA and its trailing version comment together,
+# which is the only thing that keeps pinning honest.
+#
+# nuget — the MAUI app, its Core and its Tests project. directory "/" so the
+# updater walks all three rather than naming each. Worth having beyond the
+# usual reasons: the Android graph already restores with NU1608 constraint
+# warnings, because Xamarin.AndroidX packages resolve past what their own
+# .Ktx companions declare. A monthly PR that moves the set together is how
+# that gets better rather than worse.
+#
+# Monthly and grouped on purpose: one reviewer, and a weekly ungrouped
+# schedule is a great deal of noise for a volunteer-maintained app.
+#
+# Note: merging a Dependabot PR cuts a version like any other change — the
+# version job in ci.yml bumps on a push to main, once every gate has passed.
+
+version: 2
+
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # Newly published versions are the ones most likely to be malicious or
+    # broken, so hold them for a week before proposing them.
+    cooldown:
+      default-days: 7
+    # One PR for all action bumps rather than one per action.
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(ci)"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    # Grouped: a month of package updates arrives as one PR that CI runs
+    # against as a set, rather than one PR per package.
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"

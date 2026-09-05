@@ -249,6 +249,31 @@ public sealed class MessageServiceTests
 		Assert.False(client.SendCalled);
 	}
 
+	// ── Constructor guards ───────────────────────────────────────────────
+	//
+	// Four dependencies, all resolved from the container. A missing
+	// registration otherwise surfaces as a NullReferenceException on the
+	// first sync, a long way from the MauiProgram line that caused it —
+	// and on a handset, where the stack trace goes to a log file nobody
+	// reads. Each guard names the parameter it is about, so the message
+	// says which registration is missing.
+
+	[Theory]
+	[InlineData("client")]
+	[InlineData("history")]
+	[InlineData("keys")]
+	[InlineData("sessions")]
+	public void EveryDependencyIsRequiredByName(string missing)
+	{
+		var exception = Assert.Throws<ArgumentNullException>(() => new MessageService(
+			missing == "client" ? null! : new FakeClient(),
+			missing == "history" ? null! : new FakeHistory(),
+			missing == "keys" ? null! : new FakeKeys("key"),
+			missing == "sessions" ? null! : new FakeSessions()));
+
+		Assert.Equal(missing, exception.ParamName);
+	}
+
 	private static MessageService Service(FakeClient client, FakeHistory history, string privateKey) =>
 		new(client, history, new FakeKeys(privateKey), new FakeSessions());
 

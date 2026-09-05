@@ -66,10 +66,66 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 
+		<!--
+			Compile XAML bindings that set Source, and fail the build when one
+			cannot be compiled. Hand carries both lines; this project had neither,
+			and it matters more here than there because this one has an iOS head.
+
+			Without the property, a {Binding ... Source=...} silently falls back to
+			reflection. Three files here set Source - App.xaml, ComposePage.xaml
+			and MessagesPage.xaml - so the fallback was real rather than
+			hypothetical. Reflection is slower everywhere, and under the full
+			trimming an iOS Release build uses it is not safe at all: the member
+			it reflects over can have been trimmed away, and the failure is a
+			binding that quietly resolves to nothing on a device, with nothing
+			wrong at compile time.
+
+			The property alone only makes compilation possible. XC0022-XC0025 and
+			XC0045 are the diagnostics the XAML compiler raises when it cannot
+			compile a binding and falls back; left as warnings they scroll past in
+			a build that says "succeeded". Escalated, they are a gate.
+		-->
+		<MauiEnableXamlCBindingWithSourceCompilation>true</MauiEnableXamlCBindingWithSourceCompilation>
+		<WarningsAsErrors>$(WarningsAsErrors);XC0022;XC0023;XC0024;XC0025;XC0045</WarningsAsErrors>
+
 		<ApplicationTitle>Link</ApplicationTitle>
 		<ApplicationId>com.thebleedingdeacons.intergroup.link</ApplicationId>
 		<ApplicationDisplayVersion>1.4.1</ApplicationDisplayVersion>
 		<ApplicationVersion>10</ApplicationVersion>
+
+		<!--
+			Derive the assembly versions from the display version rather than
+			leaving them at the SDK default of 1.0.0.0, which is what they
+			were: the app displayed its real version and every assembly in
+			it claimed 1.0.0.0. No number is named here on purpose - the
+			release job rewrites ApplicationDisplayVersion on every merge,
+			so a version quoted in this comment would be stale by the next.
+			That is the drift Hand hit, where the Windows head stamped the wrong
+			version onto every log event, and one number to bump is the fix. The
+			trailing .0 makes the four-part version out of the three-part display
+			string, so keep ApplicationDisplayVersion three-part.
+
+			bump-version.sh rewrites ApplicationDisplayVersion alone, so these
+			follow a release without the script needing to know they exist.
+		-->
+		<AssemblyVersion>$(ApplicationDisplayVersion).0</AssemblyVersion>
+		<FileVersion>$(ApplicationDisplayVersion).0</FileVersion>
+
+		<!--
+			When this build was made, to the second, stamped at build time.
+
+			InformationalVersion is the only one of the three that can hold it:
+			AssemblyVersion and FileVersion are four 16-bit fields capped at 65534
+			each, and a yyyyMMddHHmmss stamp is about 202 billion. Stamped UTC so
+			builds either side of a BST change still sort honestly.
+
+			IncludeSourceRevisionInInformationalVersion is off because the SDK
+			would otherwise append '+<commit sha>' and the result would carry two
+			'+' segments, which anything parsing on the first one reads wrongly.
+		-->
+		<BuildTimestampUtc>$([System.DateTime]::UtcNow.ToString("yyyyMMddHHmmss"))</BuildTimestampUtc>
+		<InformationalVersion>$(ApplicationDisplayVersion)+$(BuildTimestampUtc)</InformationalVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">15.0</SupportedOSPlatformVersion>

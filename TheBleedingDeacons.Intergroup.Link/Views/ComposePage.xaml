@@ -22,8 +22,15 @@
 			-->
 			<VerticalStackLayout Spacing="6" IsVisible="{Binding CanSendToCommittee}">
 				<Label Text="Committee" Style="{StaticResource Secondary}" />
+				<!--
+					ItemDisplayBinding resolves against the *item*, not against
+					this page's ComposeViewModel, so it needs its own x:DataType.
+					Without one the binding cannot be compiled and falls back to
+					reflection - which the iOS head's trimming is entitled to
+					break. XC0022 is an error here, so this is a gate, not advice.
+				-->
 				<Picker ItemsSource="{Binding Committees}"
-				        ItemDisplayBinding="{Binding Name}"
+				        ItemDisplayBinding="{Binding Name, x:DataType=models:DirectoryCommittee}"
 				        SelectedItem="{Binding Committee}"
 				        Title="No committee — choose people below" />
 				<Label Style="{StaticResource Secondary}"
