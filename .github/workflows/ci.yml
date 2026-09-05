@@ -523,7 +523,45 @@ jobs:
           # is closed twice over — belt and braces, because a runaway here
           # would bump on every iteration.
           git commit -am "chore: version ${{ steps.bump.outputs.version }} [skip ci]"
-          git push
+
+          # Rebase onto anything that landed while this job was running, and
+          # retry. A bare `git push` here fails outright when main has moved
+          # between the checkout above and this line, and that is not
+          # hypothetical: it happened on 2026-09-05, when a merge landed
+          # sixteen seconds before this push and took the whole release with
+          # it. Every gate had passed; the version was simply lost, and the
+          # next release skipped a number to catch up.
+          #
+          # The concurrency group above serialises this job against *itself*,
+          # so the race is never two version jobs — it is a person merging
+          # while one is in flight, which no amount of job-level concurrency
+          # can prevent.
+          #
+          # Rebasing is safe for the version this job computed. The bump was
+          # derived from the commit range this run was triggered for, and the
+          # commits that arrived meanwhile are not in that range — they get
+          # their own run and their own bump, so nothing is skipped or
+          # double-counted by landing this commit on top of them.
+          #
+          # A conflict is not retried. The only way to conflict here is
+          # another writer touching the same version line, which the
+          # concurrency group already rules out for this job — so it means
+          # something genuinely unexpected, and failing loudly beats
+          # resolving it blind.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Pushed the version commit on attempt $attempt."
+              exit 0
+            fi
+            echo "Push rejected on attempt $attempt; main moved. Rebasing onto it."
+            if ! git pull --rebase origin main; then
+              echo "Rebase onto main failed; leaving it alone." >&2
+              git rebase --abort || true
+              exit 1
+            fi
+          done
+          echo "Could not push the version commit after 3 attempts." >&2
+          exit 1
 
       # The tag is not decoration: it is how bump-version.sh knows whether
       # anything has shipped, which is what lets the first release keep the
