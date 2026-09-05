@@ -53,6 +53,17 @@
 			       IsVisible="{Binding HasNotice}"
 			       Style="{StaticResource Secondary}" />
 
+			<!--
+				The build, last and quiet, exactly as Hand shows it. It is the
+				first thing asked for when a handset misbehaves, and the last
+				thing anybody wants to read otherwise.
+			-->
+			<Label Text="{Binding Build}"
+			       Margin="0,16,0,0"
+			       FontSize="11"
+			       Opacity="0.5"
+			       HorizontalOptions="Center" />
+
 		</VerticalStackLayout>
 	</ScrollView>
 

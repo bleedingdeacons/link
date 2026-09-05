@@ -14,47 +14,96 @@
 			       IsVisible="{Binding IsReply}"
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
-			<!--
-				Committee first, and it clears the people below when it is
-				set: Fellowship refuses a message addressed to both,
-				because the recipient list that would produce cannot be
-				explained back to whoever sent it.
-			-->
-			<VerticalStackLayout Spacing="6" IsVisible="{Binding CanSendToCommittee}">
-				<Label Text="Committee" Style="{StaticResource Secondary}" />
-				<!--
-					ItemDisplayBinding resolves against the *item*, not against
-					this page's ComposeViewModel, so it needs its own x:DataType.
-					Without one the binding cannot be compiled and falls back to
-					reflection - which the iOS head's trimming is entitled to
-					break. XC0022 is an error here, so this is a gate, not advice.
-				-->
-				<Picker ItemsSource="{Binding Committees}"
-				        ItemDisplayBinding="{Binding Name, x:DataType=models:DirectoryCommittee}"
-				        SelectedItem="{Binding Committee}"
-				        Title="No committee — choose people below" />
-				<Label Style="{StaticResource Secondary}"
-				       Text="A committee includes its sub-committees." />
-			</VerticalStackLayout>
+			<Label Text="Send to" FontAttributes="Bold" />
 
-			<VerticalStackLayout Spacing="6">
-				<Label Text="People" Style="{StaticResource Secondary}" />
-				<CollectionView ItemsSource="{Binding People}"
-				                SelectedItems="{Binding SelectedPeople}"
-				                SelectionMode="Multiple"
-				                HeightRequest="200">
+			<!--
+				Hand's arrangement, and Hand's reasoning with it: one scope
+				or the other, chosen before the list rather than inferred
+				from what happens to be selected in two lists at once.
+
+				Fellowship refuses a message addressed to both a committee
+				and named people, because the recipient list that would
+				produce cannot be explained back to whoever sent it. Two
+				radios make that rule visible instead of leaving it as a
+				400 somebody meets after typing.
+
+				Bound one-way and set from the code-behind, exactly as
+				Hand does it: a two-way IsChecked binding fights itself,
+				because selecting one radio unchecks the other and each
+				uncheck fires the same handler.
+			-->
+			<Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+				<RadioButton
+					Grid.Column="0"
+					Content="A member"
+					GroupName="scope"
+					IsChecked="{Binding IsMemberMode, Mode=OneWay}"
+					CheckedChanged="OnMemberScopeChecked" />
+				<!--
+					Hidden rather than disabled when the site does not
+					allow committee sends from the app. This is not a
+					setting somebody can turn on from here — Fellowship
+					sends no committees at all — so a greyed control would
+					be offering something that does not exist.
+				-->
+				<RadioButton
+					Grid.Column="1"
+					Content="A committee"
+					GroupName="scope"
+					IsVisible="{Binding CanSendToCommittee}"
+					IsChecked="{Binding IsCommitteeMode, Mode=OneWay}"
+					CheckedChanged="OnCommitteeScopeChecked" />
+			</Grid>
+
+			<!-- Members -->
+			<VerticalStackLayout Spacing="8" IsVisible="{Binding IsMemberMode}">
+				<!--
+					Filters the list already in hand rather than asking
+					Fellowship again. Hand searches server-side because its
+					member list is paged; Link is handed the whole address
+					book in one response, so a round trip per keystroke
+					would buy nothing and cost a request.
+				-->
+				<SearchBar
+					Text="{Binding Search}"
+					Placeholder="Search by name" />
+
+				<CollectionView
+					ItemsSource="{Binding People}"
+					SelectedItem="{Binding SelectedPerson}"
+					SelectionMode="Single"
+					HeightRequest="240">
 					<CollectionView.EmptyView>
 						<Label Style="{StaticResource Secondary}"
 						       Text="No one to show. Pull the message list down to reconnect." />
 					</CollectionView.EmptyView>
 					<CollectionView.ItemTemplate>
 						<DataTemplate x:DataType="models:DirectoryMember">
-							<Grid Padding="10,8">
-								<Label Text="{Binding Name}" />
+							<Grid Padding="12,10">
+								<Label Text="{Binding Name}" FontSize="16" />
 							</Grid>
 						</DataTemplate>
 					</CollectionView.ItemTemplate>
 				</CollectionView>
+			</VerticalStackLayout>
+
+			<!-- Committees -->
+			<VerticalStackLayout Spacing="8" IsVisible="{Binding IsCommitteeMode}">
+				<CollectionView
+					ItemsSource="{Binding Committees}"
+					SelectedItem="{Binding Committee}"
+					SelectionMode="Single"
+					HeightRequest="240">
+					<CollectionView.ItemTemplate>
+						<DataTemplate x:DataType="models:DirectoryCommittee">
+							<Grid Padding="12,10">
+								<Label Text="{Binding Name}" FontSize="16" />
+							</Grid>
+						</DataTemplate>
+					</CollectionView.ItemTemplate>
+				</CollectionView>
+				<Label Style="{StaticResource Secondary}"
+				       Text="A committee includes its sub-committees." />
 			</VerticalStackLayout>
 
 			<Entry Placeholder="Subject" Text="{Binding Subject}" MaxLength="200" />
