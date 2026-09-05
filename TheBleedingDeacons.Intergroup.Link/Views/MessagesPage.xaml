@@ -53,9 +53,22 @@
 					<DataTemplate x:DataType="models:LinkMessage">
 						<Border Style="{StaticResource Card}" Margin="12,6" StrokeShape="RoundRectangle 10">
 
+							<!--
+								The command lives on the page's view model, not on the
+								message, so this binding's x:DataType has to override the
+								DataTemplate's. Without it the compiler resolves
+								OpenCommand against LinkMessage, does not find it, and
+								raises XC0045 - which is now an error.
+
+								The tap worked before this: at runtime the RelativeSource
+								is honoured and reflection finds OpenCommand on the view
+								model. What was wrong was the compile-time type, and the
+								cost was a reflected binding on the one head whose
+								trimming can delete what it reflects over.
+							-->
 							<Border.GestureRecognizers>
 								<TapGestureRecognizer
-									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenCommand}"
+									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenCommand, x:DataType=vm:MessagesViewModel}"
 									CommandParameter="{Binding .}" />
 							</Border.GestureRecognizers>
 

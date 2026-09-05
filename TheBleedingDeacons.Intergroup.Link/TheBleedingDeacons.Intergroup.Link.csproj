@@ -95,8 +95,11 @@
 
 		<!--
 			Derive the assembly versions from the display version rather than
-			leaving them at the SDK default of 1.0.0.0, which is what they were:
-			the app displayed 1.4.0 and every assembly in it claimed 1.0.0.0.
+			leaving them at the SDK default of 1.0.0.0, which is what they
+			were: the app displayed its real version and every assembly in
+			it claimed 1.0.0.0. No number is named here on purpose - the
+			release job rewrites ApplicationDisplayVersion on every merge,
+			so a version quoted in this comment would be stale by the next.
 			That is the drift Hand hit, where the Windows head stamped the wrong
 			version onto every log event, and one number to bump is the fix. The
 			trailing .0 makes the four-part version out of the three-part display
