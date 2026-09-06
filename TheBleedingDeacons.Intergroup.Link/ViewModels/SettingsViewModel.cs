@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TheBleedingDeacons.Intergroup.Link.Services;
+using TheBleedingDeacons.Intergroup.Link.Support;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
 namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
@@ -36,6 +37,27 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private string _notice = string.Empty;
 
 	public bool HasNotice => !string.IsNullOrEmpty(Notice);
+
+	/// <summary>
+	/// Which build is running, in Hand's words and Hand's order: version,
+	/// build number, when it was made, which runtime.
+	///
+	/// <para>A plain get rather than an observable property. Nothing about
+	/// it can change while the process lives, so raising change
+	/// notifications for it would be notifying nobody about nothing.</para>
+	///
+	/// <para><b>Instance, not static</b>, which is why the analyser is
+	/// silenced rather than obeyed. Hand made it static once and the label
+	/// on its settings screen went blank: a XAML Binding resolves against
+	/// the BindingContext <i>instance</i> and cannot see static members, so
+	/// it binds to nothing. It fails silently in both directions - no
+	/// warning, because a binding to a missing member is only a compile
+	/// error when the compiler can prove the type, and nothing to notice on
+	/// screen, because an empty label looks like an empty label.</para>
+	/// </summary>
+#pragma warning disable S2325 // See above: static breaks the binding.
+	public string Build => BuildInfo.Summary;
+#pragma warning restore S2325
 
 	[RelayCommand]
 	public async Task LoadAsync()

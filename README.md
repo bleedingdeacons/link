@@ -249,12 +249,28 @@ on the server either way — and "swallowed" had quietly come to mean
 "swallowed without trace". The catches still swallow; they no longer do
 it silently.
 
-Deliberately **no remote sink**, which is where this differs from Hand.
-Hand's failure is a helpline alert that does not ring, and somebody who
-is not holding the phone needs to see that. Link's failure is a late
-message. Shipping a log-ingestion token in the app to watch for one would
-be a credential in every APK for no proportionate benefit, so the file is
-pulled with adb when somebody is diagnosing:
+**Now the same pipeline Hand runs**, which reverses what this said
+before. Every enricher Hand carries, the flattened exception fields, the
+crash handlers for unhandled AppDomain, unobserved-task and Android
+exceptions, and a durable Better Stack sink that flushes the moment
+something is logged at Error or worse rather than waiting for its timer.
+
+The old argument was that Link's failures are late messages rather than a
+helpline alert that did not ring, so the file could be pulled with adb
+when somebody was diagnosing. The second half is what did not hold up:
+pulling a file needs the handset, a cable and somebody who knows to ask,
+and the failures that matter here — a message that arrived and would not
+open, a push that silently stopped — are exactly the ones a member does
+not report, because they cannot see them happening.
+
+The token is still a credential shipped in an app, and it is handled the
+way Hand handles it: `appsettings.json` is git-ignored, the example file
+carries an empty `BetterStack` section, and a build with no token
+configured logs locally only. That is a supported state, not a
+misconfiguration.
+
+The file is still there, and is still what to reach for with the handset
+in hand:
 
 ```
 adb -s <serial> exec-out run-as com.thebleedingdeacons.intergroup.link cat files/logs/link-<date>.log

@@ -16,7 +16,15 @@ namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 /// not a member, cannot address one to a typo, and never holds anybody's
 /// email address in the first place.</para>
 ///
-/// <para>The committee picker appears only when the site allows committee
+/// <para><b>One scope or the other, never both</b>, chosen with a pair of
+/// radios before the list rather than inferred from what happens to be
+/// selected in two lists at once. Fellowship refuses a message addressed
+/// to a committee and to named people together, because the recipient
+/// list that would produce cannot be explained back to whoever sent it.
+/// This is Hand's arrangement, adopted so a member holding both apps
+/// picks a recipient the same way in each.</para>
+///
+/// <para>The committee scope appears only when the site allows committee
 /// sends from the app, which is off by default — Fellowship simply sends
 /// an empty committee list, and there is nothing here to hide.</para>
 /// </summary>
@@ -33,14 +41,45 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		_sessions = sessions;
 	}
 
+	/// <summary>
+	/// Everyone the directory returned, before <see cref="Search"/> is
+	/// applied. Held so filtering is a local operation rather than another
+	/// request per keystroke — Link is handed the whole address book in one
+	/// response, unlike Hand, whose member list is paged and searched
+	/// server-side.
+	/// </summary>
+	private readonly List<DirectoryMember> _allPeople = [];
+
+	/// <summary>
+	/// The names actually on screen: <see cref="_allPeople"/> narrowed by
+	/// <see cref="Search"/>.
+	/// </summary>
 	public ObservableCollection<DirectoryMember> People { get; } = [];
 
 	public ObservableCollection<DirectoryCommittee> Committees { get; } = [];
 
 	/// <summary>
-	/// Who this message is for. Bound to a multi-select list.
+	/// Which of the two recipient lists is in force: 0 a member, 1 a
+	/// committee. An int rather than an enum because it is set from two
+	/// radio handlers and read by two visibility bindings, and neither
+	/// gains anything from a named type.
 	/// </summary>
-	public ObservableCollection<object> SelectedPeople { get; } = [];
+	[ObservableProperty]
+	[NotifyCanExecuteChangedFor(nameof(SendCommand))]
+	private int _recipientMode;
+
+	/// <summary>
+	/// The one member this message is for, in member scope.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyCanExecuteChangedFor(nameof(SendCommand))]
+	private DirectoryMember? _selectedPerson;
+
+	/// <summary>
+	/// Narrows the member list as it is typed into. Never sent anywhere.
+	/// </summary>
+	[ObservableProperty]
+	private string _search = string.Empty;
 
 	[ObservableProperty]
 	[NotifyCanExecuteChangedFor(nameof(SendCommand))]
@@ -75,6 +114,10 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	public bool HasError => !string.IsNullOrEmpty(Error);
 
 	public bool IsReply => ReplyToId > 0;
+
+	public bool IsMemberMode => RecipientMode == 0;
+
+	public bool IsCommitteeMode => RecipientMode == 1;
 
 	/// <summary>
 	/// Whether this site lets the app address a whole committee.
@@ -120,11 +163,9 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 
 		var directory = await _client.FetchDirectoryAsync(session.Token).ConfigureAwait(true);
 
-		People.Clear();
-		foreach (var person in directory.Members)
-		{
-			People.Add(person);
-		}
+		_allPeople.Clear();
+		_allPeople.AddRange(directory.Members);
+		ApplySearch();
 
 		Committees.Clear();
 		foreach (var committee in directory.Committees)
@@ -133,6 +174,64 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		}
 
 		OnPropertyChanged(nameof(CanSendToCommittee));
+
+		// A site that sends no committees leaves the committee radio hidden,
+		// so a screen sitting in committee scope would show an empty list and
+		// no way back to the members. Only possible if the directory changed
+		// under a page that was already open, which is exactly when nobody
+		// would think to look for it.
+		if (!CanSendToCommittee && IsCommitteeMode)
+		{
+			RecipientMode = 0;
+		}
+	}
+
+	/// <summary>
+	/// Rebuild the visible list from the held one.
+	///
+	/// <para>Rebuilt rather than filtered in place: a selection that has
+	/// just been typed out of view has to be dropped, and doing both in one
+	/// place is what keeps <see cref="SelectedPerson"/> from naming
+	/// somebody the sender can no longer see.</para>
+	/// </summary>
+	private void ApplySearch()
+	{
+		var term = Search.Trim();
+
+		People.Clear();
+		foreach (var person in _allPeople)
+		{
+			if (term.Length == 0
+				|| person.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+			{
+				People.Add(person);
+			}
+		}
+
+		if (SelectedPerson is not null && !People.Contains(SelectedPerson))
+		{
+			SelectedPerson = null;
+		}
+	}
+
+	partial void OnSearchChanged(string value) => ApplySearch();
+
+	partial void OnRecipientModeChanged(int value)
+	{
+		OnPropertyChanged(nameof(IsMemberMode));
+		OnPropertyChanged(nameof(IsCommitteeMode));
+
+		// Switching scope clears the other side's choice. Leaving both set
+		// would let the screen show a committee while the send addressed a
+		// member — and Fellowship refuses both at once anyway.
+		if (value == 0)
+		{
+			Committee = null;
+		}
+		else
+		{
+			SelectedPerson = null;
+		}
 	}
 
 	[RelayCommand(CanExecute = nameof(CanSend))]
@@ -150,10 +249,12 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 				// A committee and named people are mutually exclusive —
 				// Fellowship refuses a request carrying both, because the
 				// resulting recipient list cannot be explained back to
-				// whoever sent it. The picker enforces the same thing, so
-				// this is belt and braces rather than a second rule.
-				MemberIds = Committee is null ? SelectedIds() : [],
-				Committee = Committee?.Slug ?? string.Empty,
+				// whoever sent it. The scope radios enforce the same thing,
+				// so this is belt and braces rather than a second rule.
+				MemberIds = IsMemberMode && SelectedPerson is not null
+					? [SelectedPerson.Id]
+					: [],
+				Committee = IsCommitteeMode ? Committee?.Slug ?? string.Empty : string.Empty,
 				ReplyToId = ReplyToId,
 			}).ConfigureAwait(true);
 
@@ -171,9 +272,6 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		}
 	}
 
-	private IReadOnlyList<long> SelectedIds() =>
-		SelectedPeople.OfType<DirectoryMember>().Select(p => p.Id).ToList();
-
 	/// <summary>
 	/// A message needs something to say and somebody to say it to.
 	///
@@ -187,5 +285,5 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		!Busy
 		&& !string.IsNullOrWhiteSpace(Subject)
 		&& !string.IsNullOrWhiteSpace(Body)
-		&& (Committee is not null || SelectedPeople.Count > 0);
+		&& (IsMemberMode ? SelectedPerson is not null : Committee is not null);
 }

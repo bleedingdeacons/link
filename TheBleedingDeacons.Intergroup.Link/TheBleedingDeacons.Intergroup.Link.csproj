@@ -191,9 +191,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- The suite's green, not Hand's alert red: Link is the quiet one. -->
+		<!-- The icon stays the suite's green. It is what tells Link apart
+		     from Hand in a launcher, and it is still the colour of the app
+		     once it is up. -->
 		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" ForegroundScale="0.65" Color="#2E5E4E" />
-		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#2E5E4E" BaseSize="128,128" />
+		<!-- Splash matches Hand's, which matches Register's: same artwork,
+		     same background. These are the same suite on the same handsets,
+		     and the thing shown at every launch is where that should read as
+		     one family rather than three. -->
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#3977C3" BaseSize="128,128" />
 		<MauiImage Include="Resources\Images\*" />
 		<MauiFont Include="Resources\Fonts\*" />
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
@@ -232,9 +238,14 @@
 		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+		<PackageReference Include="Ben.Demystifier" Version="0.4.1" />
 		<PackageReference Include="Serilog" Version="4.4.0" />
+		<PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+		<PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
 		<PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+		<PackageReference Include="Serilog.Sinks.Http" Version="9.2.1" />
 		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
