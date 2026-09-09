@@ -506,7 +506,10 @@ public static class MauiProgram
 				| System.Net.DecompressionMethods.Brotli,
 		};
 
-		return new HttpClient(handler, disposeHandler: true)
+		// Better Stack gets the same introduction as Fellowship does. It is
+		// not behind the bot protection this was written for, but a log
+		// shipper that names itself is worth having in its own right.
+		return new HttpClient(new UserAgentHandler(AppUserAgent.Current, handler), disposeHandler: true)
 		{
 			// Fail fast and let the durable sink retry from its on-disk
 			// buffer rather than blocking shutdown behind a slow response.
