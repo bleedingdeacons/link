@@ -3,6 +3,7 @@ using System.Text.Json;
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
+using TheBleedingDeacons.Intergroup.Link.Support;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
@@ -112,7 +113,30 @@ public static class LinkServices
 				// classic way to exhaust sockets, and this app makes a
 				// request every couple of minutes for as long as it is
 				// open.
-				_http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+				//
+				// The platform's own handler, named rather than left to the
+				// MAUI default. It is the same handler as before — that
+				// default is the native one, and it matters: Fellowship sits
+				// behind an edge WAF that fingerprints TLS (JA3/JA4) and
+				// blocks .NET's managed SocketsHttpHandler while allowing the
+				// stack the system browser uses. Wrapping it in a
+				// UserAgentHandler means passing one explicitly, and an
+				// implicit choice cannot be passed.
+#if ANDROID
+				HttpMessageHandler handler = new Xamarin.Android.Net.AndroidMessageHandler();
+#elif IOS || MACCATALYST
+				HttpMessageHandler handler = new NSUrlSessionHandler();
+#else
+				HttpMessageHandler handler = new HttpClientHandler();
+#endif
+
+				// Every request now says which app, which head, who to
+				// contact and which server. See UserAgent.
+				_http = new HttpClient(new UserAgentHandler(AppUserAgent.Current, handler), disposeHandler: true)
+				{
+					Timeout = TimeSpan.FromSeconds(20),
+				};
+
 				_client = new FellowshipClient(_http, Configuration);
 
 				return _client;
