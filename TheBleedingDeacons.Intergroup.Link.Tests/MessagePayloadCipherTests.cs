@@ -178,4 +178,37 @@ public sealed class MessagePayloadCipherTests
 
 		Assert.NotNull(MessagePayloadCipher.Open(sealed_.WrappedKey, sealed_.Payload, sealed_.PrivateKeyPem));
 	}
+
+	/// <summary>
+	/// A message that inflates past the ceiling is refused rather than
+	/// allocated.
+	///
+	/// <para>This is the finding where Link is the weaker of the two apps.
+	/// Hand verifies its GCM tag with a key only the handset and Reach hold,
+	/// so a forged payload never reaches its inflate. Here the content key is
+	/// RSA-OAEP wrapped to the handset's <b>public</b> key, which the device
+	/// publishes at enrolment — so anyone holding it can mint a content key,
+	/// seal a bomb under it and produce an envelope that authenticates
+	/// perfectly. That is exactly what this test does: it seals through the
+	/// ordinary path, and the envelope is valid in every respect.</para>
+	/// </summary>
+	[Fact]
+	public void ItRefusesAMessageThatInflatesPastTheCeiling()
+	{
+		var payload = new Dictionary<string, object>(StringComparer.Ordinal)
+		{
+			["subject"] = new string('a', 2 * 1024 * 1024),
+		};
+
+		var sealed_ = Sealing.Seal(payload);
+
+		// Two megabytes of one repeated character compresses to almost
+		// nothing, so the bomb fits inside FCM's 4KB data message with room
+		// to spare — which is what makes it worth capping.
+		var onTheWire = "k".Length + sealed_.WrappedKey.Length + "p".Length + sealed_.Payload.Length;
+
+		Assert.True(onTheWire < 4096, "the bomb should fit in an FCM data message");
+
+		Assert.Null(MessagePayloadCipher.Open(sealed_.WrappedKey, sealed_.Payload, sealed_.PrivateKeyPem));
+	}
 }

@@ -171,7 +171,33 @@ public static class MessagePayloadCipher
 	}
 
 	/// <summary>
-	/// Undo the server's <c>gzencode</c>, or null if it will not undo.
+	/// The most a message may inflate to. Far above any real message and low
+	/// enough that a compression bomb costs nothing worth measuring.
+	/// </summary>
+	private const int MaxInflatedBytes = 512 * 1024;
+
+	/// <summary>
+	/// Undo the server's <c>gzencode</c>, or null if it will not undo, or
+	/// will not stop.
+	///
+	/// <para>Copied through a fixed buffer with a running total rather than
+	/// <c>CopyTo</c>, which inflates into an unbounded MemoryStream. The
+	/// asymmetry with Hand is why this matters here: Hand verifies its GCM
+	/// tag with a key only the handset and the server hold, so a forged
+	/// payload never reaches its inflate. This content key is RSA-OAEP
+	/// wrapped to the handset's <b>public</b> key, which the device
+	/// publishes at enrolment — so anyone holding it can mint a content key,
+	/// seal a bomb under it and produce an envelope that authenticates
+	/// perfectly. The tag gates nothing against this, and the ceiling is
+	/// the only thing standing in front of the inflate.</para>
+	///
+	/// <para>Bounded even without it — FCM caps a payload at 4KB and gzip
+	/// tops out near 1000:1, so roughly 4MB of allocation inside a push
+	/// handler on a phone: memory pressure and a dropped message rather
+	/// than a crash. Cheap to remove all the same.</para>
+	///
+	/// <para>Overflow returns null, which needs no new handling from
+	/// callers: "will not open" is already one outcome here.</para>
 	/// </summary>
 	private static byte[]? Inflate(byte[] compressed)
 	{
@@ -181,7 +207,18 @@ public static class MessagePayloadCipher
 			using var gzip = new GZipStream(source, CompressionMode.Decompress);
 			using var inflated = new MemoryStream();
 
-			gzip.CopyTo(inflated);
+			var buffer = new byte[8192];
+			int read;
+
+			while ((read = gzip.Read(buffer, 0, buffer.Length)) > 0)
+			{
+				if (inflated.Length + read > MaxInflatedBytes)
+				{
+					return null;
+				}
+
+				inflated.Write(buffer, 0, read);
+			}
 
 			return inflated.ToArray();
 		}
