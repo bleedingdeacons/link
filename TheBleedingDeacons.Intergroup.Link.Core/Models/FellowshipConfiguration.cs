@@ -36,7 +36,23 @@ public sealed class FellowshipConfiguration
 	/// </summary>
 	public int PollSeconds { get; set; } = 120;
 
-	public bool IsConfigured => !string.IsNullOrWhiteSpace(BaseUrl);
+	/// <summary>
+	/// Whether this names somewhere Link is willing to talk to.
+	///
+	/// <para>This was a non-empty check, which meant any string at all
+	/// counted as configured and <see cref="Route"/> went on to interpolate
+	/// whatever it held. An absolute HTTPS URL is the real requirement: the
+	/// session token travels as a bearer credential and message bodies are
+	/// readable on the wire, so a plaintext base would put both in the
+	/// clear with nothing in the app saying it had happened.</para>
+	///
+	/// <para>SignInViewModel gates sign-in on this, so a base URL that is
+	/// not HTTPS fails closed rather than downgrading quietly.</para>
+	/// </summary>
+	public bool IsConfigured =>
+		!string.IsNullOrWhiteSpace(BaseUrl)
+		&& Uri.TryCreate(BaseUrl, UriKind.Absolute, out var parsed)
+		&& parsed.Scheme == Uri.UriSchemeHttps;
 
 	/// <summary>
 	/// Build an absolute URL for one of Fellowship's routes.

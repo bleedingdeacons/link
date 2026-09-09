@@ -8,6 +8,21 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed partial class PushRegistrar
 {
+	/// <summary>
+	/// Firebase Cloud Messaging is compiled into this head, so the
+	/// transport exists. Whether the build was given a
+	/// <c>google-services.json</c> to talk to a project with is a separate
+	/// question, and it shows up as an empty token rather than here — see
+	/// the interface.
+	/// </summary>
+	// S3400 wants a constant instead of a method returning one. It cannot
+	// be a constant: this is the implementing half of a partial method,
+	// and being a method is what lets the iOS head answer differently.
+	// Narrow suppression rather than a project-wide one.
+#pragma warning disable S3400
+	private static partial bool PlatformSupported() => true;
+#pragma warning restore S3400
+
 	private partial async Task<string?> PlatformTokenAsync()
 	{
 		// GetToken is marked obsolete by the binding because Google

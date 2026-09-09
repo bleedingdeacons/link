@@ -16,6 +16,35 @@
 				</VerticalStackLayout>
 			</Border>
 
+			<!--
+				Whether push is available in this build and enabled on this
+				phone. A dot and a headline, with the detail underneath.
+
+				Second on the page on purpose: it sits directly above
+				"Messages on this phone", which is where somebody goes when
+				they think a message is missing. It is usually not missing —
+				it is late, because nothing is being pushed — and this is
+				the card that says so before they clear their history
+				looking for it.
+
+				The colour is the indicator at a glance: green working,
+				amber still covered by the sync, red silenced, grey no push
+				in this build at all. See PushStatus.
+			-->
+			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+				<VerticalStackLayout Spacing="6">
+					<HorizontalStackLayout Spacing="8">
+						<BoxView WidthRequest="12"
+						         HeightRequest="12"
+						         CornerRadius="6"
+						         VerticalOptions="Center"
+						         BackgroundColor="{Binding PushIndicatorColour}" />
+						<Label Text="{Binding PushHeadline}" VerticalOptions="Center" />
+					</HorizontalStackLayout>
+					<Label Style="{StaticResource Secondary}" Text="{Binding PushDetail}" />
+				</VerticalStackLayout>
+			</Border>
+
 			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
 				<VerticalStackLayout Spacing="8">
 					<Label Text="Messages on this phone" />

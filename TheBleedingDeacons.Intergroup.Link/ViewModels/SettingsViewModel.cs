@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Support;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
@@ -15,12 +16,21 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly DeviceAuthService _auth;
 	private readonly ISessionStore _sessions;
 	private readonly IMessageHistory _history;
+	private readonly IPushRegistrar _registrar;
+	private readonly INotificationPermission _notifications;
 
-	public SettingsViewModel(DeviceAuthService auth, ISessionStore sessions, IMessageHistory history)
+	public SettingsViewModel(
+		DeviceAuthService auth,
+		ISessionStore sessions,
+		IMessageHistory history,
+		IPushRegistrar registrar,
+		INotificationPermission notifications)
 	{
 		_auth = auth;
 		_sessions = sessions;
 		_history = history;
+		_registrar = registrar;
+		_notifications = notifications;
 	}
 
 	[ObservableProperty]
@@ -31,6 +41,32 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 	[ObservableProperty]
 	private bool _busy;
+
+	/// <summary>
+	/// Whether push is available in this build and enabled on this phone,
+	/// as one thing the screen can draw.
+	///
+	/// <para>Link had nothing here at all: the one screen a member goes to
+	/// when messages seem slow said nothing about the mechanism that makes
+	/// them fast. See <see cref="PushStatus"/> for why it is four states
+	/// rather than a tick.</para>
+	///
+	/// <para>Flattened onto three properties rather than left as a nested
+	/// binding path, because this project compiles its XAML bindings and
+	/// escalates the diagnostics that fire when one cannot be compiled —
+	/// see the csproj. Shallow paths are what keeps that gate quiet.</para>
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(PushHeadline))]
+	[NotifyPropertyChangedFor(nameof(PushDetail))]
+	[NotifyPropertyChangedFor(nameof(PushIndicatorColour))]
+	private PushStatus _push = PushStatus.Unknown;
+
+	public string PushHeadline => Push.Headline;
+
+	public string PushDetail => Push.Detail;
+
+	public string PushIndicatorColour => Push.IndicatorColour;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(HasNotice))]
@@ -67,6 +103,34 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var held = await _history.AllAsync().ConfigureAwait(true);
 		Held = held.Count;
+
+		await RefreshPushAsync().ConfigureAwait(true);
+	}
+
+	/// <summary>
+	/// Work out whether push is both available and enabled, and say so.
+	///
+	/// <para>Read on every visit rather than cached. The state that most
+	/// needs correcting is fixed somewhere other than in Link — a member
+	/// switches notifications back on from the phone's own settings — so
+	/// somebody who has just gone and done that must find this agreeing
+	/// with them when they come back.</para>
+	///
+	/// <para>The registration half is
+	/// <see cref="DeviceAuthService.PushRegistered"/>, which is whether
+	/// the intergroup accepted a token, not whether this phone holds one.
+	/// Those disagree in the case worth catching.</para>
+	/// </summary>
+	private async Task RefreshPushAsync()
+	{
+		// ConfigureAwait(true): the property set below drives a label and a
+		// coloured dot on screen.
+		var permitted = await _notifications.IsGrantedAsync().ConfigureAwait(true);
+
+		Push = new PushStatus(
+			Supported: _registrar.Supported,
+			Permitted: permitted,
+			Registered: _auth.PushRegistered);
 	}
 
 	/// <summary>

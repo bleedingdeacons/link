@@ -16,5 +16,23 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// </summary>
 public interface IPushRegistrar
 {
+	/// <summary>
+	/// Whether this build has a push transport at all.
+	///
+	/// <para><b>Not the same question as "is there a token".</b> An empty
+	/// token means any of three things — no transport, a transport that
+	/// has not answered yet, or a phone with no Play Services — and only
+	/// the first of them is permanent. The settings indicator has to tell
+	/// "this build will never be pushed to" from "it has not been
+	/// registered yet", because one of those is worth a member's
+	/// attention and the other is not. See <c>PushStatus</c>.</para>
+	///
+	/// <para>An Android head answers true even without
+	/// <c>google-services.json</c>: the transport is compiled in and the
+	/// missing file is a build-configuration fault, which shows as an
+	/// unregistered phone rather than as an iOS-shaped one.</para>
+	/// </summary>
+	bool Supported { get; }
+
 	Task<string> CurrentTokenAsync();
 }

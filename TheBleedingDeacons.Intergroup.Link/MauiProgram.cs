@@ -23,6 +23,26 @@ public static class MauiProgram
 
 	public static MauiApp CreateMauiApp()
 	{
+#if IOS || MACCATALYST
+		// Keep everything SecureStorage writes on the handset that wrote it.
+		//
+		// MAUI's own default is AfterFirstUnlock, which is included in
+		// encrypted device backups and restores onto a different device. For
+		// Link that would carry the RSA private key, the history key and the
+		// session token onto a handset the intergroup never enrolled — the
+		// same outcome AndroidManifest.xml's allowBackup="false" comment
+		// describes as precisely what the enrolment flow exists to prevent,
+		// and it would make "the private half never leaves the handset"
+		// untrue. ThisDeviceOnly has identical unlock semantics, which
+		// matters because a push can arrive on a locked phone, and excludes
+		// the item from migration.
+		//
+		// Must be set before anything reads or writes SecureStorage. Items
+		// already stored keep the attribute they were written with; those
+		// follow at the next enrolment.
+		SecureStorage.DefaultAccessible = Security.SecAccessible.AfterFirstUnlockThisDeviceOnly;
+#endif
+
 		var builder = MauiApp.CreateBuilder();
 
 		// ── Load appsettings.json from the embedded resource ──────────
@@ -84,6 +104,12 @@ public static class MauiProgram
 		builder.Services.AddSingleton(LinkServices.History);
 		builder.Services.AddSingleton(LinkServices.Messages);
 		builder.Services.AddSingleton(LinkServices.Push);
+		// Reads the notification permission for the settings indicator and
+		// never asks for it — MainActivity does the asking. Not in
+		// LinkServices, because that graph exists for the headless push
+		// service and nothing without a screen has any use for this.
+		builder.Services.AddSingleton<INotificationPermission, NotificationPermission>();
+
 		builder.Services.AddSingleton<IUiDispatcher, MainThreadDispatcher>();
 		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
