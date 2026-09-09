@@ -14,7 +14,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Models
         /// <c>https://</c>. Better Stack's dashboard shows the ingest address as a
         /// bare hostname — <c>sNNNNNN.eu-central-1a.betterstackdata.com</c> — so
         /// that is what gets pasted into configuration, but <see cref="IsValid"/>
-        /// requires an absolute http/https URI and <c>Uri.TryCreate</c> refuses a
+        /// requires an absolute HTTPS URI and <c>Uri.TryCreate</c> refuses a
         /// bare hostname.</para>
         ///
         /// <para>Without this the configuration reads as invalid, the logger
@@ -37,13 +37,20 @@ namespace TheBleedingDeacons.Intergroup.Link.Models
         /// <summary>
         /// Validates the Better Stack configuration.
         /// </summary>
+        /// <remarks>
+        /// HTTPS only. The endpoint is editable and BetterStackHttpClient
+        /// attaches the source token as a Bearer header on every batch, so an
+        /// http:// address would ship that token -- and whatever the logs
+        /// contain -- in the clear. A bare hostname is still accepted: the
+        /// setter gives it https:// on the way in.
+        /// </remarks>
         /// <returns>True if configuration is valid, false otherwise.</returns>
         public bool IsValid()
         {
             return !string.IsNullOrWhiteSpace(SourceToken) &&
                    !string.IsNullOrWhiteSpace(Endpoint) &&
                    Uri.TryCreate(Endpoint, UriKind.Absolute, out var parsed) &&
-                   (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps);
+                   parsed.Scheme == Uri.UriSchemeHttps;
         }
 
         /// <summary>
