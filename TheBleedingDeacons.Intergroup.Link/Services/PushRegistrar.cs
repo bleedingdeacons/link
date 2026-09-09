@@ -14,6 +14,13 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 public sealed partial class PushRegistrar : IPushRegistrar
 {
 	/// <summary>
+	/// Whether this head carries a push transport at all. Constant per
+	/// build, and answered by the platform half rather than by looking for
+	/// a token — see the interface for why those are different questions.
+	/// </summary>
+	public bool Supported => PlatformSupported();
+
+	/// <summary>
 	/// The current token, or empty.
 	///
 	/// <para>Never throws. Firebase can fail for reasons that have nothing
@@ -37,4 +44,14 @@ public sealed partial class PushRegistrar : IPushRegistrar
 	}
 
 	private partial Task<string?> PlatformTokenAsync();
+
+	/// <summary>
+	/// A partial method rather than a partial property, and not a
+	/// <c>Task</c>: whether a head was compiled with Firebase in it cannot
+	/// change while the process runs, so there is nothing to await — and
+	/// the analyser reads a partial property's two halves as two members,
+	/// then reports the implementing one as unused and the defining one as
+	/// never assigned. Both are false, and a method avoids them.
+	/// </summary>
+	private static partial bool PlatformSupported();
 }

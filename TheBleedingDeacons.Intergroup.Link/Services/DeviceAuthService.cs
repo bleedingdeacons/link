@@ -44,6 +44,26 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
+	/// Whether Fellowship has accepted a push token for this handset since
+	/// the process started.
+	///
+	/// <para><b>Not "do we hold a token".</b> Those two disagree in
+	/// exactly the case the settings indicator exists to catch: a phone
+	/// with a perfectly good FCM token that the intergroup was never told
+	/// about, because the one call that would have told it failed while
+	/// the phone was out of signal. Such a phone looks push-capable from
+	/// the inside and is never pushed to.</para>
+	///
+	/// <para><b>In memory, and reset by a restart, deliberately.</b> It
+	/// means "as of this launch, the intergroup was told" — which is the
+	/// claim the indicator can actually stand behind. Persisting it would
+	/// make it a memory of something that was true on a different day, and
+	/// a device revoked from the admin Devices screen would still read as
+	/// registered here.</para>
+	/// </summary>
+	public bool PushRegistered { get; private set; }
+
+	/// <summary>
 	/// Re-send this handset's push token, if it has one and is signed in.
 	///
 	/// <para>Called at every launch. See <see cref="App.OnStart"/> for why
@@ -89,6 +109,12 @@ public sealed class DeviceAuthService
 		}
 
 		var ok = await _client.UpdatePushTokenAsync(session.Token, pushToken, cancellationToken).ConfigureAwait(false);
+
+		// Only ever set true here. A failed attempt leaves an earlier
+		// success standing rather than retracting it: the token that was
+		// accepted is still the one the intergroup holds, and a phone that
+		// dipped out of signal has not stopped being pushed to.
+		PushRegistered = PushRegistered || ok;
 
 		if (ok)
 		{
@@ -336,6 +362,11 @@ public sealed class DeviceAuthService
 
 		await _sessions.ClearAsync().ConfigureAwait(false);
 		await _keys.ClearAsync().ConfigureAwait(false);
+
+		// The registration belonged to the device row that has just been
+		// revoked. Leaving it standing would have the next sign-in screen
+		// claim push was connected for a handset the server no longer knows.
+		PushRegistered = false;
 	}
 
 	/// <summary>
@@ -378,6 +409,14 @@ public sealed class DeviceAuthService
 		if (result.Succeeded && result.Session is not null)
 		{
 			await _sessions.SaveAsync(result.Session).ConfigureAwait(false);
+
+			// Enrolment carries the token itself rather than going through
+			// RegisterPushTokenAsync, so this is the other place the
+			// registration becomes true. Without it a member who has just
+			// signed in would be told push was not connected until their
+			// next launch, which is both wrong and the moment they are most
+			// likely to be looking.
+			PushRegistered = pushToken.Length > 0;
 
 			Log.Information(
 				"Enrolled as device {DeviceId} for member {MemberId}; push {Push}",

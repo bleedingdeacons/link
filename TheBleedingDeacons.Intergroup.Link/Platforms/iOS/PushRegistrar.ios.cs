@@ -14,5 +14,17 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed partial class PushRegistrar
 {
+	/// <summary>
+	/// No transport on this head, and saying so is the point: it is what
+	/// lets the settings indicator tell an iOS member "this build has no
+	/// push" instead of "not registered yet", which would be an invitation
+	/// to wait for something that is never coming.
+	/// </summary>
+	// S3400: see the Android half. It cannot be a constant, because being
+	// a method is what lets the two heads answer differently.
+#pragma warning disable S3400
+	private static partial bool PlatformSupported() => false;
+#pragma warning restore S3400
+
 	private partial Task<string?> PlatformTokenAsync() => Task.FromResult<string?>(null);
 }

@@ -104,6 +104,12 @@ public static class MauiProgram
 		builder.Services.AddSingleton(LinkServices.History);
 		builder.Services.AddSingleton(LinkServices.Messages);
 		builder.Services.AddSingleton(LinkServices.Push);
+		// Reads the notification permission for the settings indicator and
+		// never asks for it — MainActivity does the asking. Not in
+		// LinkServices, because that graph exists for the headless push
+		// service and nothing without a screen has any use for this.
+		builder.Services.AddSingleton<INotificationPermission, NotificationPermission>();
+
 		builder.Services.AddSingleton<IUiDispatcher, MainThreadDispatcher>();
 		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
