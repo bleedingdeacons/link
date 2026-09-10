@@ -318,7 +318,16 @@ public sealed class FellowshipClient : IFellowshipClient
 				var id = Number(element, "id");
 				if (id > 0)
 				{
-					members.Add(new DirectoryMember { Id = id, Name = Text(element, "name") });
+					// group and gsr are read leniently: a Fellowship older than
+					// they are sends neither, and a directory that failed to
+					// parse would take the whole address book with it.
+					members.Add(new DirectoryMember
+					{
+						Id = id,
+						Name = Text(element, "name"),
+						HomeGroup = Text(element, "group"),
+						IsGsr = Flag(element, "gsr"),
+					});
 				}
 			}
 		}
@@ -501,6 +510,33 @@ public sealed class FellowshipClient : IFellowshipClient
 			JsonValueKind.String => value.GetString() ?? string.Empty,
 			JsonValueKind.Number => value.ToString(),
 			_ => string.Empty,
+		};
+	}
+
+	/// <summary>
+	/// A boolean field, read leniently.
+	/// </summary>
+	/// <remarks>
+	/// WordPress will happily encode a bool as true, as 1, or as "1"
+	/// depending on how it reached the response, so all three are accepted
+	/// rather than trusting one. Anything else, including the field being
+	/// absent, is false — which for `gsr` is the right default: claiming a
+	/// standing somebody does not hold is worse than omitting one they do.
+	/// </remarks>
+	private static bool Flag(JsonElement element, string name)
+	{
+		if (!element.TryGetProperty(name, out var value))
+		{
+			return false;
+		}
+
+		return value.ValueKind switch
+		{
+			JsonValueKind.True => true,
+			JsonValueKind.False => false,
+			JsonValueKind.Number => value.TryGetInt64(out var number) && number != 0,
+			JsonValueKind.String => value.GetString() is "1" or "true",
+			_ => false,
 		};
 	}
 

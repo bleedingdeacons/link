@@ -216,6 +216,72 @@ public sealed class FellowshipClientTests
 	}
 
 	[Fact]
+	public async Task TheDirectoryCarriesHomeGroupAndGsr()
+	{
+		var handler = new StubHandler(HttpStatusCode.OK, """
+			{"members":[{"id":3,"name":"Dave B","group":"Tuesday Bristol","gsr":true}],
+			 "committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.Equal("Tuesday Bristol", directory.Members[0].HomeGroup);
+		Assert.True(directory.Members[0].IsGsr);
+	}
+
+	[Fact]
+	public async Task AnOlderFellowshipThatSendsNeitherStillParses()
+	{
+		// The fields were added after handsets were already in use, so a
+		// server without them must not take the whole address book down.
+		var handler = new StubHandler(HttpStatusCode.OK, """
+			{"members":[{"id":3,"name":"Dave B"}],"committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.Equal("Dave B", directory.Members[0].Name);
+		Assert.Equal(string.Empty, directory.Members[0].HomeGroup);
+		Assert.False(directory.Members[0].IsGsr);
+	}
+
+	[Theory]
+	[InlineData("true", true)]
+	[InlineData("1", true)]
+	[InlineData("\"1\"", true)]
+	[InlineData("false", false)]
+	[InlineData("0", false)]
+	[InlineData("\"\"", false)]
+	public async Task GsrIsReadWhicheverWayWordPressEncodedIt(string encoded, bool expected)
+	{
+		// WordPress encodes a bool as true, as 1 or as "1" depending on how
+		// it reached the response, and claiming a standing somebody does
+		// not hold is worse than omitting one they do.
+		var handler = new StubHandler(HttpStatusCode.OK, $$"""
+			{"members":[{"id":3,"name":"Dave B","gsr":{{encoded}}}],"committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.Equal(expected, directory.Members[0].IsGsr);
+	}
+
+	[Theory]
+	[InlineData("", false, "")]
+	[InlineData("Tuesday Bristol", false, "Tuesday Bristol")]
+	[InlineData("", true, "GSR")]
+	[InlineData("Tuesday Bristol", true, "Tuesday Bristol · GSR")]
+	public void TheSecondLineIsComposedOnceRatherThanPerScreen(string group, bool gsr, string expected)
+	{
+		// A member with no group who is not a GSR gets no line at all, so
+		// the row closes up instead of holding a blank one open.
+		var member = new DirectoryMember { Id = 1, Name = "Dave B", HomeGroup = group, IsGsr = gsr };
+
+		Assert.Equal(expected, member.Standing);
+		Assert.Equal(expected.Length > 0, member.HasStanding);
+	}
+
+	[Fact]
 	public async Task ASendNamesMembersByIdAndNeverByAddress()
 	{
 		var handler = new StubHandler(HttpStatusCode.Created, """{"id":55,"recipients":2}""");

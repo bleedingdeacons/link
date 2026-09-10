@@ -67,7 +67,7 @@
 				-->
 				<SearchBar
 					Text="{Binding Search}"
-					Placeholder="Search by name" />
+					Placeholder="Search by name or group" />
 
 				<CollectionView
 					ItemsSource="{Binding People}"
@@ -80,9 +80,36 @@
 					</CollectionView.EmptyView>
 					<CollectionView.ItemTemplate>
 						<DataTemplate x:DataType="models:DirectoryMember">
-							<Grid Padding="12,10">
+							<!--
+								Hand's two-line row, and Hand's reason for
+								it: a rota has more than one Dave, and what
+								tells them apart is the home group.
+
+								Where Hand puts a "Show number" button and
+								the numbers it fetches, this puts the
+								member's standing and nothing else. Link is
+								never told an email address or a telephone
+								number - see Fellowship's DirectoryPresenter
+								- so there is nothing here to reveal and no
+								button to press.
+							-->
+							<VerticalStackLayout Padding="12,10" Spacing="2">
 								<Label Text="{Binding Name}" FontSize="16" />
-							</Grid>
+
+								<!--
+									Hidden rather than blank when a member
+									has no group and is not a GSR, so the
+									row closes up instead of holding open a
+									line with nothing in it. DirectoryMember
+									composes the string, so the empty case
+									has one answer rather than one per
+									screen.
+								-->
+								<Label Text="{Binding Standing}"
+								       IsVisible="{Binding HasStanding}"
+								       FontSize="12"
+								       Opacity="0.6" />
+							</VerticalStackLayout>
 						</DataTemplate>
 					</CollectionView.ItemTemplate>
 				</CollectionView>

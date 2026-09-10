@@ -201,8 +201,14 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		People.Clear();
 		foreach (var person in _allPeople)
 		{
+			// Home group counts as well as the name, now that the row
+			// shows one: somebody who knows a member only as "the GSR
+			// from Tuesday Bristol" can find them by typing the group,
+			// which is a real way people describe each other and was a
+			// dead end while only the name matched.
 			if (term.Length == 0
-				|| person.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+				|| person.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase)
+				|| person.HomeGroup.Contains(term, StringComparison.CurrentCultureIgnoreCase))
 			{
 				People.Add(person);
 			}
