@@ -185,9 +185,8 @@ history over the same file, whose write lock is per-instance.
 
 Stated plainly rather than left to be discovered.
 
-**iOS push, and Sign in with Apple.** The TFM is in the csproj now and CI
-builds the head, so this entry is about what that head lacks rather than
-about its absence.
+**iOS push.** The TFM is in the csproj now and CI builds the head, so this
+entry is about what that head lacks rather than about its absence.
 
 It now carries the push code, and has never received a push. The Firebase
 iOS SDK is referenced, `FirebasePush.ios.cs` configures it at launch and
@@ -212,11 +211,46 @@ binding is **`AdamE.Firebase.iOS.CloudMessaging`**, not
 its newest version targets `net6.0-ios15.4`, so it cannot restore against
 this project at all.
 
-It does not offer Sign in with Apple. `DeviceAuthService.SignInWithAppleAsync`
-and Fellowship's half both exist, but nothing on this side raises the
-platform sheet to get the identity token they need, so an iOS member
-signs in with Google — which works, because WebAuthenticator and the
-`link` scheme are wired in `Platforms/iOS/Info.plist` and `AppDelegate`.
+**Sign in with Apple is written, and compiled out of every build anybody
+can currently install.**
+
+This entry used to say the app never raised the platform sheet. It does,
+and has for a while: `SignInPage` offers a *Continue with Apple* button,
+`SignInViewModel` binds it to `DeviceAuthService.SignInWithAppleAsync`,
+that asks Fellowship for a nonce at `/auth/device/start`,
+`Platforms/iOS/AppleSignIn.ios.cs` raises Apple's own
+`ASAuthorizationController` with it, and Fellowship's
+`AppleProvider::verifyIdToken` checks the returned token against Apple's
+JWKS and compares its `nonce` claim with what it issued.
+
+It is written against `ASAuthorization` directly rather than MAUI's
+`AppleSignInAuthenticator`, and the nonce is the reason. The MAUI
+helper's `AuthenticateAsync` takes no options of any kind, so there is
+nowhere to put one, and Fellowship rejects a token minted without it
+every single time — which would have looked like a server bug from the
+app and an app bug from the server. The nonce is passed **unhashed**:
+Apple copies the value it is given straight into the claim, and hashing
+it first, which some flows require, would break the comparison against
+what Fellowship stored.
+
+What is not done is shipping it. `PlatformIsAvailable()` answers `false`
+unless `LINK_APPLE_SIGNIN` is defined, and only `-p:LinkPaidTeam=true`
+defines it — the same flag that applies `Platforms/iOS/Entitlements.plist`.
+`com.apple.developer.applesignin` is grantable only to a paid Apple
+Developer Program team, and a free personal team — which is what signs a
+sideloaded build, currently the only way Link reaches an iPhone at all —
+cannot sign an app that requests it. The install fails outright rather
+than degrading, so asking for it unconditionally would trade a working
+sideload for a feature that still would not work.
+
+The default build therefore hides the button rather than offering one
+that always fails, and an iOS member signs in with Google — which works,
+because WebAuthenticator and the `link` scheme are wired in
+`Platforms/iOS/Info.plist` and `AppDelegate`.
+
+That flag now gates `aps-environment` as well, for the same paid-team
+reason, which is why it is no longer called `LinkAppleSignIn`. See the
+push entry above.
 
 **A signed .ipa.** CI archives an unsigned one. Making it installable
 needs an Apple Developer Program membership, a distribution certificate
