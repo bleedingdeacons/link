@@ -67,7 +67,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	{
 		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
 
-		return held.Values.OrderByDescending(m => m.Id).ToList();
+		return held.Messages.Values.OrderByDescending(m => m.Id).ToList();
 	}
 
 	public async Task SaveAsync(IEnumerable<LinkMessage> messages, CancellationToken cancellationToken = default)
@@ -85,6 +85,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		try
 		{
 			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+			var kept = held.Messages;
 
 			foreach (var message in incoming)
 			{
@@ -97,13 +98,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				// The one thing not to lose is a local read that has not
 				// reached the server yet, which is why a locally-read
 				// message keeps its flag when the incoming copy is unread.
-				if (held.TryGetValue(message.Id, out var existing) && existing.IsRead && !message.IsRead)
+				if (kept.TryGetValue(message.Id, out var existing) && existing.IsRead && !message.IsRead)
 				{
-					held[message.Id] = message with { ReadAt = existing.ReadAt };
+					kept[message.Id] = message with { ReadAt = existing.ReadAt };
 				}
 				else
 				{
-					held[message.Id] = message;
+					kept[message.Id] = message;
 				}
 			}
 
@@ -119,7 +120,14 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	{
 		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
 
-		return held.Count == 0 ? 0 : held.Keys.Max();
+		// The higher of the two, never the more recent. A cleared inbox
+		// that has since received one message holds an id above the mark;
+		// an inbox cleared after that holds a mark above every id. Taking
+		// whichever was set last would, in the first case, ask the server
+		// for everything the member has just cleared.
+		var highest = held.Messages.Count == 0 ? 0 : held.Messages.Keys.Max();
+
+		return Math.Max(highest, held.ClearedUpTo);
 	}
 
 	public async Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default)
@@ -130,12 +138,12 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		{
 			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
 
-			if (!held.TryGetValue(messageId, out var message) || message.IsRead)
+			if (!held.Messages.TryGetValue(messageId, out var message) || message.IsRead)
 			{
 				return;
 			}
 
-			held[messageId] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+			held.Messages[messageId] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
 
 			await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
 		}
@@ -146,15 +154,48 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	}
 
 	/// <summary>
-	/// Delete the store.
+	/// Empty the store, and mark how far it had got.
 	///
-	/// <para>This clears the handset's copy and nothing else. It does not
-	/// unsend anything, other people still have theirs, and a message the
-	/// server has not yet aged out will arrive again on the next poll —
-	/// which is why the screen offering this says so rather than
-	/// implying otherwise.</para>
+	/// <para>This clears the handset's copies and nothing else. It does
+	/// not unsend anything, other people still have theirs, and the
+	/// intergroup's own record is untouched — which is why the screen
+	/// offering this says so rather than implying otherwise.</para>
+	///
+	/// <para><b>The file is rewritten, not deleted</b>, and that is the
+	/// point. A poll asks for everything above the highest id held, so
+	/// deleting the file sent the next poll back to zero and the server
+	/// refilled the inbox seconds later, in front of a member who had just
+	/// been told it was cleared. What stays behind is a single number
+	/// inside the same encrypted envelope: no message, no subject, no
+	/// sender, and nothing readable off the flash.</para>
 	/// </summary>
 	public async Task ClearAsync(CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			var highest = held.Messages.Count == 0 ? 0 : held.Messages.Keys.Max();
+
+			// Never walk the mark backwards: clearing an inbox that is
+			// already empty must not un-clear the one cleared before it.
+			var mark = Math.Max(highest, held.ClearedUpTo);
+
+			await WriteUnguardedAsync(new Held([], mark), cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	/// <summary>
+	/// Delete the store outright, mark and all. See the interface remarks:
+	/// this is for signing out, and clearing is not.
+	/// </summary>
+	public async Task ResetAsync(CancellationToken cancellationToken = default)
 	{
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -180,7 +221,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 	public void Dispose() => _gate.Dispose();
 
-	private async Task<Dictionary<long, LinkMessage>> ReadAsync(CancellationToken cancellationToken)
+	private async Task<Held> ReadAsync(CancellationToken cancellationToken)
 	{
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -194,11 +235,11 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		}
 	}
 
-	private async Task<Dictionary<long, LinkMessage>> ReadUnguardedAsync(CancellationToken cancellationToken)
+	private async Task<Held> ReadUnguardedAsync(CancellationToken cancellationToken)
 	{
 		if (!File.Exists(_path))
 		{
-			return [];
+			return Held.Nothing();
 		}
 
 		byte[] packed;
@@ -209,12 +250,12 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		}
 		catch (Exception e) when (e is IOException or UnauthorizedAccessException)
 		{
-			return [];
+			return Held.Nothing();
 		}
 
 		if (packed.Length <= NonceBytes + TagBytes)
 		{
-			return [];
+			return Held.Nothing();
 		}
 
 		var plaintext = new byte[packed.Length - NonceBytes - TagBytes];
@@ -232,28 +273,67 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		{
 			// A changed key, or a file that was half-written. Reads as no
 			// history rather than as an error — see the class remarks.
-			return [];
+			return Held.Nothing();
 		}
 
 		try
 		{
-			var messages = JsonSerializer.Deserialize<List<LinkMessage>>(plaintext, JsonOptions);
-
-			return messages is null
-				? []
-				: messages.Where(m => m.Id > 0).ToDictionary(m => m.Id);
+			return Parse(plaintext);
 		}
 		catch (Exception e) when (e is JsonException or ArgumentException)
 		{
 			// ArgumentException covers a duplicate id in a file written by
 			// something that did not go through SaveAsync.
-			return [];
+			return Held.Nothing();
 		}
 	}
 
-	private async Task WriteUnguardedAsync(Dictionary<long, LinkMessage> held, CancellationToken cancellationToken)
+	/// <summary>
+	/// Read either shape of file: the object written since clearing
+	/// learned to leave a mark, or the bare array written before it.
+	/// </summary>
+	/// <remarks>
+	/// Told apart by the first character rather than by trying one and
+	/// catching the failure, because a <see cref="JsonException"/> here is
+	/// indistinguishable from a corrupt file — and this class answers
+	/// corruption by returning nothing, which would silently discard the
+	/// history of every handset upgrading from an older build.
+	/// </remarks>
+	private static Held Parse(ReadOnlySpan<byte> plaintext)
 	{
-		var json = JsonSerializer.SerializeToUtf8Bytes(held.Values.OrderByDescending(m => m.Id).ToList(), JsonOptions);
+		var start = 0;
+		while (start < plaintext.Length && char.IsWhiteSpace((char)plaintext[start]))
+		{
+			start++;
+		}
+
+		if (start < plaintext.Length && plaintext[start] == (byte)'[')
+		{
+			var legacy = JsonSerializer.Deserialize<List<LinkMessage>>(plaintext, JsonOptions);
+
+			return legacy is null
+				? Held.Nothing()
+				: new Held(legacy.Where(m => m.Id > 0).ToDictionary(m => m.Id), 0);
+		}
+
+		var stored = JsonSerializer.Deserialize<StoredHistory>(plaintext, JsonOptions);
+
+		return stored is null
+			? Held.Nothing()
+			: new Held(
+				stored.Messages.Where(m => m.Id > 0).ToDictionary(m => m.Id),
+				Math.Max(0, stored.ClearedUpTo));
+	}
+
+	private async Task WriteUnguardedAsync(Held held, CancellationToken cancellationToken)
+	{
+		var stored = new StoredHistory
+		{
+			ClearedUpTo = held.ClearedUpTo,
+			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
+		};
+
+		var json = JsonSerializer.SerializeToUtf8Bytes(stored, JsonOptions);
 
 		var nonce = RandomNumberGenerator.GetBytes(NonceBytes);
 		var ciphertext = new byte[json.Length];
@@ -330,4 +410,34 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	/// reaching for <see cref="Encoding"/> gymnastics at each call site.
 	/// </summary>
 	internal static byte[] KeyForTesting(byte fill) => Enumerable.Repeat(fill, KeyBytes).ToArray();
+
+	/// <summary>
+	/// One read of the file: the messages, and how far a clear had reached.
+	/// </summary>
+	/// <remarks>
+	/// <see cref="Nothing"/> is a method rather than a shared instance
+	/// because callers write into <see cref="Messages"/>, and a static one
+	/// would let an empty read from one call end up carrying another
+	/// call's messages.
+	/// </remarks>
+	private sealed record Held(Dictionary<long, LinkMessage> Messages, long ClearedUpTo)
+	{
+		public static Held Nothing() => new([], 0);
+	}
+
+	/// <summary>
+	/// The file's shape on disk, inside the encrypted envelope.
+	/// </summary>
+	/// <remarks>
+	/// Before clearing left a mark this was a bare array of messages, and
+	/// files in that shape are still out there on handsets — see
+	/// <see cref="Parse"/>, which reads both. Nothing writes the old shape
+	/// any more, so a handset converts itself the first time it saves.
+	/// </remarks>
+	private sealed class StoredHistory
+	{
+		public long ClearedUpTo { get; set; }
+
+		public List<LinkMessage> Messages { get; set; } = [];
+	}
 }

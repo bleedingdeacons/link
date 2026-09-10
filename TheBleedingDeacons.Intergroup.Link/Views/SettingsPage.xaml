@@ -56,7 +56,7 @@
 						The confirmation says so too.
 					-->
 					<Label Style="{StaticResource Secondary}"
-					       Text="Clearing removes only this phone's copies. Nothing is unsent, and recent messages come back on the next sync." />
+					       Text="Clearing removes only this phone's copies. Nothing is unsent, and the intergroup keeps its own record." />
 					<Button Text="Clear messages on this phone"
 					        Style="{StaticResource Quiet}"
 					        Command="{Binding ClearHistoryCommand}" />

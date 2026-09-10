@@ -145,7 +145,49 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ClearAsync();
 
 		Assert.Empty(await history.AllAsync());
-		Assert.Equal(0, await history.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task ClearedMessagesStayClearedRatherThanBeingFetchedBackAgain()
+	{
+		// The whole point of the mark. A poll asks for everything above
+		// the highest id held, so a store that dropped back to 0 had the
+		// server refill it seconds later, in front of somebody who had
+		// just been told their messages were cleared.
+		using var history = New();
+
+		await history.SaveAsync([Message(1, "Gone"), Message(2, "Also gone")]);
+		await history.ClearAsync();
+
+		Assert.Equal(2, await history.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task TheMarkSurvivesBeingReopened()
+	{
+		using (var writing = New())
+		{
+			await writing.SaveAsync([Message(9, "Gone")]);
+			await writing.ClearAsync();
+		}
+
+		using var reopened = New();
+
+		Assert.Empty(await reopened.AllAsync());
+		Assert.Equal(9, await reopened.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task AMessageArrivingAfterAClearMovesThePollPastTheMark()
+	{
+		using var history = New();
+
+		await history.SaveAsync([Message(4, "Gone")]);
+		await history.ClearAsync();
+		await history.SaveAsync([Message(5, "New")]);
+
+		Assert.Equal(5, await history.HighestIdAsync());
+		Assert.Single(await history.AllAsync());
 	}
 
 	[Fact]
@@ -156,6 +198,64 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ClearAsync();
 
 		Assert.Empty(await history.AllAsync());
+	}
+
+	[Fact]
+	public async Task ClearingTwiceDoesNotUndoTheFirstClear()
+	{
+		// The second clear finds nothing held, so a mark taken from the
+		// messages alone would be 0 — and everything the first clear
+		// removed would arrive again on the next poll.
+		using var history = New();
+
+		await history.SaveAsync([Message(6, "Gone")]);
+		await history.ClearAsync();
+		await history.ClearAsync();
+
+		Assert.Equal(6, await history.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task ResettingForgetsTheMarkAsWell()
+	{
+		// Signing out. The next member on this handset must fetch their
+		// own history from the beginning rather than inherit somebody
+		// else's idea of where to start.
+		using var history = New();
+
+		await history.SaveAsync([Message(3, "Someone else's")]);
+		await history.ClearAsync();
+		await history.ResetAsync();
+
+		Assert.Empty(await history.AllAsync());
+		Assert.Equal(0, await history.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task AHistoryWrittenBeforeTheMarkExistedIsStillRead()
+	{
+		// Handsets are carrying files in the old shape — a bare array
+		// rather than an object — and reading one as corrupt would throw
+		// away the history of every phone that upgrades.
+		await WriteLegacyFileAsync();
+
+		using var history = New();
+
+		Assert.Equal(8, Assert.Single(await history.AllAsync()).Id);
+		Assert.Equal(8, await history.HighestIdAsync());
+	}
+
+	[Fact]
+	public async Task AHistoryInTheOldShapeCanStillBeCleared()
+	{
+		await WriteLegacyFileAsync();
+
+		using var history = New();
+
+		await history.ClearAsync();
+
+		Assert.Empty(await history.AllAsync());
+		Assert.Equal(8, await history.HighestIdAsync());
 	}
 
 	[Fact]
@@ -202,7 +302,54 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		Assert.NotEqual(Convert.ToBase64String(new byte[8]), toStore);
 	}
 
+	/// <summary>
+	/// A history file as builds before the clear mark wrote it: the bare
+	/// array, with no object around it.
+	/// </summary>
+	private const string LegacyFile =
+		"""[{"id":8,"subject":"Older build","body":"b","sender":"Dave B","createdAt":1788000000}]""";
+
 	private JsonMessageHistory New() => new(_path, _key);
+
+	/// <summary>
+	/// Pack plaintext into the envelope the store reads: a 12-byte nonce,
+	/// the 16-byte tag, then the ciphertext.
+	/// </summary>
+	/// <remarks>
+	/// Written out here rather than reached for through the class under
+	/// test, because these tests exist to prove a file this class did not
+	/// write is still readable — and a helper that used its own writer
+	/// could only ever produce the shape it writes today.
+	/// </remarks>
+	private async Task WriteLegacyFileAsync()
+	{
+		// The store creates its own directory when it writes; nothing has
+		// written yet when a test plants a file by hand.
+		Directory.CreateDirectory(_directory);
+
+		await File.WriteAllBytesAsync(_path, Sealed(LegacyFile));
+	}
+
+	private byte[] Sealed(string json)
+	{
+		var plaintext = System.Text.Encoding.UTF8.GetBytes(json);
+
+		var nonce = RandomNumberGenerator.GetBytes(12);
+		var ciphertext = new byte[plaintext.Length];
+		var tag = new byte[16];
+
+		using (var gcm = new AesGcm(_key, 16))
+		{
+			gcm.Encrypt(nonce, plaintext, ciphertext, tag);
+		}
+
+		var packed = new byte[nonce.Length + tag.Length + ciphertext.Length];
+		nonce.CopyTo(packed, 0);
+		tag.CopyTo(packed, nonce.Length);
+		ciphertext.CopyTo(packed, nonce.Length + tag.Length);
+
+		return packed;
+	}
 
 	private static LinkMessage Message(long id, string subject) => new()
 	{

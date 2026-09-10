@@ -386,7 +386,16 @@ public sealed class MessageServiceTests
 
 		public Task ClearAsync(CancellationToken cancellationToken = default)
 		{
+			Highest = Held.Count == 0 ? Highest : Math.Max(Highest, Held.Max(m => m.Id));
 			Held.Clear();
+
+			return Task.CompletedTask;
+		}
+
+		public Task ResetAsync(CancellationToken cancellationToken = default)
+		{
+			Held.Clear();
+			Highest = 0;
 
 			return Task.CompletedTask;
 		}
