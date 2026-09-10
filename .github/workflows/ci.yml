@@ -57,6 +57,12 @@ name: CI
 #  * Platforms/Android/google-services.json — the build succeeds and produces
 #    an app that polls rather than receiving pushes, which is a documented
 #    degraded state rather than a broken build.
+#  * Platforms/iOS/GoogleService-Info.plist — the same file for the other
+#    head, and the iOS job now writes it from a secret when one is set. Not
+#    because iOS is special on principle, but because the .ipa this workflow
+#    archives is the artifact that actually reaches an iPhone, so a plist
+#    absent here is push absent from every iOS install. The Android half is
+#    still unwritten and still worth closing.
 #  * appsettings.json — **written by the build now**, from the LINK_BASE_URL
 #    repository variable, because an artifact somebody installs has to know
 #    which intergroup it belongs to. Without the variable the behaviour is
@@ -308,6 +314,15 @@ jobs:
             > TheBleedingDeacons.Intergroup.Link/appsettings.json
           echo 'Wrote:'
           cat TheBleedingDeacons.Intergroup.Link/appsettings.json
+
+      # Without this the .ipa builds and polls, silently — and the .ipa this
+      # job archives is the one Sideloadly puts on the iPhone, so that is the
+      # only iOS build there is. See the script for why the Android job has
+      # no matching step yet.
+      - name: Write GoogleService-Info.plist
+        env:
+          GOOGLE_SERVICES_PLIST: ${{ secrets.GOOGLE_SERVICES_PLIST }}
+        run: bash .github/scripts/write-google-services-plist.sh
 
       # Release for a device (ios-arm64), unsigned.
       #

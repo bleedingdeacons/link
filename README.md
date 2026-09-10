@@ -189,13 +189,28 @@ Stated plainly rather than left to be discovered.
 builds the head, so this entry is about what that head lacks rather than
 about its absence.
 
-It does not push. There is no Firebase iOS SDK, no APNs key on the
-Firebase project and no background-fetch entitlement, so
-`PushRegistrar.ios.cs` answers empty and an iOS build collects its
-messages by polling. That is the same documented state as an Android
-build without `google-services.json`, and the same one a phone in a
-tunnel is in: every message arrives, on the poll interval rather than at
-once.
+It now carries the push code, and has never received a push. The Firebase
+iOS SDK is referenced, `FirebasePush.ios.cs` configures it at launch and
+exchanges Apple's APNs device token for the FCM registration token
+`message.token` needs, the app delegate opens the silent push and raises
+the notification itself, and the `aps-environment` entitlement is
+declared. What none of that has had is an iPhone, an APNs key on the
+Firebase project, or a paid Developer Program team — Apple grants
+`aps-environment` to nothing less, so a free personal team cannot even
+sign a build that asks for it.
+
+Until those exist the head behaves as it always has: `FirebasePush`
+finds no `GoogleService-Info.plist`, reports no transport, and an iOS
+build collects its messages by polling. That is the same documented
+state as an Android build without `google-services.json`, and the same
+one a phone in a tunnel is in: every message arrives, on the poll
+interval rather than at once.
+
+If you came here from an older copy of this file, or from Hand's: the
+binding is **`AdamE.Firebase.iOS.CloudMessaging`**, not
+`Xamarin.Firebase.iOS.CloudMessaging`. The Xamarin one is archived and
+its newest version targets `net6.0-ios15.4`, so it cannot restore against
+this project at all.
 
 It does not offer Sign in with Apple. `DeviceAuthService.SignInWithAppleAsync`
 and Fellowship's half both exist, but nothing on this side raises the
@@ -322,8 +337,12 @@ Configuration lives in `appsettings.json`, embedded rather than copied so
 it cannot be edited on a device to point the app at somebody else's
 server — which matters, since the app hands that server an OAuth code.
 
-`Platforms/Android/google-services.json` is git-ignored. Without it the
-app builds and works; it just polls instead of being pushed to.
+`Platforms/Android/google-services.json` and
+`Platforms/iOS/GoogleService-Info.plist` are git-ignored — one Firebase
+project, one file per head. Without them the app builds and works; it
+just polls instead of being pushed to. CI writes the iOS one from a
+`GOOGLE_SERVICES_PLIST` secret, because the `.ipa` it archives is the
+artifact that reaches a handset; the Android half is still unwritten.
 
 ```bash
 dotnet test TheBleedingDeacons.Intergroup.Link.Tests
@@ -358,9 +377,11 @@ first time.
   stops launching until it is deployed again. This is Apple's limit, not
   a Link one.
 * **No push, ever, on a free account.** APNs keys need a paid Developer
-  Program membership, so an iOS build signed this way polls — which is
-  what the iOS head does anyway today, for the separate reason that there
-  is no Firebase iOS SDK in it. The two limits happen to agree.
+  Program membership, and `aps-environment` cannot be signed by a free
+  personal team at all — a build requesting it fails to install rather
+  than degrading, which is why `LinkPaidTeam` gates the whole
+  entitlements file. So an iOS build signed this way polls. The push code
+  is in it and will stay dormant.
 * **The tab bar and sign-in are the point.** What Hot Restart is good for
   is proving the UI, the Google browser leg and the `link` scheme return
   work on a real handset. It is not a way to hand Link to a member.

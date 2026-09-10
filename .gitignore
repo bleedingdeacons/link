@@ -511,3 +511,9 @@ Properties/launchSettings.json
 # would rather CI produce a push-capable APK - and check the key's
 # restrictions in the Google Cloud console first.
 TheBleedingDeacons.Intergroup.Link/Platforms/Android/google-services.json
+
+# GoogleService-Info.plist is the Apple counterpart, ignored for exactly
+# the same reasons - see above. It carries an API key and a project number,
+# Google expects it to ship inside every app bundle, and the build treats it
+# as optional: without it the iOS head polls rather than failing.
+TheBleedingDeacons.Intergroup.Link/Platforms/iOS/GoogleService-Info.plist

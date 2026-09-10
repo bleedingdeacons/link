@@ -45,6 +45,21 @@
 		README.md, "The four places `link://auth` is written", which this
 		file is one of.
 	-->
+	<!--
+		Remote notifications, which Fellowship's push cannot do without.
+
+		It sends a *silent* push - content-available, no alert - because the
+		server cannot write the notification: it cannot read the message.
+		So nothing is displayed unless iOS wakes the app to open the
+		envelope, and this key is what permits that wake. Without it the
+		push is delivered to nothing at all and the message waits for the
+		next poll - which is not a crash, and is exactly the sort of
+		omission that reads as an intermittent server.
+	-->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
