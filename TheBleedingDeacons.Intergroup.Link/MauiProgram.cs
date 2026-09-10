@@ -144,11 +144,18 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton<SignInViewModel>();
 		builder.Services.AddSingleton<MessagesViewModel>();
+		// Transient, unlike the others: one instance per message opened.
+		// A singleton would keep the previous message's text on screen for
+		// the instant before the next one loads, which reads as the wrong
+		// message having opened.
+		builder.Services.AddTransient<MessageViewModel>();
 		builder.Services.AddSingleton<ComposeViewModel>();
 		builder.Services.AddSingleton<SettingsViewModel>();
 
 		builder.Services.AddSingleton<SignInPage>();
 		builder.Services.AddSingleton<MessagesPage>();
+		// Transient for the same reason its view model is.
+		builder.Services.AddTransient<MessagePage>();
 		builder.Services.AddTransient<ComposePage>();
 		builder.Services.AddSingleton<SettingsPage>();
 

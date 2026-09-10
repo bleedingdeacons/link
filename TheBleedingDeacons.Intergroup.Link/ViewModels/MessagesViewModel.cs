@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -104,29 +105,47 @@ public sealed partial class MessagesViewModel : ObservableObject
 	}
 
 	/// <summary>
-	/// Mark a message read, here and — if it can be reached — on the
-	/// server.
+	/// Open a message: mark it read, then show it.
 	///
-	/// <para>The list is not reloaded afterwards: the record is replaced
-	/// in place so the row stops being bold without the view jumping back
-	/// to the top, which is what a full reload would do to somebody
-	/// halfway down.</para>
+	/// <para>Reading is the point, and until there was a screen for it
+	/// this did only the marking — so a body longer than the three lines
+	/// the row shows could not be read at all. See
+	/// <see cref="MessageViewModel"/>.</para>
+	///
+	/// <para>The list is not reloaded after marking: the record is
+	/// replaced in place so the row stops being bold without the view
+	/// jumping back to the top, which is what a full reload would do to
+	/// somebody halfway down.</para>
 	/// </summary>
 	[RelayCommand]
 	public async Task OpenAsync(LinkMessage? message)
 	{
-		if (message is null || message.IsRead)
+		if (message is null)
 		{
 			return;
 		}
 
-		await _messages.MarkReadAsync(message.Id).ConfigureAwait(true);
-
-		var index = Messages.IndexOf(message);
-		if (index >= 0)
+		// Only when it is new. The navigation below happens either way —
+		// an already-read message is still one somebody wants to open, and
+		// an early return here is what used to make the second tap on a
+		// message do nothing at all.
+		if (!message.IsRead)
 		{
-			Messages[index] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+			await _messages.MarkReadAsync(message.Id).ConfigureAwait(true);
+
+			var index = Messages.IndexOf(message);
+			if (index >= 0)
+			{
+				Messages[index] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
+			}
 		}
+
+		// By id rather than by handing the record over: the page is
+		// recreated if Android reclaims the process, and an id survives
+		// that where an object does not.
+		var route = string.Create(CultureInfo.InvariantCulture, $"message?id={message.Id}");
+
+		await Shell.Current.GoToAsync(route).ConfigureAwait(true);
 	}
 
 	internal async Task LoadAsync()
