@@ -15,6 +15,49 @@ public sealed record DirectoryMember
 	public required long Id { get; init; }
 
 	public string Name { get; init; } = string.Empty;
+
+	/// <summary>
+	/// The member's home group, or empty.
+	///
+	/// <para>Here because a first name identifies nobody in an intergroup
+	/// with several Daves — the same reason Hand shows one beside its own
+	/// member list. Empty is ordinary rather than exceptional: a member
+	/// need not have a group recorded, a group can be deleted while
+	/// members still point at it, and a Fellowship older than this sends
+	/// no group at all.</para>
+	///
+	/// <para><b>Not a contact detail.</b> Fellowship sends no email
+	/// address and no telephone number, and adding this did not change
+	/// that — its own test asserts as much.</para>
+	/// </summary>
+	public string HomeGroup { get; init; } = string.Empty;
+
+	/// <summary>
+	/// Whether this member is a General Service Representative.
+	///
+	/// <para>A bool rather than a label, so the wording lives in the app
+	/// and never has to come back from the server.</para>
+	/// </summary>
+	public bool IsGsr { get; init; }
+
+	/// <summary>
+	/// The second line of a row, or empty when there is nothing to put in
+	/// it.
+	///
+	/// <para>Composed here rather than in the XAML so the empty case has
+	/// one answer: a member with no group who is not a GSR gets no line
+	/// at all, rather than a blank one holding the row open.</para>
+	/// </summary>
+	public string Standing => (HomeGroup, IsGsr) switch
+	{
+		("", false) => string.Empty,
+		("", true) => "GSR",
+		(var group, false) => group,
+		(var group, true) => group + " · GSR",
+	};
+
+	/// <summary>Whether <see cref="Standing"/> has anything to show.</summary>
+	public bool HasStanding => Standing.Length > 0;
 }
 
 /// <summary>
