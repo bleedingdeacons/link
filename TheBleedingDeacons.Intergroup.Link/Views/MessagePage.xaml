@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagePage"
+             x:DataType="vm:MessageViewModel"
+             Shell.TabBarIsVisible="False"
+             Title="Message">
+
+	<!--
+		Deliberately a pushed page rather than a modal or an expanding row.
+
+		Pushed is what both platforms already know how to undo: iOS gives
+		it a back chevron and the edge swipe, Android the system back
+		gesture and the app bar arrow. Nothing here has to draw a close
+		button, and nobody has to be taught how to leave.
+
+		Title is "Message" and not the subject. A subject is member-typed
+		and can be 200 characters; a nav bar that truncates mid-word tells
+		you less than a fixed word does, and the subject is the first thing
+		in the page anyway.
+	-->
+
+	<ScrollView>
+		<VerticalStackLayout Padding="16" Spacing="14">
+
+			<!--
+				Said plainly rather than left as an empty card. The history
+				is clearable from Settings and the server ages messages
+				out, so arriving here to find nothing is a thing that
+				happens rather than a bug.
+			-->
+			<Label IsVisible="{Binding Missing}"
+			       Style="{StaticResource Secondary}"
+			       Text="This message is no longer on this phone. It may have been cleared from history, or removed by the intergroup after its retention period." />
+
+			<VerticalStackLayout Spacing="14" IsVisible="{Binding Found}">
+
+				<Label Text="{Binding Subject}"
+				       Style="{StaticResource Heading}"
+				       FontSize="22" />
+
+				<!--
+					Sender and time on one line, quiet. Who it is from
+					matters; what matters more is the body, so this does
+					not compete with it.
+				-->
+				<VerticalStackLayout Spacing="2">
+					<Label Text="{Binding Sender}" FontSize="15" />
+					<Label Text="{Binding Sent}" Style="{StaticResource Secondary}" />
+				</VerticalStackLayout>
+
+				<BoxView HeightRequest="1"
+				         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+
+				<!--
+					No MaxLines and no truncation: this screen exists
+					precisely because the list had both.
+
+					Not selectable, and not by choice - MAUI's Label has no
+					selection property at all, so a member cannot copy a
+					number out of a message. Worth revisiting with an
+					Editor made read-only, which can be selected but looks
+					like a field somebody is meant to type in.
+				-->
+				<Label Text="{Binding Body}"
+				       FontSize="16"
+				       LineHeight="1.35" />
+
+				<Button Text="Reply"
+				        Command="{Binding ReplyCommand}"
+				        HorizontalOptions="Start"
+				        Margin="0,8,0,0" />
+
+			</VerticalStackLayout>
+
+		</VerticalStackLayout>
+	</ScrollView>
+
+</ContentPage>

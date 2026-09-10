@@ -5,6 +5,7 @@
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.ComposePage"
              x:DataType="vm:ComposeViewModel"
+             Shell.TabBarIsVisible="False"
              Title="New message">
 
 	<ScrollView>
