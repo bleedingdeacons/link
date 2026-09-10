@@ -16,5 +16,20 @@
 	<array>
 		<string>Default</string>
 	</array>
+
+	<!--
+		APNs. Without this the app registers, Apple refuses, and the handset
+		collects its messages by polling - a failure that looks exactly like
+		a missing Firebase project from the log.
+
+		Same paid-team constraint as the entitlement above, which is why one
+		switch gates the whole file. "development" is right for every build
+		this repo produces; a TestFlight or App Store build needs
+		"production", and a value that disagrees with the provisioning
+		profile is rejected at install rather than at build, with a message
+		that names neither side.
+	-->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

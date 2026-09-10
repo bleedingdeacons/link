@@ -143,26 +143,73 @@
 	</PropertyGroup>
 
 	<!--
-		Sign in with Apple, off by default.
+		Paid-team entitlements, off by default.
 
-		<b>The entitlement is the whole reason this is a switch.</b>
-		com.apple.developer.applesignin is only grantable to a paid Apple
-		Developer Program team. A free personal team — which is what signs
-		a sideloaded build, and currently the only way Link reaches an
-		iPhone at all — cannot sign an app that requests it, and the
-		install fails outright rather than degrading. So asking for it
-		unconditionally would trade a working sideload for a feature that
-		still would not work.
+		<b>The entitlements are the whole reason this is a switch.</b>
+		Everything in Entitlements.plist is grantable only to a paid Apple
+		Developer Program team: com.apple.developer.applesignin, and now
+		aps-environment for push. A free personal team — which is what
+		signs a sideloaded build, and currently the only way Link reaches
+		an iPhone at all — cannot sign an app that requests either, and the
+		install fails outright rather than degrading. So asking for them
+		unconditionally would trade a working sideload for two features
+		that still would not work.
 
-		LINK_APPLE_SIGNIN also decides whether AppleSignIn reports itself
-		available, so the button is absent from a build that could not
-		honour it rather than present and permanently broken. The two must
-		move together, which is why one property sets both.
+		<b>Renamed from LinkAppleSignIn</b> when push joined it. The old
+		name described one of the two things it gated, and a flag called
+		"apple sign in" quietly deciding whether a handset can be pushed to
+		is the kind of thing that is discovered from behaviour rather than
+		read from the file. Nothing outside this file referenced it.
+
+		LINK_APPLE_SIGNIN is still defined here and still means only what
+		it says: whether AppleSignIn reports itself available, so the
+		button is absent from a build that could not honour it rather than
+		present and permanently broken.
+
+		Push needs no matching constant. FirebasePush decides at runtime,
+		from whether a GoogleService-Info.plist was bundled and Firebase
+		actually started — a build signed without aps-environment simply
+		fails to register with Apple and polls, which is the same degraded
+		state and one it can report honestly.
 	-->
-	<PropertyGroup Condition="'$(LinkAppleSignIn)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+	<PropertyGroup Condition="'$(LinkPaidTeam)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
 		<CodesignEntitlements>Platforms\iOS\Entitlements.plist</CodesignEntitlements>
 		<DefineConstants>$(DefineConstants);LINK_APPLE_SIGNIN</DefineConstants>
 	</PropertyGroup>
+
+	<!--
+		Firebase Cloud Messaging for the iOS head.
+
+		<b>AdamE, not Xamarin.</b> Microsoft archived the
+		Xamarin.Firebase.iOS.* bindings and the newest,
+		Xamarin.Firebase.iOS.CloudMessaging 8.10.0.3, targets
+		net6.0-ios15.4 — it cannot restore against a net10.0-ios project at
+		all. AdamE.Firebase.iOS.* is the maintained community binding and
+		ships net10.0-ios26.0 assets. Hand carries the same reference for
+		the same reason.
+
+		The binding is what turns an APNs device token into an FCM
+		registration token. Fellowship sends through FCM and message.token
+		requires the latter; they are different identifiers and FCM rejects
+		the wrong one. See Platforms/iOS/FirebasePush.ios.cs.
+
+		SupportedOSPlatformVersion stays at 15.0. The ios26.0 in the
+		package TFM is the SDK it was built against, not a deployment
+		floor, and Firebase 12 supports iOS 15 upwards.
+	-->
+	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<PackageReference Include="AdamE.Firebase.iOS.CloudMessaging" Version="12.10.0" />
+
+		<!--
+			The Apple counterpart of google-services.json, and ignored for
+			the same reasons - see .gitignore. Conditional for the same
+			reason too: a checkout without it must still build, and what it
+			produces is a polling handset rather than a broken one.
+		-->
+		<BundleResource Include="Platforms\iOS\GoogleService-Info.plist"
+		                Link="GoogleService-Info.plist"
+		                Condition="Exists('Platforms\iOS\GoogleService-Info.plist')" />
+	</ItemGroup>
 
 	<!--
 		Unsigned device builds, for CI.
