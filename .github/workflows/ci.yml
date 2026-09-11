@@ -85,6 +85,19 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    # `labeled` is here for the `ios` label the iOS job reads. Without it
+    # the default types are opened/synchronize/reopened, so labelling a PR
+    # changes nothing until somebody pushes to it — and the run that
+    # already decided to skip the iOS head does not reconsider. Asking for
+    # the head would then mean making a commit to ask, which is the sort of
+    # instruction nobody follows twice.
+    #
+    # The cost is that *any* label change starts a run, not just this one:
+    # GitHub cannot filter `types` by label name, and the filtering has to
+    # happen in the job's own `if`. PR runs share a concurrency group with
+    # cancel-in-progress, so the waste is bounded by whatever the previous
+    # run had got through.
+    types: [ opened, synchronize, reopened, labeled ]
   workflow_dispatch:
     inputs:
       ios:
