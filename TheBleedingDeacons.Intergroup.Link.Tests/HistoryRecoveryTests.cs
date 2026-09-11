@@ -122,16 +122,37 @@ public sealed class HistoryRecoveryTests : IDisposable
 	}
 
 	[Fact]
-	public async Task ClearingRemovesTheFileRatherThanEmptyingIt()
+	public async Task ClearingLeavesNoMessageOnDiskToRecover()
 	{
-		// A cleared history should leave nothing on disk to recover, which
-		// is the whole point of the button.
+		// This used to assert that the file was deleted, and clearing now
+		// rewrites it instead — it has to leave behind how far it got, or
+		// the next poll fetches everything straight back. What the test
+		// was protecting is unchanged and is what it now checks: somebody
+		// holding the key, which is the strongest position anyone can be
+		// in, still recovers nothing.
 		var history = New();
 		await history.SaveAsync([Message(1, "Held")]);
 
 		Assert.True(File.Exists(_path));
 
 		await history.ClearAsync();
+
+		using var withTheKey = New();
+
+		Assert.Empty(await withTheKey.AllAsync());
+
+		var raw = await File.ReadAllBytesAsync(_path);
+
+		Assert.True(raw.Length < 120, $"A cleared file should hold a number and nothing else; it is {raw.Length} bytes.");
+	}
+
+	[Fact]
+	public async Task SigningOutRemovesTheFileAltogether()
+	{
+		var history = New();
+		await history.SaveAsync([Message(1, "Held")]);
+
+		await history.ResetAsync();
 
 		Assert.False(File.Exists(_path));
 	}

@@ -12,12 +12,26 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// </para>
 ///
 /// <para><b>Why it is clearable, and what clearing actually does.</b>
-/// <see cref="ClearAsync"/> deletes the local store outright. It does not
-/// tell the server anything and it does not un-send anything: other
-/// people still have their copies, and a message still on the server
-/// arrives again on the next poll if it has not aged out. That is worth
-/// saying plainly on the screen that offers it, because "clear history"
-/// reads to most people like "delete the messages", and it is not.</para>
+/// <see cref="ClearAsync"/> deletes the local store and remembers how far
+/// it had got, so what was cleared stays cleared. It does not tell the
+/// server anything and it does not un-send anything: other people still
+/// have their copies, and the intergroup's own record is untouched. That
+/// is worth saying plainly on the screen that offers it, because "clear
+/// history" reads to most people like "delete the messages", and it is
+/// only ever this phone's copies.</para>
+///
+/// <para><b>Why remembering is the whole trick.</b> A poll asks for
+/// everything above <see cref="HighestIdAsync"/>, so a store that merely
+/// deleted its file went back to asking from zero and the server refilled
+/// it within seconds — leaving a button whose entire visible effect was
+/// nothing at all. Clearing therefore leaves a mark behind, and that mark
+/// is where the next poll starts.</para>
+///
+/// <para><b>Which is exactly why signing out must not use it.</b> The
+/// mark belongs to the member who set it. Left in place for whoever signs
+/// in next, it would hand them an inbox that silently refuses to fetch
+/// their own history, with nothing on screen to explain why — so sign-out
+/// calls <see cref="ResetAsync"/> instead.</para>
 /// </summary>
 public interface IMessageHistory
 {
@@ -34,11 +48,31 @@ public interface IMessageHistory
 	/// </summary>
 	Task SaveAsync(IEnumerable<LinkMessage> messages, CancellationToken cancellationToken = default);
 
-	/// <summary>The highest message id held, or 0. This is what a poll asks for.</summary>
+	/// <summary>
+	/// Where the next poll should start: the highest message id held, the
+	/// point a clear reached, or 0 when neither applies.
+	///
+	/// <para>The higher of the two, not the newer. Clearing an inbox and
+	/// then receiving one more message must not walk the starting point
+	/// backwards to what was cleared.</para>
+	/// </summary>
 	Task<long> HighestIdAsync(CancellationToken cancellationToken = default);
 
 	Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default);
 
-	/// <summary>Delete everything held locally. See the interface remarks.</summary>
+	/// <summary>
+	/// Delete this phone's copies, and remember how far they reached so
+	/// the next poll does not fetch them straight back. The member's
+	/// choice; see the interface remarks.
+	/// </summary>
 	Task ClearAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Delete everything, the mark left by <see cref="ClearAsync"/>
+	/// included, leaving the store as it was before anybody signed in.
+	///
+	/// <para>For signing out, and for nothing else. The next member on
+	/// this handset must start from zero and fetch their own history.</para>
+	/// </summary>
+	Task ResetAsync(CancellationToken cancellationToken = default);
 }

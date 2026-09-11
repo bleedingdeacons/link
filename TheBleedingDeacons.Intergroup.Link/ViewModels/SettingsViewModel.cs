@@ -139,10 +139,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// <para><b>The confirmation says what it actually does</b>, because
 	/// "clear history" reads to most people as "delete the messages" and
 	/// it is not that at all. Other people still have their copies,
-	/// nothing is unsent, and anything the intergroup has not yet aged out
-	/// comes back on the next sync. Saying so is the difference between a
-	/// member who uses this to tidy up and one who uses it believing they
-	/// have recalled something.</para>
+	/// nothing is unsent, and the intergroup's own record is untouched.
+	/// Saying so is the difference between a member who uses this to tidy
+	/// up and one who uses it believing they have recalled something.</para>
+	///
+	/// <para>What it no longer says is that the messages come back on the
+	/// next sync. They did, within seconds, because the poll asked for
+	/// everything above the highest id held and a cleared store held
+	/// none — so the warning was accurate and the button was useless.
+	/// <see cref="IMessageHistory.ClearAsync"/> now leaves a mark behind
+	/// and cleared messages stay cleared.</para>
 	/// </summary>
 	[RelayCommand]
 	private async Task ClearHistoryAsync()
@@ -155,8 +161,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var confirmed = await page.DisplayAlertAsync(
 			"Clear messages on this phone?",
-			"This deletes the copies held on this handset. It does not unsend anything — everyone else still has theirs — "
-				+ "and recent messages will come back the next time this app syncs.",
+			"This deletes the copies held on this handset, and they will not come back. It does not unsend anything — "
+				+ "everyone else still has theirs, and the intergroup keeps its own record.",
 			"Clear",
 			"Keep them").ConfigureAwait(true);
 
@@ -251,7 +257,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 		try
 		{
 			await _auth.SignOutAsync().ConfigureAwait(true);
-			await _history.ClearAsync().ConfigureAwait(true);
+
+			// Reset, not clear. Clearing leaves behind the point it
+			// reached so the poll does not fetch it all straight back —
+			// which is right for the member who asked for it, and wrong
+			// for whoever signs in next: they would inherit a mark set
+			// against somebody else's messages and never see their own
+			// history, with nothing on screen to say why.
+			await _history.ResetAsync().ConfigureAwait(true);
 
 			if (Shell.Current is AppShell shell)
 			{
