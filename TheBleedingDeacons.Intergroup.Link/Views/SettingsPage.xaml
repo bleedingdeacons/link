@@ -47,6 +47,31 @@
 
 			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
 				<VerticalStackLayout Spacing="8">
+					<Label Text="Sound" />
+					<!--
+						The noise a message makes when it lands while Link is
+						open. A message that arrives with the app closed is
+						announced by the platform, with whatever tone the
+						member has set for the app - that is theirs to
+						configure and nothing here touches it.
+
+						A fellowship phone sits in meetings, so somewhere to
+						turn this off is not a nicety.
+					-->
+					<Grid ColumnDefinitions="*,Auto">
+						<Label Grid.Column="0"
+						       Style="{StaticResource Secondary}"
+						       VerticalOptions="Center"
+						       Text="Play a sound when a message arrives while Link is open." />
+						<Switch Grid.Column="1"
+						        IsToggled="{Binding SoundOn}"
+						        VerticalOptions="Center" />
+					</Grid>
+				</VerticalStackLayout>
+			</Border>
+
+			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+				<VerticalStackLayout Spacing="8">
 					<Label Text="Messages on this phone" />
 					<Label Style="{StaticResource Secondary}"
 					       Text="{Binding Held, StringFormat='{0} kept on this handset, encrypted.'}" />

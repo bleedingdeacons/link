@@ -262,9 +262,9 @@ public sealed class FellowshipClient : IFellowshipClient
 			body["member_ids"] = request.MemberIds;
 		}
 
-		if (!string.IsNullOrEmpty(request.Committee))
+		if (request.Committees.Count > 0)
 		{
-			body["committee"] = request.Committee;
+			body["committees"] = request.Committees;
 		}
 
 		if (request.ReplyToId > 0)

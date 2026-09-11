@@ -1,3 +1,4 @@
+using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.ViewModels;
 
 namespace TheBleedingDeacons.Intergroup.Link.Views;
@@ -30,27 +31,45 @@ public partial class ComposePage : ContentPage
 	}
 
 	/// <summary>
-	/// The scope radios, written one-way in XAML and set from here.
-	///
-	/// <para>A two-way binding on <c>IsChecked</c> would fight itself:
-	/// selecting one radio unchecks the other, and that uncheck fires the
-	/// same handler. Acting only on the one that became checked is what
-	/// keeps a single choice from being two writes in an order nothing
-	/// controls. Hand does it this way for the same reason.</para>
+	/// A tap on a chip's cross, and a tap on a row of the list.
 	/// </summary>
-	private void OnMemberScopeChecked(object? sender, CheckedChangedEventArgs e)
+	/// <remarks>
+	/// <para>Handled here rather than bound to the view model's commands,
+	/// and the reason is the compiler rather than taste. This project
+	/// compiles its XAML bindings, and a compiled binding resolves its
+	/// Path against the <c>x:DataType</c> in scope — never against
+	/// <c>Source</c>. So reaching the page's BindingContext from inside a
+	/// DataTemplate whose type is <see cref="Recipient"/> is XC0045, as is
+	/// reading <c>SelectedItem</c> off a CollectionView from a page typed
+	/// to the view model.</para>
+	///
+	/// <para>Worth knowing where that was found: a local Debug build does
+	/// not compile bindings and ran both happily by reflection, chips and
+	/// all, on a handset. CI compiles them and refused.</para>
+	/// </remarks>
+	private void OnDropTapped(object? sender, TappedEventArgs e)
 	{
-		if (e is not null && e.Value)
+		if (sender is Element { BindingContext: Recipient recipient })
 		{
-			_viewModel.RecipientMode = 0;
+			_viewModel.DropCommand.Execute(recipient);
 		}
 	}
 
-	private void OnCommitteeScopeChecked(object? sender, CheckedChangedEventArgs e)
+	private void OnCandidateSelected(object? sender, SelectionChangedEventArgs e)
 	{
-		if (e is not null && e.Value)
+		if (e?.CurrentSelection.FirstOrDefault() is not Recipient recipient)
 		{
-			_viewModel.RecipientMode = 1;
+			return;
+		}
+
+		_viewModel.ChooseCommand.Execute(recipient);
+
+		// Choosing takes the row out of the list, so the control has
+		// nothing left selected; saying so explicitly keeps a stale
+		// selection from surviving a filter that puts the row back.
+		if (sender is CollectionView list)
+		{
+			list.SelectedItem = null;
 		}
 	}
 }

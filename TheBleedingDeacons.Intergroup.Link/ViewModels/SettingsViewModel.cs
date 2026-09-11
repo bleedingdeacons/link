@@ -18,20 +18,40 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly IMessageHistory _history;
 	private readonly IPushRegistrar _registrar;
 	private readonly INotificationPermission _notifications;
+	private readonly IArrivalSound _sound;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
 		ISessionStore sessions,
 		IMessageHistory history,
 		IPushRegistrar registrar,
-		INotificationPermission notifications)
+		INotificationPermission notifications,
+		IArrivalSound sound)
 	{
 		_auth = auth;
 		_sessions = sessions;
 		_history = history;
 		_registrar = registrar;
 		_notifications = notifications;
+		_sound = sound;
+		_soundOn = sound.Enabled;
 	}
+
+	/// <summary>
+	/// Whether a message arriving with the app open makes a noise.
+	///
+	/// <para>Read once into the backing field at construction and written
+	/// straight through on change, rather than proxying the preference on
+	/// every get: this drives a Switch, which reads it more often than
+	/// anybody toggles it.</para>
+	///
+	/// <para>A fellowship phone sits in meetings. Somewhere to turn this
+	/// off is not a nicety.</para>
+	/// </summary>
+	[ObservableProperty]
+	private bool _soundOn;
+
+	partial void OnSoundOnChanged(bool value) => _sound.Enabled = value;
 
 	[ObservableProperty]
 	private string _memberName = string.Empty;

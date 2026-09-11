@@ -92,10 +92,10 @@ public sealed class ClientRefusalTests
 		{
 			Subject = "Intergroup moved",
 			Body = "Now the 14th.",
-			Committee = "steering",
+			Committees = ["steering"],
 		});
 
-		Assert.Contains("\"committee\":\"steering\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.Contains("\"committees\":[\"steering\"]", handler.LastBody, StringComparison.Ordinal);
 		Assert.DoesNotContain("member_ids", handler.LastBody, StringComparison.Ordinal);
 	}
 
@@ -110,7 +110,7 @@ public sealed class ClientRefusalTests
 		{
 			Subject = "Re: Intergroup moved",
 			Body = "Noted.",
-			Committee = "steering",
+			Committees = ["steering"],
 			ReplyToId = 42,
 		});
 
@@ -127,7 +127,7 @@ public sealed class ClientRefusalTests
 		{
 			Subject = "Fresh",
 			Body = "Not a reply.",
-			Committee = "steering",
+			Committees = ["steering"],
 		});
 
 		Assert.DoesNotContain("reply_to", handler.LastBody, StringComparison.Ordinal);
@@ -144,7 +144,7 @@ public sealed class ClientRefusalTests
 		{
 			Subject = "Intergroup moved",
 			Body = "Now the 14th.",
-			Committee = "steering",
+			Committees = ["steering"],
 		});
 
 		Assert.False(result.Succeeded);
