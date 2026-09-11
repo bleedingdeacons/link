@@ -422,8 +422,26 @@ first time.
 
 ### What CI produces
 
-Two artifacts on every run, `link-apk` and `link-ipa-unsigned`, kept for
-30 days.
+`link-apk` on every run, kept for 30 days.
+
+**`link-ipa-unsigned` only when the iOS job is asked for**, which since
+2026-09-11 is not by default. It was the slowest thing in the workflow by
+a wide margin — around eleven minutes against three or four for Android,
+after a wait for a macOS runner that nobody can see the end of — and
+every merge queued behind it for a head that nothing installs
+automatically anyway.
+
+Two ways to ask for it:
+
+* run the `CI` workflow manually and tick **`ios`**;
+* put the **`ios`** label on a pull request, and every run of that PR
+  builds the head until the label comes off.
+
+Label the PR whenever anything under `Platforms/iOS` or `MauiProgram`
+moves. The trade is stated plainly in the workflow: the release job still
+refuses to publish if the iOS head *fails*, but it publishes happily when
+the head was never built, so iOS breakage now surfaces in a batch rather
+than on the commit that caused it.
 
 Both are built against the **`LINK_BASE_URL`** repository variable, which
 CI writes into `appsettings.json` before compiling. Without it the
