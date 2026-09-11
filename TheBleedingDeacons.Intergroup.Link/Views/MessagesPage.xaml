@@ -5,20 +5,50 @@
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagesPage"
              x:DataType="vm:MessagesViewModel"
+             Shell.NavBarIsVisible="False"
              Title="Messages">
 
-	<ContentPage.ToolbarItems>
-		<ToolbarItem Text="New" Clicked="OnComposeClicked" />
-	</ContentPage.ToolbarItems>
+	<!--
+		A Button rather than a ToolbarItem, and it is Hand's header that
+		settles it. A ToolbarItem is plain text drawn by the navigation
+		bar: it cannot take the Button style, so "New" read as a word in
+		the corner while every other thing the member can press in either
+		app is a filled blue rectangle. Hand puts History and Settings in
+		the page itself for exactly this reason, and the two apps now
+		agree.
 
-	<Grid RowDefinitions="Auto,Auto,*">
+		The navigation bar goes with it, or the page would carry two
+		titles: Shell's and this one. Hand's AlertsPage carries a comment
+		warning that a ToolbarItem on a page with no navigation bar
+		renders nowhere at all, which is worth reading before anybody puts
+		one back.
+
+		Padding matches Hand's header buttons. The shared style's 14,10 is
+		for a button that owns its row; this one sits beside a title.
+	-->
+	<Grid RowDefinitions="Auto,Auto,Auto,*">
+
+		<Grid Grid.Row="0"
+		      ColumnDefinitions="*,Auto"
+		      Padding="16,8"
+		      ColumnSpacing="8">
+			<Label Grid.Column="0"
+			       Style="{StaticResource Heading}"
+			       VerticalOptions="Center"
+			       Text="Messages" />
+
+			<Button Grid.Column="1"
+			        Text="New"
+			        Padding="8,6"
+			        Clicked="OnComposeClicked" />
+		</Grid>
 
 		<!--
 			The member is looking at a list that is missing something, and
 			without being told they would conclude the message was never
 			sent. The recovery is on Settings.
 		-->
-		<Border Grid.Row="0"
+		<Border Grid.Row="1"
 		        IsVisible="{Binding KeyFault}"
 		        BackgroundColor="{StaticResource Warning}"
 		        Padding="14"
@@ -27,13 +57,13 @@
 			       Text="Some messages could not be opened on this phone. Go to Settings and choose 'Fix messages that will not open'." />
 		</Border>
 
-		<Label Grid.Row="1"
+		<Label Grid.Row="2"
 		       IsVisible="{Binding Offline}"
 		       Style="{StaticResource Secondary}"
 		       Padding="16,8"
 		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
 
-		<RefreshView Grid.Row="2"
+		<RefreshView Grid.Row="3"
 		             IsRefreshing="{Binding Busy}"
 		             Command="{Binding RefreshCommand}">
 
