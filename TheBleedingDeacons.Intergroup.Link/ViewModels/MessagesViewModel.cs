@@ -23,12 +23,18 @@ public sealed partial class MessagesViewModel : ObservableObject
 	private readonly IMessageService _messages;
 	private readonly IMessageHistory _history;
 	private readonly IUiDispatcher _dispatcher;
+	private readonly IArrivalSound _sound;
 
-	public MessagesViewModel(IMessageService messages, IMessageHistory history, IUiDispatcher dispatcher)
+	public MessagesViewModel(
+		IMessageService messages,
+		IMessageHistory history,
+		IUiDispatcher dispatcher,
+		IArrivalSound sound)
 	{
 		_messages = messages;
 		_history = history;
 		_dispatcher = dispatcher;
+		_sound = sound;
 
 		// A pushed message announces itself; see MessageReceived. The
 		// handler arrives on whichever thread the push service used, so it
@@ -38,7 +44,16 @@ public sealed partial class MessagesViewModel : ObservableObject
 		// is a singleton for the app's lifetime, so there is nothing to
 		// unregister and no leak to create by not doing so.
 		WeakReferenceMessenger.Default.Register<MessageReceived>(this, (_, _) =>
-			_dispatcher.Invoke(() => _ = LoadAsync()));
+			_dispatcher.Invoke(() =>
+			{
+				// A push that arrives while the app is open is announced by
+				// nothing else: the platform's notification is for a message
+				// that lands with Link closed. Without this the list simply
+				// grows a row in silence.
+				_sound.Play();
+
+				_ = LoadAsync();
+			}));
 	}
 
 	public ObservableCollection<LinkMessage> Messages { get; } = [];
@@ -95,6 +110,11 @@ public sealed partial class MessagesViewModel : ObservableObject
 
 			if (result.Received > 0)
 			{
+				// The poll's arrival, which is the one that matters on a
+				// handset with no push configured -- there, every message
+				// arrives this way.
+				_sound.Play();
+
 				await LoadAsync().ConfigureAwait(true);
 			}
 		}

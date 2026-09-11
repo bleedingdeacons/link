@@ -5,6 +5,7 @@
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.ComposePage"
              x:DataType="vm:ComposeViewModel"
+             x:Name="Page"
              Shell.TabBarIsVisible="False"
              Title="New message">
 
@@ -18,121 +19,108 @@
 			<Label Text="Send to" FontAttributes="Bold" />
 
 			<!--
-				Hand's arrangement, and Hand's reasoning with it: one scope
-				or the other, chosen before the list rather than inferred
-				from what happens to be selected in two lists at once.
+				One list, not two behind a radio.
 
-				Fellowship refuses a message addressed to both a committee
-				and named people, because the recipient list that would
-				produce cannot be explained back to whoever sent it. Two
-				radios make that rule visible instead of leaving it as a
-				400 somebody meets after typing.
+				The radio existed because Fellowship refused a message
+				addressed to a committee and to named people at once, so the
+				screen had to make the sender choose a scope before it could
+				show them anything. That rule went on 2026-09-11: a message now
+				carries any number of members and committees together, the
+				server resolves the union, and somebody in both gets one copy.
+				With the rule gone the question "which list is showing?" is one
+				nobody should have to answer.
 
-				Bound one-way and set from the code-behind, exactly as
-				Hand does it: a two-way IsChecked binding fights itself,
-				because selecting one radio unchecks the other and each
-				uncheck fires the same handler.
+				Chosen recipients are chips above the list. Each carries its own
+				×, because the alternative to removing one is starting the
+				message again.
 			-->
-			<Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-				<RadioButton
-					Grid.Column="0"
-					Content="A member"
-					GroupName="scope"
-					IsChecked="{Binding IsMemberMode, Mode=OneWay}"
-					CheckedChanged="OnMemberScopeChecked" />
-				<!--
-					Hidden rather than disabled when the site does not
-					allow committee sends from the app. This is not a
-					setting somebody can turn on from here — Fellowship
-					sends no committees at all — so a greyed control would
-					be offering something that does not exist.
-				-->
-				<RadioButton
-					Grid.Column="1"
-					Content="A committee"
-					GroupName="scope"
-					IsVisible="{Binding CanSendToCommittee}"
-					IsChecked="{Binding IsCommitteeMode, Mode=OneWay}"
-					CheckedChanged="OnCommitteeScopeChecked" />
-			</Grid>
-
-			<!-- Members -->
-			<VerticalStackLayout Spacing="8" IsVisible="{Binding IsMemberMode}">
-				<!--
-					Filters the list already in hand rather than asking
-					Fellowship again. Hand searches server-side because its
-					member list is paged; Link is handed the whole address
-					book in one response, so a round trip per keystroke
-					would buy nothing and cost a request.
-				-->
-				<SearchBar
-					Text="{Binding Search}"
-					Placeholder="Search by name, group or service position" />
-
-				<CollectionView
-					ItemsSource="{Binding People}"
-					SelectedItem="{Binding SelectedPerson}"
-					SelectionMode="Single"
-					HeightRequest="240">
-					<CollectionView.EmptyView>
-						<Label Style="{StaticResource Secondary}"
-						       Text="No one to show. Pull the message list down to reconnect." />
-					</CollectionView.EmptyView>
-					<CollectionView.ItemTemplate>
-						<DataTemplate x:DataType="models:DirectoryMember">
-							<!--
-								Hand's two-line row, and Hand's reason for
-								it: a rota has more than one Dave, and what
-								tells them apart is the home group.
-
-								Where Hand puts a "Show number" button and
-								the numbers it fetches, this puts the
-								member's standing and nothing else. Link is
-								never told an email address or a telephone
-								number - see Fellowship's DirectoryPresenter
-								- so there is nothing here to reveal and no
-								button to press.
-							-->
-							<VerticalStackLayout Padding="12,10" Spacing="2">
-								<Label Text="{Binding Name}" FontSize="16" />
-
+			<FlexLayout BindableLayout.ItemsSource="{Binding Chosen}"
+			            IsVisible="{Binding HasChosen}"
+			            Wrap="Wrap"
+			            Direction="Row"
+			            AlignItems="Start">
+				<BindableLayout.ItemTemplate>
+					<DataTemplate x:DataType="models:Recipient">
+						<Border Margin="0,0,6,6"
+						        Padding="10,4"
+						        StrokeShape="RoundRectangle 14"
+						        StrokeThickness="1">
+							<HorizontalStackLayout Spacing="6" VerticalOptions="Center">
+								<Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center" />
 								<!--
-									Hidden rather than blank when a member
-									has no group and is not a GSR, so the
-									row closes up instead of holding open a
-									line with nothing in it. DirectoryMember
-									composes the string, so the empty case
-									has one answer rather than one per
-									screen.
+									Bound through the page rather than the item: the
+									template's context is the Recipient, and the command
+									lives on the view model. x:Reference rather than a
+									relative source, because this project compiles its
+									bindings and a reference is the form that always
+									compiles.
 								-->
-								<Label Text="{Binding Standing}"
-								       IsVisible="{Binding HasStanding}"
-								       FontSize="12"
-								       Opacity="0.6" />
-							</VerticalStackLayout>
-						</DataTemplate>
-					</CollectionView.ItemTemplate>
-				</CollectionView>
-			</VerticalStackLayout>
+								<Button Text="×"
+								        FontSize="16"
+								        Padding="0"
+								        WidthRequest="26"
+								        HeightRequest="26"
+								        BackgroundColor="Transparent"
+								        VerticalOptions="Center"
+								        SemanticProperties.Description="Remove recipient"
+								        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DropCommand}"
+								        CommandParameter="{Binding .}" />
+							</HorizontalStackLayout>
+						</Border>
+					</DataTemplate>
+				</BindableLayout.ItemTemplate>
+			</FlexLayout>
 
-			<!-- Committees -->
-			<VerticalStackLayout Spacing="8" IsVisible="{Binding IsCommitteeMode}">
-				<CollectionView
-					ItemsSource="{Binding Committees}"
-					SelectedItem="{Binding Committee}"
-					SelectionMode="Single"
-					HeightRequest="240">
-					<CollectionView.ItemTemplate>
-						<DataTemplate x:DataType="models:DirectoryCommittee">
-							<Grid Padding="12,10">
-								<Label Text="{Binding Name}" FontSize="16" />
-							</Grid>
-						</DataTemplate>
-					</CollectionView.ItemTemplate>
-				</CollectionView>
-				<Label Style="{StaticResource Secondary}"
-				       Text="A committee includes its sub-committees." />
-			</VerticalStackLayout>
+			<Label Style="{StaticResource Secondary}"
+			       IsVisible="{Binding HasChosenNothing}"
+			       Text="Nobody chosen yet. Tap a name or a committee below." />
+
+			<!--
+				Filters the list already in hand rather than asking Fellowship
+				again. Hand searches server-side because its member list is
+				paged; Link is handed the whole address book in one response,
+				so a round trip per keystroke would buy nothing and cost a
+				request.
+			-->
+			<SearchBar
+				Text="{Binding Search}"
+				Placeholder="Search by name, group, position or committee" />
+
+			<CollectionView
+				x:Name="CandidateList"
+				ItemsSource="{Binding Candidates}"
+				SelectionMode="Single"
+				SelectionChangedCommand="{Binding ChooseCommand}"
+				SelectionChangedCommandParameter="{Binding Source={x:Reference CandidateList}, Path=SelectedItem}"
+				HeightRequest="240">
+				<CollectionView.EmptyView>
+					<Label Style="{StaticResource Secondary}"
+					       Text="No one left to show. Pull the message list down to reconnect." />
+				</CollectionView.EmptyView>
+				<CollectionView.ItemTemplate>
+					<DataTemplate x:DataType="models:Recipient">
+						<!--
+							Hand's two-line row, and Hand's reason for it: a rota
+							has more than one Dave, and what tells them apart is
+							the home group. Where Hand puts a "Show number" button
+							and the numbers it fetches, this puts the member's
+							standing and nothing else: Link is never told an email
+							address or a telephone number, so there is nothing to
+							reveal and no button to press.
+						-->
+						<VerticalStackLayout Padding="12,10" Spacing="2">
+							<Label Text="{Binding Name}" FontSize="16" />
+							<Label Text="{Binding Detail}"
+							       IsVisible="{Binding HasDetail}"
+							       FontSize="12"
+							       Opacity="0.6" />
+						</VerticalStackLayout>
+					</DataTemplate>
+				</CollectionView.ItemTemplate>
+			</CollectionView>
+
+			<Label Style="{StaticResource Secondary}"
+			       Text="A committee includes its sub-committees." />
 
 			<Entry Placeholder="Subject" Text="{Binding Subject}" MaxLength="200" />
 

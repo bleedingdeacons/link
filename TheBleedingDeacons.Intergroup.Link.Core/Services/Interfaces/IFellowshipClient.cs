@@ -242,8 +242,15 @@ public sealed record SendRequest
 	/// <summary>Opaque Unity member ids from the directory. Never addresses.</summary>
 	public IReadOnlyList<long> MemberIds { get; init; } = [];
 
-	/// <summary>A committee slug, when the site allows committee sends from the app.</summary>
-	public string Committee { get; init; } = string.Empty;
+	/// <summary>
+	/// Committee slugs, when the site allows committee sends from the app.
+	///
+	/// <para>A list, and it may travel alongside <see cref="MemberIds"/>.
+	/// Fellowship refused that combination until 2026-09-11 — one audience
+	/// per message — and the workaround was to send twice, which is worse
+	/// for anybody who is in both.</para>
+	/// </summary>
+	public IReadOnlyList<string> Committees { get; init; } = [];
 
 	/// <summary>The message being replied to, or 0.</summary>
 	public long ReplyToId { get; init; }
