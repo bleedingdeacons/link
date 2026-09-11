@@ -55,16 +55,27 @@
 									bindings and a reference is the form that always
 									compiles.
 								-->
-								<Button Text="×"
-								        FontSize="16"
-								        Padding="0"
-								        WidthRequest="26"
-								        HeightRequest="26"
-								        BackgroundColor="Transparent"
-								        VerticalOptions="Center"
-								        SemanticProperties.Description="Remove recipient"
-								        Command="{Binding Source={x:Reference Page}, Path=BindingContext.DropCommand}"
-								        CommandParameter="{Binding .}" />
+								<!--
+									A Label rather than a Button, and that is not a
+									style preference. A transparent Button keeps the
+									Button style's TextColor, which in this app is the
+									colour for text on a filled primary button: white.
+									On a chip that is white on white: the control is
+									there, it is the right size, it responds to a tap,
+									and nothing is drawn. Found on a handset, because an
+									invisible control looks identical to a missing one
+									in every dump of the view tree.
+								-->
+								<Label Text="×"
+								       FontSize="20"
+								       VerticalOptions="Center"
+								       SemanticProperties.Description="Remove recipient">
+									<Label.GestureRecognizers>
+										<TapGestureRecognizer
+											Command="{Binding Source={x:Reference Page}, Path=BindingContext.DropCommand}"
+											CommandParameter="{Binding .}" />
+									</Label.GestureRecognizers>
+								</Label>
 							</HorizontalStackLayout>
 						</Border>
 					</DataTemplate>
