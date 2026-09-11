@@ -67,7 +67,7 @@
 				-->
 				<SearchBar
 					Text="{Binding Search}"
-					Placeholder="Search by name or group" />
+					Placeholder="Search by name, group or service position" />
 
 				<CollectionView
 					ItemsSource="{Binding People}"
