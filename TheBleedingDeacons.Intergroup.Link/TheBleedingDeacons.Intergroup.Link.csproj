@@ -53,11 +53,39 @@
 			explicit narrowing property beats the host default. `-f` is
 			still forbidden: it sets TargetFramework globally and forces
 			the TFM onto Link.Core, breaking its restore with NU1105.
+
+			<b>LinkAndroidOnly sets TargetFramework — singular — and that
+			is the whole point of it.</b> A project with TargetFrameworks
+			*plural* is a cross-targeting build even when the list holds a
+			single entry: MSBuild runs an outer build that dispatches to an
+			inner one, and the outer build has no `Run` target. That is the
+			MSB4057 that made `-t:Run` unusable here and pushed the Android
+			loop onto `EmbedAssembliesIntoApk=true` plus a hand-rolled
+			`adb install`. Singular makes this an ordinary inner build, so
+			`Run` exists, Fast Deployment works as it was designed to, and
+			the Debug APK is 14 MB rather than 90.
+
+			Measured on this machine, 2026-09-11: an edit to one source
+			file reaching a running app on the handset went from about two
+			and a quarter minutes to seven seconds.
+
+			LinkIosOnly deliberately stays on TargetFrameworks. Nothing
+			runs `-t:Run` against an iPhone from here, so it would buy
+			nothing — and now that CI builds the iOS head only when asked
+			(see ci.yml), a subtle break in that path would sit unnoticed
+			until somebody asked.
 		-->
 		<TargetFrameworks>net10.0-android;net10.0-ios</TargetFrameworks>
 		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('Linux'))">net10.0-android</TargetFrameworks>
-		<TargetFrameworks Condition="'$(LinkAndroidOnly)' == 'true'">net10.0-android</TargetFrameworks>
 		<TargetFrameworks Condition="'$(LinkIosOnly)' == 'true'">net10.0-ios</TargetFrameworks>
+
+		<!--
+			Last, and it empties the plural one: the two cannot both be
+			set, and MSBuild cross-targets whenever TargetFrameworks is
+			non-empty.
+		-->
+		<TargetFrameworks Condition="'$(LinkAndroidOnly)' == 'true'"></TargetFrameworks>
+		<TargetFramework Condition="'$(LinkAndroidOnly)' == 'true'">net10.0-android</TargetFramework>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>TheBleedingDeacons.Intergroup.Link</RootNamespace>
