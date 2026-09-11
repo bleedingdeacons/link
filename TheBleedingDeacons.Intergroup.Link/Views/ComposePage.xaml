@@ -102,7 +102,7 @@
 			-->
 			<SearchBar
 				Text="{Binding Search}"
-				Placeholder="Search by name, group, position or committee" />
+				Placeholder="Search names and committees" />
 
 			<CollectionView
 				x:Name="CandidateList"
