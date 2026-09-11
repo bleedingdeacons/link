@@ -86,6 +86,11 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      ios:
+        description: 'Also build and archive the iOS head'
+        type: boolean
+        default: false
 
 # Pull request runs share one group per ref, so pushing again cancels the
 # superseded run and saves runner minutes. Runs on main get a group of their
@@ -223,6 +228,32 @@ jobs:
 
   ios:
     name: Build & archive (net10.0-ios)
+
+    # Off unless asked for, from 2026-09-11. Two ways to ask:
+    #
+    #   * run the workflow manually with the `ios` input ticked;
+    #   * put the `ios` label on a pull request, which makes every run of
+    #     that PR build the head until the label comes off.
+    #
+    # Why: it is far and away the slowest thing here — around eleven
+    # minutes against three to four for Android, and that is once a macOS
+    # runner picks it up, which is itself a wait nobody can see the end of.
+    # Every merge queued behind it, for a head that nothing installs
+    # automatically: the .ipa is archived unsigned and goes onto a handset
+    # through Sideloadly by hand.
+    #
+    # What it costs, and it is a real cost rather than a formality: the
+    # comment on `version.needs` below argues that a broken iOS head must
+    # stop an Android release while the two share every line above the
+    # platform folders. That guarantee is now only as good as the last run
+    # somebody asked for. Label the PR when anything under Platforms/iOS
+    # or MauiProgram moves, and expect to find breakage in a batch rather
+    # than on the commit that caused it.
+    #
+    # Turning it back on for good is deleting the `if:` below.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.ios)
+      || contains(github.event.pull_request.labels.*.name, 'ios')
 
     # macOS is not a preference here: the iOS toolchain will not run anywhere
     # else. Public repository, so GitHub-hosted macOS minutes are free; on a
@@ -485,7 +516,23 @@ jobs:
 
     # main only, and only for a real push - not for pull_request runs of this
     # same workflow, and not for workflow_dispatch.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    #
+    # The result checks are what keeps releases working now that `ios` is
+    # off unless asked for. A skipped dependency skips everything that
+    # needs it, so `needs: [..., ios, ...]` alone would have quietly ended
+    # releasing altogether — the failure mode being a merge that publishes
+    # nothing and says nothing. `!cancelled()` makes this job evaluate when
+    # a dependency was skipped, and since that also overrides the ordinary
+    # "a needed job failed" skip, every gate is then named explicitly. iOS
+    # is the one allowed to be absent: skipped releases, failed does not.
+    if: >-
+      ${{ !cancelled()
+      && github.ref == 'refs/heads/main'
+      && github.event_name == 'push'
+      && needs.build.result == 'success'
+      && needs.test.result == 'success'
+      && needs.semgrep.result == 'success'
+      && needs.ios.result != 'failure' }}
 
     runs-on: ubuntu-latest
 
