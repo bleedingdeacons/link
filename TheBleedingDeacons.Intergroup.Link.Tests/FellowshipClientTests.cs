@@ -216,10 +216,11 @@ public sealed class FellowshipClientTests
 	}
 
 	[Fact]
-	public async Task TheDirectoryCarriesHomeGroupAndGsr()
+	public async Task TheDirectoryCarriesHomeGroupAndGsrAndServicePosition()
 	{
 		var handler = new StubHandler(HttpStatusCode.OK, """
-			{"members":[{"id":3,"name":"Dave B","group":"Tuesday Bristol","gsr":true}],
+			{"members":[{"id":3,"name":"Dave B","group":"Tuesday Bristol","gsr":true,
+			             "position":"Intergroup Secretary"}],
 			 "committees":[]}
 			""");
 
@@ -227,10 +228,11 @@ public sealed class FellowshipClientTests
 
 		Assert.Equal("Tuesday Bristol", directory.Members[0].HomeGroup);
 		Assert.True(directory.Members[0].IsGsr);
+		Assert.Equal("Intergroup Secretary", directory.Members[0].Position);
 	}
 
 	[Fact]
-	public async Task AnOlderFellowshipThatSendsNeitherStillParses()
+	public async Task AnOlderFellowshipThatSendsNoneOfThemStillParses()
 	{
 		// The fields were added after handsets were already in use, so a
 		// server without them must not take the whole address book down.
@@ -243,6 +245,24 @@ public sealed class FellowshipClientTests
 		Assert.Equal("Dave B", directory.Members[0].Name);
 		Assert.Equal(string.Empty, directory.Members[0].HomeGroup);
 		Assert.False(directory.Members[0].IsGsr);
+		Assert.Equal(string.Empty, directory.Members[0].Position);
+	}
+
+	[Fact]
+	public async Task AFellowshipWithGroupsButNoPositionsStillParses()
+	{
+		// The realistic in-between: position shipped after group and gsr,
+		// so a server can be new enough for two of the three.
+		var handler = new StubHandler(HttpStatusCode.OK, """
+			{"members":[{"id":3,"name":"Dave B","group":"Tuesday Bristol","gsr":true}],
+			 "committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.Equal("Tuesday Bristol", directory.Members[0].HomeGroup);
+		Assert.Equal(string.Empty, directory.Members[0].Position);
+		Assert.Equal("Tuesday Bristol · GSR", directory.Members[0].Standing);
 	}
 
 	[Theory]
@@ -267,15 +287,32 @@ public sealed class FellowshipClientTests
 	}
 
 	[Theory]
-	[InlineData("", false, "")]
-	[InlineData("Tuesday Bristol", false, "Tuesday Bristol")]
-	[InlineData("", true, "GSR")]
-	[InlineData("Tuesday Bristol", true, "Tuesday Bristol · GSR")]
-	public void TheSecondLineIsComposedOnceRatherThanPerScreen(string group, bool gsr, string expected)
+	[InlineData("", false, "", "")]
+	[InlineData("Tuesday Bristol", false, "", "Tuesday Bristol")]
+	[InlineData("", true, "", "GSR")]
+	[InlineData("Tuesday Bristol", true, "", "Tuesday Bristol · GSR")]
+	[InlineData("", false, "Intergroup Secretary", "Intergroup Secretary")]
+	[InlineData("Tuesday Bristol", false, "Treasurer", "Tuesday Bristol · Treasurer")]
+	[InlineData("", true, "Telephone", "GSR · Telephone")]
+	[InlineData("Tuesday Bristol", true, "Telephone", "Tuesday Bristol · GSR · Telephone")]
+	public void TheSecondLineIsComposedOnceRatherThanPerScreen(
+		string group,
+		bool gsr,
+		string position,
+		string expected)
 	{
-		// A member with no group who is not a GSR gets no line at all, so
-		// the row closes up instead of holding a blank one open.
-		var member = new DirectoryMember { Id = 1, Name = "Dave B", HomeGroup = group, IsGsr = gsr };
+		// A member with none of the three gets no line at all, so the row
+		// closes up instead of holding a blank one open. Group and GSR
+		// stay adjacent: GSR is a job at a particular group and reads as
+		// nonsense detached from one.
+		var member = new DirectoryMember
+		{
+			Id = 1,
+			Name = "Dave B",
+			HomeGroup = group,
+			IsGsr = gsr,
+			Position = position,
+		};
 
 		Assert.Equal(expected, member.Standing);
 		Assert.Equal(expected.Length > 0, member.HasStanding);

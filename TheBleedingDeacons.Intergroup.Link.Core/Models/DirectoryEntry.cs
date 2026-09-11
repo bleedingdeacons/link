@@ -41,23 +41,60 @@ public sealed record DirectoryMember
 	public bool IsGsr { get; init; }
 
 	/// <summary>
+	/// The member's intergroup service position, or empty.
+	///
+	/// <para>Here because somebody writing to the Secretary is looking for
+	/// a job rather than a person, and a list of first names and home
+	/// groups gives them no way to find it. Empty is by far the ordinary
+	/// case — most of the fellowship holds no intergroup position — so it
+	/// has to read as an absent line rather than a missing value.</para>
+	///
+	/// <para><b>Still not a contact detail.</b> Fellowship sends the
+	/// position's name and not the address attached to it, and has a test
+	/// that says so.</para>
+	/// </summary>
+	public string Position { get; init; } = string.Empty;
+
+	/// <summary>
 	/// The second line of a row, or empty when there is nothing to put in
 	/// it.
 	///
 	/// <para>Composed here rather than in the XAML so the empty case has
-	/// one answer: a member with no group who is not a GSR gets no line
-	/// at all, rather than a blank one holding the row open.</para>
+	/// one answer: a member with no group, no position and no GSR standing
+	/// gets no line at all, rather than a blank one holding the row open.
+	/// </para>
+	///
+	/// <para>Ordered group, GSR, position. The first two belong together —
+	/// GSR is a job at a particular group, and reads as nonsense detached
+	/// from it — while the position is intergroup-level and stands on its
+	/// own, so it goes last.</para>
+	///
+	/// <para>A join over the parts that are present, rather than a switch
+	/// over every combination: three fields is eight cases written out,
+	/// and the next one to be added would be sixteen.</para>
 	/// </summary>
-	public string Standing => (HomeGroup, IsGsr) switch
-	{
-		("", false) => string.Empty,
-		("", true) => "GSR",
-		(var group, false) => group,
-		(var group, true) => group + " · GSR",
-	};
+	public string Standing => string.Join(" · ", Parts());
 
 	/// <summary>Whether <see cref="Standing"/> has anything to show.</summary>
 	public bool HasStanding => Standing.Length > 0;
+
+	private IEnumerable<string> Parts()
+	{
+		if (HomeGroup.Length > 0)
+		{
+			yield return HomeGroup;
+		}
+
+		if (IsGsr)
+		{
+			yield return "GSR";
+		}
+
+		if (Position.Length > 0)
+		{
+			yield return Position;
+		}
+	}
 }
 
 /// <summary>

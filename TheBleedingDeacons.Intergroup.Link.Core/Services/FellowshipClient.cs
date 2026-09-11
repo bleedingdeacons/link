@@ -318,15 +318,17 @@ public sealed class FellowshipClient : IFellowshipClient
 				var id = Number(element, "id");
 				if (id > 0)
 				{
-					// group and gsr are read leniently: a Fellowship older than
-					// they are sends neither, and a directory that failed to
-					// parse would take the whole address book with it.
+					// group, gsr and position are read leniently: a Fellowship
+					// older than any one of them sends that field and not the
+					// rest, and a directory that failed to parse would take
+					// the whole address book with it.
 					members.Add(new DirectoryMember
 					{
 						Id = id,
 						Name = Text(element, "name"),
 						HomeGroup = Text(element, "group"),
 						IsGsr = Flag(element, "gsr"),
+						Position = Text(element, "position"),
 					});
 				}
 			}
