@@ -65,15 +65,22 @@
 									and nothing is drawn. Found on a handset, because an
 									invisible control looks identical to a missing one
 									in every dump of the view tree.
+
+									The tap is handled in the code-behind rather than
+									bound to the view model's command. This project
+									compiles its bindings, and a compiled binding
+									resolves its Path against the x:DataType in scope -
+									here a Recipient - never against Source. Reaching the
+									page from inside a template is therefore XC0045, and
+									it is CI that says so: a local Debug build does not
+									compile bindings and runs this happily by reflection.
 								-->
 								<Label Text="×"
 								       FontSize="20"
 								       VerticalOptions="Center"
 								       SemanticProperties.Description="Remove recipient">
 									<Label.GestureRecognizers>
-										<TapGestureRecognizer
-											Command="{Binding Source={x:Reference Page}, Path=BindingContext.DropCommand}"
-											CommandParameter="{Binding .}" />
+										<TapGestureRecognizer Tapped="OnDropTapped" />
 									</Label.GestureRecognizers>
 								</Label>
 							</HorizontalStackLayout>
@@ -101,8 +108,7 @@
 				x:Name="CandidateList"
 				ItemsSource="{Binding Candidates}"
 				SelectionMode="Single"
-				SelectionChangedCommand="{Binding ChooseCommand}"
-				SelectionChangedCommandParameter="{Binding Source={x:Reference CandidateList}, Path=SelectedItem}"
+				SelectionChanged="OnCandidateSelected"
 				HeightRequest="240">
 				<CollectionView.EmptyView>
 					<Label Style="{StaticResource Secondary}"
