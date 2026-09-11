@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -418,6 +419,17 @@ public sealed class FellowshipClient : IFellowshipClient
 			using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 			{
+				// Said out loud, because the caller cannot. Every reader of
+				// this null turns it into an empty list or a false, and on
+				// screen "the server refused you" and "there is nothing
+				// here" look identical — which is exactly how an address
+				// book that the server was returning empty cost an evening
+				// and a database query to explain.
+				Log.Warning(
+					"GET {Path} refused with {Status}",
+					uri.AbsolutePath,
+					(int)response.StatusCode);
+
 				return null;
 			}
 
@@ -425,6 +437,11 @@ public sealed class FellowshipClient : IFellowshipClient
 		}
 		catch (Exception e) when (IsTransport(e))
 		{
+			// Not an error: a phone loses signal, and the next poll fixes
+			// it. Worth a line all the same, because the alternative is a
+			// screen that looks the same as a refusal.
+			Log.Debug(e, "GET {Path} did not arrive", uri.AbsolutePath);
+
 			return null;
 		}
 	}
@@ -446,10 +463,23 @@ public sealed class FellowshipClient : IFellowshipClient
 			}
 
 			// Not disposed here: the caller reads the body and disposes it.
-			return await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+			var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+			if (!response.IsSuccessStatusCode)
+			{
+				// The status only. Every caller here reads the server's own
+				// message out of the body and shows it, and a request body
+				// on this route can carry a password — so the line says
+				// which route and what came back, and nothing else.
+				Log.Warning("POST {Route} refused with {Status}", route, (int)response.StatusCode);
+			}
+
+			return response;
 		}
 		catch (Exception e) when (IsTransport(e))
 		{
+			Log.Debug(e, "POST {Route} did not arrive", route);
+
 			return null;
 		}
 	}
