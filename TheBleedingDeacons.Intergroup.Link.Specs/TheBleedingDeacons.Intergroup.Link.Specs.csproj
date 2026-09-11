@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+		The executable specification for Link.
+
+		Same tooling as Hand's: Reqnroll over xUnit v3, with Shouldly for
+		the assertions. The feature files are the readable half — what a
+		member's handset is supposed to do — and the step definitions under
+		Steps/ bind them to Link.Core.
+
+		Hand's equivalent also carries Microsoft.Extensions.TimeProvider.Testing,
+		and this deliberately does not. Hand has a clock in its model:
+		an alert expires, and a scenario has to be able to say what time it
+		is. Nothing in Link expires — a message is read or it is not — and
+		the one timestamp that is written, the read stamp, is asserted as
+		"has one" rather than as a value. A fake clock here would be a
+		package referenced to prove a point.
+
+		It sits beside Link.Tests rather than replacing it. The xUnit suite
+		is where the edges live (a tampered ciphertext, a file that will not
+		decrypt, a server that answers something that is not JSON); this is
+		where the behaviour lives, in the words the README uses for it. Both
+		run over the same library.
+
+		It references Link.Core for the same reason Link.Tests does, and it
+		is the same reason the Core split exists at all: nothing can
+		reference the app, whose only target frameworks are platform heads.
+		See Link.Core's project file.
+
+		Scenarios tagged @manual @ignore are on-device acceptance criteria —
+		what the notification tray shows, a keystore entry invalidated by a
+		changed screen lock, the seven-day signature on a sideloaded build.
+		Reqnroll's @ignore keeps them out of the automated run; they are
+		written down here because several of them are the sharpest hazards
+		this app has and no test host can reach any of them.
+	-->
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<RootNamespace>TheBleedingDeacons.Intergroup.Link.Specs</RootNamespace>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- xUnit v3 test projects are executables that host Microsoft.Testing.Platform. -->
+		<OutputType>Exe</OutputType>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+		<!-- Run through Microsoft.Testing.Platform (not VSTest) under `dotnet test`. -->
+		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+		<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
+		<!--
+			Test project: exempt from the repo's strict analyzer gate, as
+			Link.Tests is. Reqnroll also generates a .feature.cs behind every
+			feature file, and generated code has no business failing a style
+			rule nobody can edit it to satisfy.
+		-->
+		<RunAnalyzers>false</RunAnalyzers>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Reqnroll.xunit.v3" Version="3.3.4" />
+		<PackageReference Include="Shouldly" Version="4.3.0" />
+		<PackageReference Include="xunit.v3" Version="3.2.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Xunit" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TheBleedingDeacons.Intergroup.Link.Core\TheBleedingDeacons.Intergroup.Link.Core.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -84,6 +84,12 @@ No fixture is committed, and that is deliberate: a fixture would have to
 carry the private key that opens it, and a private key in a public
 repository is what push protection blocks and Semgrep flags.
 
+`Link.Specs` carries its own copy of the sealer, and that is unavoidable
+rather than sloppy: `Sealing.cs` is `internal` to a test project, and
+nothing can reference a test project. Do not merge the two into a shared
+one — the copies are lean on purpose, and the thing being protected here
+is that neither of them seals by calling the code under test.
+
 ## Push is the fast path, not the reliable one
 
 Every message is stored by Fellowship before any push is attempted, and
@@ -161,7 +167,8 @@ before anybody taps it.
 | --- | --- |
 | `…Link` | The MAUI app: views, view models, and everything that touches the platform. Android head only. |
 | `…Link.Core` | Plain net10.0. Wire models, the REST client, the cipher, the history, the sync loop. |
-| `…Link.Tests` | xUnit v3 over Link.Core. |
+| `…Link.Tests` | xUnit v3 over Link.Core — the edges. |
+| `…Link.Specs` | Reqnroll over Link.Core — the behaviour, in the words this file uses for it. |
 
 **Core exists because a test project cannot reference a MAUI app.** The
 app's target framework is `net10.0-android`; a `net10.0` test host has no
@@ -180,6 +187,37 @@ string, the history takes a path and a key, and the client takes an
 Android push service, which runs with no MAUI host at all. Registering
 fresh instances in `MauiProgram` instead would give the app a second
 history over the same file, whose write lock is per-instance.
+
+### The two test projects
+
+They are not duplicates and neither replaces the other. `Link.Tests` is
+where the edges live — a tampered ciphertext, a file that will not
+decrypt, a server that answers something which is not JSON — and it is
+what the coverage badge measures. `Link.Specs` is where the behaviour
+lives, written in the sentences above rather than in method names: a
+message arrives however it travelled, what was cleared stays cleared, a
+handset that cannot read its messages says so.
+
+```bash
+dotnet test TheBleedingDeacons.Intergroup.Link.Specs
+```
+
+Both run over Link.Core, both run in CI, and the specs are a gate rather
+than a contribution to the badge — folding them into the coverage run
+would quietly change what the number means.
+
+The narrative behind the feature files, and the glossary they use, is
+[`specs/domain-model.md`](specs/domain-model.md). It was written by
+reading the code: the app came first and the specification was
+reverse-engineered from it, so where the two disagree the feature files
+are what runs.
+
+**Scenarios tagged `@manual @ignore` are on-device acceptance criteria**
+and Reqnroll skips them. They are written down rather than left in prose
+because several of them are the sharpest hazards here — what the
+notification tray shows, a keystore entry invalidated by a changed screen
+lock, and the reinstall that destroys every message ever sent to a
+handset. No test host can reach any of them.
 
 ## What is not done
 

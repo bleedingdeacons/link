@@ -10,10 +10,13 @@ name: CI
 #  * ios      — the same for the iOS head, on macOS because nothing else can
 #               build one, and archives an unsigned .ipa.
 #  * test     — run the xUnit v3 suite over Link.Core (the MAUI-free half of
-#               the app) with Coverlet coverage, and upload to Coveralls.
-#               Ubuntu, no workload: Link.Core and its tests are plain
+#               the app) with Coverlet coverage, upload to Coveralls, and then
+#               run the Reqnroll specification over the same library. Ubuntu,
+#               no workload: Link.Core, its tests and its specs are plain
 #               net10.0, which is the entire reason that split exists — see
-#               Link.Core's project file.
+#               Link.Core's project file. The coverage figure covers the xUnit
+#               suite only, deliberately; the specs are a gate, not a
+#               contribution to the badge.
 #  * semgrep  — a job of its own rather than a step, because the other jobs
 #               install a JDK and the MAUI workload and Semgrep needs neither.
 #  * version  — bumps the version, and only after all three have passed.
@@ -465,6 +468,20 @@ jobs:
           --output coverage/coverage.cobertura.xml
           --include "[TheBleedingDeacons.Intergroup.Link.Core]*"
           --exclude-by-attribute Obsolete
+
+      # The Reqnroll suite over the same library, run as its own step rather
+      # than folded into the coverage run above. Two reasons: it is a gate in
+      # its own right and should say so in the log when it is what broke, and
+      # the Coveralls figure goes on meaning what the README says it means —
+      # how well the xUnit suite covers Link.Core — rather than quietly
+      # changing the day the specs landed.
+      #
+      # Scenarios tagged @manual @ignore are on-device acceptance criteria.
+      # Reqnroll skips them; nothing here has to filter them out.
+      - name: Run the executable specification
+        run: >
+          dotnet test TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
+          -c Debug
 
       - name: Upload coverage to Coveralls
         uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
