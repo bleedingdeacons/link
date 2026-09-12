@@ -16,6 +16,19 @@
 			       IsVisible="{Binding IsReply}"
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
+			<!--
+				Subject first, before the recipients.
+
+				It is the one field somebody arrives already knowing. Choosing
+				who a message is for is the slow part: a search, a scroll,
+				several taps, and putting it above the subject meant the
+				thought that brought the member here had to survive all of it.
+				On a reply it is filled in before the screen opens, which makes
+				the old order stranger still: the first thing on the page was
+				work, and the thing already done sat below the fold.
+			-->
+			<Entry Placeholder="Subject" Text="{Binding Subject}" MaxLength="200" />
+
 			<Label Text="Send to" FontAttributes="Bold" />
 
 			<!--
@@ -138,8 +151,6 @@
 
 			<Label Style="{StaticResource Secondary}"
 			       Text="A committee includes its sub-committees." />
-
-			<Entry Placeholder="Subject" Text="{Binding Subject}" MaxLength="200" />
 
 			<Editor Placeholder="Message"
 			        Text="{Binding Body}"
