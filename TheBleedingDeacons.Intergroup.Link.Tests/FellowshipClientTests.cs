@@ -351,6 +351,51 @@ public sealed class FellowshipClientTests
 	}
 
 	[Fact]
+	public async Task ARefusalIsStillReadableAfterTheLogHasReadIt()
+	{
+		// The refusal path now reads the body once to put the server's
+		// sentence in the log, and the caller reads it again to show it.
+		// Both must see the whole thing: a response read destructively
+		// would leave the member looking at "The message could not be
+		// sent." while the log alone knew why.
+		var handler = new StubHandler(HttpStatusCode.BadRequest, """
+			{"code":"fellowship_no_audience","message":"Choose who this message is for."}
+			""");
+
+		var result = await Client(handler).SendAsync("fdt_x", new SendRequest { Subject = "s", Body = "b" });
+
+		Assert.False(result.Succeeded);
+		Assert.Equal("Choose who this message is for.", result.Error);
+	}
+
+	[Fact]
+	public async Task ARefusalThatIsNotJsonFallsBackToTheGenericWording()
+	{
+		// A gateway having a moment answers with a page of HTML rather
+		// than the API's own shape. Reading it for the log must not throw
+		// and must not put a page of markup anywhere.
+		var handler = new StubHandler(HttpStatusCode.BadGateway, "<html><body>502 Bad Gateway</body></html>");
+
+		var result = await Client(handler).SendAsync("fdt_x", new SendRequest { Subject = "s", Body = "b" });
+
+		Assert.False(result.Succeeded);
+		Assert.Equal("The message could not be sent.", result.Error);
+	}
+
+	[Fact]
+	public async Task ARefusalWithNoMessageFallsBackToTheGenericWording()
+	{
+		// Valid JSON, no sentence in it. There is nothing to add, and the
+		// member gets the app's own wording rather than an empty string.
+		var handler = new StubHandler(HttpStatusCode.BadRequest, """{"code":"fellowship_no_recipients"}""");
+
+		var result = await Client(handler).SendAsync("fdt_x", new SendRequest { Subject = "s", Body = "b" });
+
+		Assert.False(result.Succeeded);
+		Assert.Equal("The message could not be sent.", result.Error);
+	}
+
+	[Fact]
 	public async Task SigningOutIsADeleteAndSurvivesAnUnreachableServer()
 	{
 		// The app clears its own token regardless, so a member is signed
