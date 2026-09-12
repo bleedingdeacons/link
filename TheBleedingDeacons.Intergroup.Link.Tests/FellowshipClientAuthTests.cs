@@ -218,10 +218,24 @@ public sealed class FellowshipClientAuthTests
 	{
 		var handler = new StubHandler(HttpStatusCode.OK, """{"ok":true}""");
 
-		Assert.True(await Client(handler).RotateKeyAsync("fdt_x", "new-spki"));
+		var result = await Client(handler).RotateKeyAsync(
+			"fdt_x",
+			new RotateKeyRequest { PublicKey = "new-spki", Email = "member@example.org", Password = "hunter2" });
 
+		Assert.True(result.Succeeded);
 		Assert.EndsWith("auth/device/key", handler.LastUri?.AbsolutePath, StringComparison.Ordinal);
 		Assert.Contains("\"public_key\":\"new-spki\"", handler.LastBody, StringComparison.Ordinal);
+
+		// The credential travels with it. Without one the server refuses,
+		// because a device token alone is enough to substitute the key
+		// every retained message would then be re-sealed to.
+		Assert.Contains("\"password\":\"hunter2\"", handler.LastBody, StringComparison.Ordinal);
+
+		// And only the shape that was used. Empty fields alongside a real
+		// credential are how a server comes to guess which flow it is
+		// looking at.
+		Assert.DoesNotContain("\"code\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.DoesNotContain("\"id_token\"", handler.LastBody, StringComparison.Ordinal);
 	}
 
 	[Fact]

@@ -76,7 +76,7 @@ public interface IFellowshipClient
 	/// the server has already swept, and pushes sent before the change,
 	/// are genuinely gone.</para>
 	/// </summary>
-	Task<bool> RotateKeyAsync(string token, string publicKey, CancellationToken cancellationToken = default);
+	Task<RotateKeyResult> RotateKeyAsync(string token, RotateKeyRequest request, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Report that this handset cannot open its messages.
@@ -176,6 +176,62 @@ public sealed record EnrolmentResult
 	public static EnrolmentResult Cancelled() => new();
 
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
+}
+
+/// <summary>
+/// What the app posts to replace this handset's key.
+///
+/// <para><b>A credential as well as the public half, since Fellowship
+/// 1.7.</b> The device token alone used to be enough, and because the
+/// server seals from plaintext on every fetch, substituting the key was
+/// sufficient to have every retained message re-sealed to it. The
+/// keypair could not help: it seals, and never authenticates.</para>
+///
+/// <para>Whichever shape the member signs in with — the same three
+/// enrolment takes — and it has to be the member this handset belongs
+/// to.</para>
+/// </summary>
+public sealed record RotateKeyRequest
+{
+	/// <summary>Base64 SubjectPublicKeyInfo for the new keypair.</summary>
+	public required string PublicKey { get; init; }
+
+	/// <summary>The one-time code the browser carried back (Google).</summary>
+	public string Code { get; init; } = string.Empty;
+
+	/// <summary>The state issued at start (Apple).</summary>
+	public string State { get; init; } = string.Empty;
+
+	/// <summary>The platform-issued ID token (Apple).</summary>
+	public string IdToken { get; init; } = string.Empty;
+
+	/// <summary>The address, for the password flow.</summary>
+	public string Email { get; init; } = string.Empty;
+
+	/// <summary>
+	/// The password, for the password flow. Sent once and never stored,
+	/// as at enrolment.
+	/// </summary>
+	public string Password { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// The outcome of presenting a new key.
+///
+/// <para>Carries the server's own words where there are any, for the
+/// same reason enrolment does: "sign in as the member this phone belongs
+/// to" is something the person reading it can act on, and flattening it
+/// into "that did not work" is not.</para>
+/// </summary>
+public sealed record RotateKeyResult
+{
+	public bool Succeeded { get; init; }
+
+	public string Error { get; init; } = string.Empty;
+
+	public static RotateKeyResult Ok() => new() { Succeeded = true };
+
+	public static RotateKeyResult Failed(string error) => new() { Error = error };
 }
 
 /// <summary>What setting a password answered.</summary>

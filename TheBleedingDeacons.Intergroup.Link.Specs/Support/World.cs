@@ -50,6 +50,9 @@ public sealed class World : IDisposable
 		WeakReferenceMessenger.Default.Register<World, AuthenticationLost>(
 			this, static (world, lost) => world.SignedOut = lost);
 
+		WeakReferenceMessenger.Default.Register<World, KeyFaultChanged>(
+			this, static (world, fault) => world.KeyFaultAnnounced = fault.Faulted);
+
 		// Enrolled: Fellowship holds the public half this handset just
 		// generated. Every way a key goes wrong is these two coming apart
 		// again, and rotation is how they are put back.
@@ -70,6 +73,12 @@ public sealed class World : IDisposable
 	/// while it still has it.
 	/// </summary>
 	public AuthenticationLost? SignedOut { get; set; }
+
+	/// <summary>
+	/// What the last sync said about this handset being able to open its
+	/// messages, or null before any sync has said anything.
+	/// </summary>
+	public bool? KeyFaultAnnounced { get; set; }
 
 	/// <summary>Every envelope this scenario has sealed, by message id.</summary>
 	public Dictionary<long, SealedMessage> Built { get; } = [];
@@ -187,6 +196,7 @@ public sealed class World : IDisposable
 	{
 		WeakReferenceMessenger.Default.Unregister<MessageReceived>(this);
 		WeakReferenceMessenger.Default.Unregister<AuthenticationLost>(this);
+		WeakReferenceMessenger.Default.Unregister<KeyFaultChanged>(this);
 
 		_history?.Dispose();
 

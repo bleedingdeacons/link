@@ -164,13 +164,117 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken = default)
 	{
+		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
+		if (refusal is not null)
+		{
+			return refusal;
+		}
+
+		return await EnrolAsync(new EnrolmentRequest
+		{
+			Code = code,
+			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+			Platform = PlatformName(),
+			Label = DeviceLabel(),
+		}, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Replace this handset's keypair, proving who is holding it through
+	/// the same browser leg a sign-in uses.
+	///
+	/// <para><b>Why a credential at all.</b> Fellowship seals from
+	/// plaintext on every fetch, so substituting the key on a device row
+	/// is enough to have every retained message re-sealed to it — and the
+	/// device token alone used to be enough to do that. The keypair
+	/// cannot stand in: it seals and never authenticates.</para>
+	///
+	/// <para>The device row, its token and its place in the intergroup's
+	/// list all survive. That is the whole reason this is not simply a
+	/// re-enrolment.</para>
+	/// </summary>
+	public async Task<RotateKeyResult> ReplaceKeyWithProviderAsync(
+		string provider,
+		CancellationToken cancellationToken = default)
+	{
+		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
+		if (refusal is not null)
+		{
+			return RotateKeyResult.Failed(refusal.Error);
+		}
+
+		return await RotateAsync(new RotateKeyRequest { Code = code, PublicKey = string.Empty }, cancellationToken)
+			.ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Replace the keypair, proving who is holding the handset through
+	/// Apple's own sheet. See <see cref="ReplaceKeyWithProviderAsync"/>
+	/// for why a credential is needed at all.
+	/// </summary>
+	public async Task<RotateKeyResult> ReplaceKeyWithAppleAsync(CancellationToken cancellationToken = default)
+	{
+		if (!_apple.IsAvailable)
+		{
+			return RotateKeyResult.Failed("This device cannot sign in with Apple.");
+		}
+
+		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
+		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
+		{
+			return RotateKeyResult.Failed("The intergroup is not set up for Apple sign-in.");
+		}
+
+		var idToken = await _apple.GetIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
+		if (string.IsNullOrEmpty(idToken))
+		{
+			// Dismissed the sheet. Says nothing, exactly as a cancelled
+			// sign-in says nothing.
+			return RotateKeyResult.Failed(string.Empty);
+		}
+
+		return await RotateAsync(
+			new RotateKeyRequest { IdToken = idToken, State = start.State, PublicKey = string.Empty },
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Replace the keypair with an email and password. See
+	/// <see cref="ReplaceKeyWithProviderAsync"/>.
+	/// </summary>
+	public async Task<RotateKeyResult> ReplaceKeyWithPasswordAsync(
+		string email,
+		string password,
+		CancellationToken cancellationToken = default)
+	{
+		if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+		{
+			return RotateKeyResult.Failed("Please enter your email address and password.");
+		}
+
+		return await RotateAsync(
+			new RotateKeyRequest { Email = email.Trim(), Password = password, PublicKey = string.Empty },
+			cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// The browser leg, shared by signing in and by replacing a key.
+	///
+	/// <para>Answers the one-time code, or the refusal to show instead of
+	/// one. Extracted rather than copied because the two callers have to
+	/// agree about what a closed browser tab means — silence — and a
+	/// second copy is how one of them comes to say something.</para>
+	/// </summary>
+	private async Task<(string Code, EnrolmentResult? Refusal)> BrowserCodeAsync(
+		string provider,
+		CancellationToken cancellationToken)
+	{
 		var start = await _client.StartSignInAsync(provider, cancellationToken).ConfigureAwait(false);
 		if (start is null || !start.IsBrowserFlow)
 		{
-			return EnrolmentResult.Failed($"This intergroup is not set up for {Describe(provider)} sign-in.");
+			return (string.Empty, EnrolmentResult.Failed(
+				$"This intergroup is not set up for {Describe(provider)} sign-in."));
 		}
-
-		string code;
 
 		try
 		{
@@ -190,30 +294,43 @@ public sealed class DeviceAuthService
 			// act on, so they are translated rather than collapsed.
 			if (result.Properties.TryGetValue("error", out var error))
 			{
-				return EnrolmentResult.Failed(Explain(error));
+				return (string.Empty, EnrolmentResult.Failed(Explain(error)));
 			}
 
 			if (!result.Properties.TryGetValue("code", out var returned) || string.IsNullOrEmpty(returned))
 			{
-				return EnrolmentResult.Failed("The sign-in did not complete. Please try again.");
+				return (string.Empty, EnrolmentResult.Failed("The sign-in did not complete. Please try again."));
 			}
 
-			code = returned;
+			return (returned, null);
 		}
 		catch (TaskCanceledException)
 		{
 			// The member closed the browser tab. Not a failure worth an
 			// error message — they know what they did.
-			return EnrolmentResult.Failed(string.Empty);
+			return (string.Empty, EnrolmentResult.Failed(string.Empty));
+		}
+	}
+
+	/// <summary>
+	/// Generate the new pair and present its public half, with whichever
+	/// credential the caller gathered.
+	/// </summary>
+	private async Task<RotateKeyResult> RotateAsync(RotateKeyRequest request, CancellationToken cancellationToken)
+	{
+		var session = await _sessions.LoadAsync().ConfigureAwait(false);
+		if (session is null || !session.IsSignedIn)
+		{
+			return RotateKeyResult.Failed("This device is not signed in.");
 		}
 
-		return await EnrolAsync(new EnrolmentRequest
-		{
-			Code = code,
-			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
-			Platform = PlatformName(),
-			Label = DeviceLabel(),
-		}, cancellationToken).ConfigureAwait(false);
+		// Generated here rather than by the caller, so the old pair is not
+		// thrown away until a credential has actually been gathered — a
+		// member who backs out of the browser tab keeps whatever they had.
+		var publicKey = await _keys.RegenerateAsync().ConfigureAwait(false);
+
+		return await _client.RotateKeyAsync(
+			session.Token, request with { PublicKey = publicKey }, cancellationToken).ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -370,33 +487,6 @@ public sealed class DeviceAuthService
 		// revoked. Leaving it standing would have the next sign-in screen
 		// claim push was connected for a handset the server no longer knows.
 		PushRegistered = false;
-	}
-
-	/// <summary>
-	/// Replace this handset's keypair after it has lost the old one.
-	///
-	/// <para>The recovery for "my messages will not open", and it recovers
-	/// more than this used to claim. It keeps the device row and its place
-	/// in the intergroup's list, so nobody re-enrols — and because
-	/// Fellowship stores bodies in plain text and seals them afresh on
-	/// every fetch, the next sync re-delivers everything still inside the
-	/// retention window, sealed to the new key.</para>
-	///
-	/// <para>What is actually lost is narrower: messages the server has
-	/// already swept, and any push sealed and sent before the key changed,
-	/// because nothing re-sends a push.</para>
-	/// </summary>
-	public async Task<bool> ReplaceKeyAsync(CancellationToken cancellationToken = default)
-	{
-		var session = await _sessions.LoadAsync().ConfigureAwait(false);
-		if (session is null || !session.IsSignedIn)
-		{
-			return false;
-		}
-
-		var publicKey = await _keys.RegenerateAsync().ConfigureAwait(false);
-
-		return await _client.RotateKeyAsync(session.Token, publicKey, cancellationToken).ConfigureAwait(false);
 	}
 
 	private async Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken)

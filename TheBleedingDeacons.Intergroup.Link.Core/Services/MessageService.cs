@@ -65,6 +65,11 @@ public sealed class MessageService : IMessageService
 
 		if (page.Messages.Count == 0)
 		{
+			// Nothing arrived, so nothing failed to open. Said out loud
+			// rather than left implied, because a screen that only ever
+			// hears about faults can never stop showing one.
+			WeakReferenceMessenger.Default.Send(new KeyFaultChanged(false));
+
 			return new SyncResult { Received = 0, Unread = page.Unread };
 		}
 
@@ -108,6 +113,8 @@ public sealed class MessageService : IMessageService
 
 			await _client.ReportKeyFaultAsync(session.Token, cancellationToken).ConfigureAwait(false);
 		}
+
+		WeakReferenceMessenger.Default.Send(new KeyFaultChanged(unopened > 0));
 
 		return new SyncResult
 		{

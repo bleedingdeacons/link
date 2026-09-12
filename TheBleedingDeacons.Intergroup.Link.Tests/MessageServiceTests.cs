@@ -350,8 +350,8 @@ public sealed class MessageServiceTests
 		public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default) =>
 			Task.FromResult(true);
 
-		public Task<bool> RotateKeyAsync(string token, string publicKey, CancellationToken cancellationToken = default) =>
-			Task.FromResult(true);
+		public Task<RotateKeyResult> RotateKeyAsync(string token, RotateKeyRequest request, CancellationToken cancellationToken = default) =>
+			Task.FromResult(RotateKeyResult.Ok());
 
 		public Task<bool> SignOutAsync(string token, CancellationToken cancellationToken = default) =>
 			Task.FromResult(true);

@@ -88,14 +88,63 @@
 				</VerticalStackLayout>
 			</Border>
 
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+			<!--
+				Shown only while there is a fault to fix. The recovery asks
+				a member to sign in again, and offering that permanently
+				would put an alarming-looking repair in front of everybody
+				for something the usual member never meets.
+			-->
+			<Border Style="{StaticResource Card}"
+			        StrokeShape="RoundRectangle 10"
+			        IsVisible="{Binding KeyFault}">
 				<VerticalStackLayout Spacing="8">
 					<Label Text="Messages will not open?" />
 					<Label Style="{StaticResource Secondary}"
-					       Text="This can happen after a phone is restored from a backup, or after the screen lock changes. Getting a new key fixes messages sent from now on." />
+					       Text="This usually happens after the screen lock changes, or after a phone is restored or transferred. Getting a new key fixes it, and your messages arrive again on the next sync." />
+
 					<Button Text="Fix messages that will not open"
+					        IsVisible="{Binding NotReplacingKey}"
 					        Style="{StaticResource Quiet}"
-					        Command="{Binding ReplaceKeyCommand}" />
+					        Command="{Binding StartKeyReplacementCommand}" />
+
+					<!--
+						The same choices the sign-in page offers, because
+						this asks for the same proof. Fellowship refuses a
+						key replacement on a device token alone: substituting
+						the key is enough to have every message it still
+						holds re-sealed to it.
+					-->
+					<VerticalStackLayout Spacing="8" IsVisible="{Binding ReplacingKey}">
+						<Label Style="{StaticResource Secondary}"
+						       Text="Sign in again to prove this phone is yours." />
+
+						<Button Text="Continue with Google"
+						        Style="{StaticResource Quiet}"
+						        Command="{Binding ReplaceKeyWithProviderCommand}"
+						        CommandParameter="google" />
+						<Button Text="Continue with Microsoft"
+						        Style="{StaticResource Quiet}"
+						        Command="{Binding ReplaceKeyWithProviderCommand}"
+						        CommandParameter="microsoft" />
+						<Button Text="Continue with Apple"
+						        Style="{StaticResource Quiet}"
+						        IsVisible="{Binding IsAppleAvailable}"
+						        Command="{Binding ReplaceKeyWithAppleCommand}" />
+
+						<Entry Placeholder="Email address"
+						       Keyboard="Email"
+						       Text="{Binding KeyEmail}" />
+						<Entry Placeholder="Password"
+						       IsPassword="True"
+						       Text="{Binding KeyPassword}" />
+						<Button Text="Continue with a password"
+						        Style="{StaticResource Quiet}"
+						        Command="{Binding ReplaceKeyWithPasswordCommand}" />
+
+						<Button Text="Cancel"
+						        Style="{StaticResource Quiet}"
+						        Command="{Binding CancelKeyReplacementCommand}" />
+					</VerticalStackLayout>
 				</VerticalStackLayout>
 			</Border>
 

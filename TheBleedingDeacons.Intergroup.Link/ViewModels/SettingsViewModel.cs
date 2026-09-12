@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Support;
@@ -35,6 +36,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_notifications = notifications;
 		_sound = sound;
 		_soundOn = sound.Enabled;
+
+		// The recovery is hidden until there is something to recover
+		// from. It asks a member to sign in again, which is a great deal
+		// of screen for a fault most of them will never meet.
+		//
+		// WeakReferenceMessenger holds this weakly and this view model
+		// lives as long as the app, so there is nothing to unregister.
+		WeakReferenceMessenger.Default.Register<KeyFaultChanged>(this, (_, fault) =>
+		{
+			KeyFault = fault.Faulted;
+
+			if (!fault.Faulted)
+			{
+				// Fixed, or never really broken. Fold the choices away
+				// rather than leaving a member halfway through a sign-in
+				// for a problem that has gone.
+				ReplacingKey = false;
+			}
+		});
 	}
 
 	/// <summary>
@@ -48,6 +68,46 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// <para>A fellowship phone sits in meetings. Somewhere to turn this
 	/// off is not a nicety.</para>
 	/// </summary>
+	/// <summary>
+	/// Whether the last sync found something it could not open.
+	///
+	/// <para>The whole recovery card hangs off this. Discovered from the
+	/// sync rather than asked of the server, so Settings and the message
+	/// list cannot disagree about whether there is a problem.</para>
+	/// </summary>
+	[ObservableProperty]
+	private bool _keyFault;
+
+	/// <summary>
+	/// Whether the recovery has been confirmed and is asking for a
+	/// credential. False the rest of the time, which is nearly always.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(NotReplacingKey))]
+	private bool _replacingKey;
+
+	/// <summary>
+	/// The inverse, for the button that opens the recovery. A property
+	/// rather than a converter: one bool used once does not earn a
+	/// resource entry and a lookup in the XAML.
+	/// </summary>
+	public bool NotReplacingKey => !ReplacingKey;
+
+	/// <summary>Whether this build can raise Apple's sheet at all.</summary>
+	public bool IsAppleAvailable => _auth.IsAppleAvailable;
+
+	/// <summary>The address, for the password route into recovery.</summary>
+	[ObservableProperty]
+	private string _keyEmail = string.Empty;
+
+	/// <summary>
+	/// The password, for the same. Cleared the moment it has been sent —
+	/// there is no "remember me" here for the same reason there is none
+	/// on the sign-in screen.
+	/// </summary>
+	[ObservableProperty]
+	private string _keyPassword = string.Empty;
+
 	[ObservableProperty]
 	private bool _soundOn;
 
@@ -203,16 +263,26 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// <para>Replaces the keypair and tells Fellowship the new public
 	/// half. The device row and its place in the intergroup's list
 	/// survive, so nobody has to re-enrol — and the messages come back.
-	/// Fellowship holds bodies in plain text and seals them afresh on every
-	/// fetch, so once the new key is presented the next sync re-delivers
-	/// everything still inside the retention window. What is genuinely
-	/// lost is what the server has already swept, and any push that was
-	/// sealed and sent before the key changed. The confirmation says
-	/// that, and said the opposite until 2026-09-12.
-	/// </para>
+	/// Fellowship holds bodies in plain text and seals them afresh on
+	/// every fetch, so once the new key is presented the next sync
+	/// re-delivers everything still inside the retention window. What is
+	/// genuinely lost is what the server has already swept, and any push
+	/// sealed and sent before the key changed.</para>
+	///
+	/// <para><b>It asks the member to sign in again, and that is not
+	/// ceremony.</b> Substituting the key on a device row is enough to
+	/// have every retained message re-sealed to it, so Fellowship refuses
+	/// to do it on a device token alone. This step gathers the proof it
+	/// wants. Proof of possession of the <i>old</i> key would be tidier
+	/// and cannot work: this flow exists precisely because that key is
+	/// gone.</para>
+	///
+	/// <para>Opening the choices is a separate step from using one, so a
+	/// member who taps the button out of curiosity is not immediately in
+	/// a browser.</para>
 	/// </summary>
 	[RelayCommand]
-	private async Task ReplaceKeyAsync()
+	private async Task StartKeyReplacementAsync()
 	{
 		var page = Application.Current?.Windows.FirstOrDefault()?.Page;
 		if (page is null)
@@ -222,26 +292,64 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var confirmed = await page.DisplayAlertAsync(
 			"Fix messages that will not open?",
-			"This gives the intergroup a new key for this phone. Messages the intergroup still holds "
-				+ "will arrive again on the next sync. Anything older than it keeps, and any notification "
-				+ "already sent, cannot be recovered.",
-			"Get a new key",
+			"This gives the intergroup a new key for this phone, and asks you to sign in again to prove "
+				+ "it is you. Messages the intergroup still holds will arrive again on the next sync. "
+				+ "Anything older than it keeps, and any notification already sent, cannot be recovered.",
+			"Continue",
 			"Cancel").ConfigureAwait(true);
 
-		if (!confirmed)
-		{
-			return;
-		}
+		ReplacingKey = confirmed;
+		Notice = string.Empty;
+	}
 
+	[RelayCommand]
+	private void CancelKeyReplacement()
+	{
+		ReplacingKey = false;
+		KeyPassword = string.Empty;
+	}
+
+	[RelayCommand]
+	private async Task ReplaceKeyWithProviderAsync(string provider) =>
+		await ReplaceAsync(() => _auth.ReplaceKeyWithProviderAsync(provider)).ConfigureAwait(true);
+
+	[RelayCommand]
+	private async Task ReplaceKeyWithAppleAsync() =>
+		await ReplaceAsync(() => _auth.ReplaceKeyWithAppleAsync()).ConfigureAwait(true);
+
+	[RelayCommand]
+	private async Task ReplaceKeyWithPasswordAsync()
+	{
+		await ReplaceAsync(() => _auth.ReplaceKeyWithPasswordAsync(KeyEmail, KeyPassword)).ConfigureAwait(true);
+
+		// Held only as long as it takes to send, as on the sign-in screen.
+		KeyPassword = string.Empty;
+	}
+
+	/// <summary>
+	/// The shared half of replacing a key, whichever credential proved it.
+	/// </summary>
+	private async Task ReplaceAsync(Func<Task<RotateKeyResult>> replace)
+	{
 		Busy = true;
+		Notice = string.Empty;
 
 		try
 		{
-			var ok = await _auth.ReplaceKeyAsync().ConfigureAwait(true);
+			var result = await replace().ConfigureAwait(true);
 
-			Notice = ok
-				? "This phone has a new key. New messages will open normally."
-				: "Could not reach the intergroup. Try again when you have a connection.";
+			if (result.Succeeded)
+			{
+				ReplacingKey = false;
+				KeyPassword = string.Empty;
+				Notice = "This phone has a new key. Your messages will arrive again on the next sync.";
+
+				return;
+			}
+
+			// An empty error is a cancelled sign-in — a closed browser tab
+			// or a dismissed sheet. The member knows what they did.
+			Notice = result.Error;
 		}
 		finally
 		{

@@ -157,11 +157,21 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken) =>
 		Task.FromResult(true);
 
-	public Task<bool> RotateKeyAsync(string token, string publicKey, CancellationToken cancellationToken)
+	public Task<RotateKeyResult> RotateKeyAsync(
+		string token, RotateKeyRequest request, CancellationToken cancellationToken)
 	{
-		RotatedKeys.Add(publicKey);
+		RotatedKeys.Add(request.PublicKey);
 
-		return Task.FromResult(true);
+		// A credential is required since Fellowship 1.7, and the double
+		// enforces it so a scenario cannot prove a rotation the server
+		// would refuse.
+		var proven = request.Code.Length > 0
+			|| request.IdToken.Length > 0
+			|| (request.Email.Length > 0 && request.Password.Length > 0);
+
+		return Task.FromResult(proven
+			? RotateKeyResult.Ok()
+			: RotateKeyResult.Failed("Sign in to replace this key."));
 	}
 
 	public Task<bool> ReportKeyFaultAsync(string token, CancellationToken cancellationToken)
