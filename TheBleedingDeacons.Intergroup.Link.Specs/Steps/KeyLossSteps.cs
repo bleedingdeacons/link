@@ -62,6 +62,15 @@ public sealed class KeyLossSteps(World world)
 	[Then(@"^the sync reports a key fault$")]
 	public void KeyFault() => world.LastSync.ShouldNotBeNull().KeyFault.ShouldBeTrue();
 
+	[Then(@"^the recovery is offered$")]
+	public void RecoveryOffered() => world.KeyFaultAnnounced.ShouldBe(true);
+
+	[Then(@"^the recovery is not offered$")]
+	public void RecoveryNotOffered() => world.KeyFaultAnnounced.ShouldBe(false);
+
+	[Then(@"^nothing has been said about the recovery$")]
+	public void NothingSaid() => world.KeyFaultAnnounced.ShouldBeNull();
+
 	[Then(@"^the sync reports no key fault$")]
 	public void NoKeyFault() => world.LastSync.ShouldNotBeNull().KeyFault.ShouldBeFalse();
 }

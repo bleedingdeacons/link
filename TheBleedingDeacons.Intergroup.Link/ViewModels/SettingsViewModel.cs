@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Support;
@@ -35,6 +36,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_notifications = notifications;
 		_sound = sound;
 		_soundOn = sound.Enabled;
+
+		// The recovery is hidden until there is something to recover
+		// from. It asks a member to sign in again, which is a great deal
+		// of screen for a fault most of them will never meet.
+		//
+		// WeakReferenceMessenger holds this weakly and this view model
+		// lives as long as the app, so there is nothing to unregister.
+		WeakReferenceMessenger.Default.Register<KeyFaultChanged>(this, (_, fault) =>
+		{
+			KeyFault = fault.Faulted;
+
+			if (!fault.Faulted)
+			{
+				// Fixed, or never really broken. Fold the choices away
+				// rather than leaving a member halfway through a sign-in
+				// for a problem that has gone.
+				ReplacingKey = false;
+			}
+		});
 	}
 
 	/// <summary>
@@ -48,6 +68,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// <para>A fellowship phone sits in meetings. Somewhere to turn this
 	/// off is not a nicety.</para>
 	/// </summary>
+	/// <summary>
+	/// Whether the last sync found something it could not open.
+	///
+	/// <para>The whole recovery card hangs off this. Discovered from the
+	/// sync rather than asked of the server, so Settings and the message
+	/// list cannot disagree about whether there is a problem.</para>
+	/// </summary>
+	[ObservableProperty]
+	private bool _keyFault;
+
 	/// <summary>
 	/// Whether the recovery has been confirmed and is asking for a
 	/// credential. False the rest of the time, which is nearly always.

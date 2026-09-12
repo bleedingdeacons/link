@@ -88,7 +88,15 @@
 				</VerticalStackLayout>
 			</Border>
 
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
+			<!--
+				Shown only while there is a fault to fix. The recovery asks
+				a member to sign in again, and offering that permanently
+				would put an alarming-looking repair in front of everybody
+				for something the usual member never meets.
+			-->
+			<Border Style="{StaticResource Card}"
+			        StrokeShape="RoundRectangle 10"
+			        IsVisible="{Binding KeyFault}">
 				<VerticalStackLayout Spacing="8">
 					<Label Text="Messages will not open?" />
 					<Label Style="{StaticResource Secondary}"

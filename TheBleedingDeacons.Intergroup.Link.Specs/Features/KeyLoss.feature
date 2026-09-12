@@ -122,6 +122,37 @@ Feature: A handset that cannot open its messages
       When the handset syncs
       Then the sync reports no key fault
 
+  Rule: The recovery is offered only while there is something to recover
+
+    Replacing a key asks a member to sign in again, which is a great deal
+    of screen for a fault most of them will never meet — the usual cause
+    is a changed screen lock, and it is uncommon. So Settings hides the
+    whole card until a sync says otherwise, and shows it again the moment
+    one does.
+
+    Scenario: A sync that could not open something offers the recovery
+      Given message 12 is waiting, sealed to a key this handset has lost
+      When the handset syncs
+      Then the recovery is offered
+
+    Scenario: A sync that opened everything takes the offer away
+      Given message 12 is waiting on the server
+      When the handset syncs
+      Then the recovery is not offered
+
+    Scenario: A sync with nothing waiting takes it away too
+      When the handset syncs
+      Then the recovery is not offered
+      # A screen that only ever hears about faults can never stop showing
+      # one, so an empty sync has to say so as plainly as a full one.
+
+    Scenario: A sync that never reached the server says nothing either way
+      Given Fellowship cannot be reached
+      When the handset syncs
+      Then nothing has been said about the recovery
+      # An unreachable server knows nothing about this handset's key. A
+      # phone in a tunnel must not lose an offer it needs.
+
   Rule: A push that will not open raises nothing at all
 
     Quiet on screen, not quiet in the log — those are different
