@@ -5,26 +5,53 @@
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.SignInPage"
              x:DataType="vm:SignInViewModel"
-             Title="Link">
+             Title="Sign in">
 
 	<ContentPage.Resources>
 		<toolkit:InvertedBoolConverter x:Key="Not" />
 	</ContentPage.Resources>
 
 	<!--
-		Scrollable now that there is more than one button. Five sign-in
-		methods plus a set-password section does not fit on a small phone
-		in landscape, and a screen that cannot be scrolled to its own
-		submit button is worse than a slightly longer one.
+		Hand's sign-in page in proportion: the app's name large and bold,
+		one faint line under it, tall buttons, and the password route set
+		below the providers under a small divider line.
+
+		Scrollable, because five sign-in methods plus a set-password
+		section does not fit on a small phone in landscape, and a screen
+		that cannot be scrolled to its own submit button is worse than a
+		slightly longer one.
 	-->
 	<ScrollView>
-		<VerticalStackLayout Spacing="18" Padding="28">
+		<VerticalStackLayout Padding="24,40" Spacing="16">
 
-			<Label Text="Link" Style="{StaticResource Heading}" HorizontalOptions="Center" />
+			<Label Text="Link"
+			       FontSize="34"
+			       FontAttributes="Bold"
+			       HorizontalOptions="Center" />
 
-			<Label Style="{StaticResource Secondary}"
+			<Label Text="Messages from your intergroup, and to the members and committees in it."
+			       FontSize="14"
+			       Opacity="0.7"
 			       HorizontalTextAlignment="Center"
-			       Text="Messages from your intergroup, and to the members and committees in it." />
+			       HorizontalOptions="Center"
+			       Margin="0,0,0,12" />
+
+			<!--
+				Nothing works until the build has an intergroup address, so
+				say so first, in Hand's amber, rather than below a column of
+				buttons that are not there.
+			-->
+			<Border IsVisible="{Binding IsConfigured, Converter={StaticResource Not}}"
+			        Padding="14"
+			        BackgroundColor="#FFF4E5"
+			        StrokeThickness="0">
+				<Border.StrokeShape>
+					<RoundRectangle CornerRadius="10" />
+				</Border.StrokeShape>
+				<Label TextColor="#663C00"
+				       FontSize="13"
+				       Text="This copy of Link has not been set up with an intergroup address. Ask whoever gave it to you for a configured build." />
+			</Border>
 
 			<!--
 				Said before the buttons, not after a failure. Sign-in
@@ -33,9 +60,11 @@
 				be refused — which is far less annoying to read here than
 				to discover.
 			-->
-			<Label Style="{StaticResource Secondary}"
+			<Label Text="Sign in with the email address your intergroup has for you."
+			       FontSize="13"
+			       Opacity="0.6"
 			       HorizontalTextAlignment="Center"
-			       Text="Sign in with the email address your intergroup has for you." />
+			       IsVisible="{Binding IsConfigured}" />
 
 			<!--
 				One command with a parameter, three buttons. The provider
@@ -43,16 +72,19 @@
 				knows how each of them works and refuses one it does not.
 			-->
 			<Button Text="Continue with Google"
+			        HeightRequest="50"
 			        Command="{Binding SignInWithProviderCommand}"
 			        CommandParameter="google"
 			        IsVisible="{Binding IsConfigured}" />
 
 			<Button Text="Continue with Microsoft"
+			        HeightRequest="50"
 			        Command="{Binding SignInWithProviderCommand}"
 			        CommandParameter="microsoft"
 			        IsVisible="{Binding IsConfigured}" />
 
 			<Button Text="Continue with Facebook"
+			        HeightRequest="50"
 			        Command="{Binding SignInWithProviderCommand}"
 			        CommandParameter="facebook"
 			        IsVisible="{Binding IsConfigured}" />
@@ -76,6 +108,7 @@
 				same purchase that makes this button appear at all.
 			-->
 			<Button Text="Continue with Apple"
+			        HeightRequest="50"
 			        Command="{Binding SignInWithAppleCommand}"
 			        IsVisible="{Binding CanOfferApple}" />
 
@@ -86,10 +119,12 @@
 				intergroup address is not one of those accounts, who would
 				otherwise have no way in.
 			-->
-			<Label Style="{StaticResource Secondary}"
-			       HorizontalTextAlignment="Center"
-			       IsVisible="{Binding IsConfigured}"
-			       Text="— or sign in with a password —" />
+			<Label Text="or sign in with a password"
+			       FontSize="13"
+			       Opacity="0.6"
+			       HorizontalOptions="Center"
+			       Margin="0,12,0,0"
+			       IsVisible="{Binding IsConfigured}" />
 
 			<Entry Placeholder="Email address"
 			       Keyboard="Email"
@@ -102,11 +137,20 @@
 			       IsVisible="{Binding IsConfigured}" />
 
 			<Button Text="Sign in"
+			        HeightRequest="50"
 			        Command="{Binding SignInWithPasswordCommand}"
 			        IsVisible="{Binding IsConfigured}" />
 
+			<!--
+				The Quiet style, and it was meant to be something like it
+				all along: this carried Style="{StaticResource Secondary}",
+				which is a Label style. MAUI declines a style whose
+				TargetType does not match and says so only in the log, so
+				the button fell back to the filled primary and sat in the
+				column looking exactly as important as "Sign in".
+			-->
 			<Button Text="Set or reset a password"
-			        Style="{StaticResource Secondary}"
+			        Style="{StaticResource Quiet}"
 			        Command="{Binding ToggleSettingPasswordCommand}"
 			        IsVisible="{Binding IsConfigured}" />
 
@@ -118,10 +162,12 @@
 			-->
 			<VerticalStackLayout Spacing="12" IsVisible="{Binding SettingPassword}">
 
-				<Label Style="{StaticResource Secondary}"
+				<Label FontSize="13"
+				       Opacity="0.7"
 				       Text="Enter your email address above, then ask for a code. It arrives by email and lasts an hour." />
 
 				<Button Text="Email me a code"
+				        HeightRequest="50"
 				        Command="{Binding RequestPasswordLinkCommand}" />
 
 				<Entry Placeholder="Code from the email"
@@ -131,15 +177,19 @@
 				       IsPassword="True"
 				       Text="{Binding NewPassword}" />
 
-				<Label Style="{StaticResource Secondary}"
+				<Label FontSize="12"
+				       Opacity="0.6"
 				       Text="At least 14 characters. A few random words make a strong password that is easy to remember." />
 
 				<Button Text="Set password"
+				        HeightRequest="50"
 				        Command="{Binding SetPasswordCommand}" />
 
 			</VerticalStackLayout>
 
-			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
+			<ActivityIndicator IsRunning="{Binding Busy}"
+			                   IsVisible="{Binding Busy}"
+			                   HorizontalOptions="Center" />
 
 			<!--
 				Two messages, two colours. "Check your email" is not a
@@ -149,17 +199,14 @@
 			-->
 			<Label Text="{Binding Notice}"
 			       IsVisible="{Binding HasNotice}"
+			       FontSize="14"
 			       HorizontalTextAlignment="Center" />
 
 			<Label Text="{Binding Error}"
 			       IsVisible="{Binding HasError}"
 			       TextColor="{StaticResource Warning}"
+			       FontSize="14"
 			       HorizontalTextAlignment="Center" />
-
-			<Label IsVisible="{Binding IsConfigured, Converter={StaticResource Not}}"
-			       TextColor="{StaticResource Warning}"
-			       HorizontalTextAlignment="Center"
-			       Text="This copy of Link has not been set up with an intergroup address. Ask whoever gave it to you for a configured build." />
 
 		</VerticalStackLayout>
 	</ScrollView>

@@ -20,12 +20,6 @@
         file, and eleven places for the next change to miss one.
     -->
     <x:Double x:Key="BodyFontSize">16</x:Double>
-    <!--
-        Detail lines and hints: one step down from the body, not two. This
-        was 13 against a body of 14; keeping it at 13 against 16 would make
-        it the odd size out rather than the quiet one.
-    -->
-    <x:Double x:Key="SecondaryFontSize">14</x:Double>
 
 
     <Style TargetType="ActivityIndicator">
@@ -451,10 +445,10 @@
         <Setter Property="Shell.NavBarHasShadow" Value="False" />
         <Setter Property="Shell.TabBarBackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Black}}" />
         <!--
-            Primary, not the template's Magenta. Every button in both apps
-            is Primary, and a tab bar in an accent colour that appears
-            nowhere else reads as a different app's chrome bolted on. Hand
-            has no tab bar to match, so the buttons are what it matches.
+            Primary, not the template's Magenta. Link no longer has a tab
+            bar - it went so the shell matches Hand's, which never had one -
+            but these stay Primary so that if one ever comes back it does
+            not arrive in an accent colour that appears nowhere else.
         -->
         <Setter Property="Shell.TabBarForegroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
         <Setter Property="Shell.TabBarTitleColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
@@ -476,33 +470,21 @@
 
 
     <!--
-        Link's four named styles, kept because its pages are written
-        against them, and rebuilt on the tokens above so they inherit
-        Hand's palette rather than restating a second one.
+        Link's one named style. Everything else on a Link page takes the
+        implicit styles above, which are Hand's, unmodified - and sizes and
+        faintness are set on the page, as Hand sets them, rather than
+        through named text styles.
 
-        These are the only additions. Everything else on a Link page -
-        Label, Button, Entry, Editor, Page, Shell - now takes the implicit
-        styles above, which are Hand's, unmodified.
-    -->
+        There were four. Secondary, Heading and Card went when the pages
+        were laid out as Hand's are: Hand has no bordered cards and no
+        heading style, and its quiet text is a size and an opacity on the
+        label itself. A page written against those styles looked like a
+        cousin of Hand's rather than the same app family.
 
-    <Style TargetType="Label" x:Key="Secondary">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Gray500}, Dark={StaticResource Gray300}}" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
-    </Style>
-
-    <Style TargetType="Label" x:Key="Heading">
-        <Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}" />
-        <Setter Property="FontFamily" Value="OpenSansSemibold" />
-        <Setter Property="FontSize" Value="22" />
-        <Setter Property="FontAttributes" Value="Bold" />
-    </Style>
-
-    <!--
-        A quiet button: the same shape as the primary one, drawn as an
-        outline. Used for the two settings actions that are recoverable -
-        clearing this handset's copies, and asking for a fresh key - so
-        they do not carry the same weight as Send or Sign out.
+        Quiet stays because Hand has the same thing, only inline: the
+        outlined buttons on an alert card. It is for the way out of a
+        side-track - Cancel, or opening the set-password section - and
+        never for an action. Actions are filled, as in Hand.
     -->
     <Style TargetType="Button" x:Key="Quiet">
         <Setter Property="BackgroundColor" Value="Transparent" />
@@ -510,17 +492,10 @@
         <Setter Property="BorderColor" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="14,10" />
-        <Setter Property="MinimumHeightRequest" Value="44" />
-    </Style>
-
-    <Style TargetType="Border" x:Key="Card">
-        <Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}" />
-        <Setter Property="Stroke" Value="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
-        <Setter Property="StrokeThickness" Value="1" />
-        <Setter Property="Padding" Value="14" />
+        <Setter Property="HeightRequest" Value="44" />
     </Style>
 
 </ResourceDictionary>

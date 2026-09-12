@@ -5,55 +5,72 @@
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagesPage"
              x:DataType="vm:MessagesViewModel"
-             Shell.NavBarIsVisible="False"
              Title="Messages">
 
 	<!--
-		A Button rather than a ToolbarItem, and it is Hand's header that
-		settles it. A ToolbarItem is plain text drawn by the navigation
-		bar: it cannot take the Button style, so "New" read as a word in
-		the corner while every other thing the member can press in either
-		app is a filled blue rectangle. Hand puts History and Settings in
-		the page itself for exactly this reason, and the two apps now
-		agree.
+		Laid out as Hand's duty screen is: a header line carrying the
+		buttons, the list under it, nothing along the bottom.
 
-		The navigation bar goes with it, or the page would carry two
-		titles: Shell's and this one. Hand's AlertsPage carries a comment
-		warning that a ToolbarItem on a page with no navigation bar
-		renders nowhere at all, which is worth reading before anybody puts
-		one back.
-
-		Padding matches Hand's header buttons. The shared style's 14,10 is
-		for a button that owns its row; this one sits beside a title.
+		Buttons rather than ToolbarItems, and Hand's header settles it. A
+		ToolbarItem is plain text drawn by the navigation bar: it cannot
+		take the Button style, so it reads as a word in the corner while
+		everything else a member can press in either app is a filled blue
+		rectangle. The navigation bar is hidden in AppShell for the same
+		reason, and Hand's AlertsPage carries a comment warning that a
+		ToolbarItem on a page with no navigation bar renders nowhere at
+		all - worth reading before anybody puts one back.
 	-->
 	<Grid RowDefinitions="Auto,Auto,Auto,*">
 
+		<!--
+			Hand's status-line proportions: 18 bold, and the buttons as
+			small as they can be while still being hit reliably. The
+			shared style's 14,10 padding is for a button that owns its
+			row; these sit beside a title.
+		-->
 		<Grid Grid.Row="0"
-		      ColumnDefinitions="*,Auto"
-		      Padding="16,8"
-		      ColumnSpacing="8">
+		      ColumnDefinitions="*,Auto,Auto"
+		      Padding="12,14"
+		      ColumnSpacing="6">
 			<Label Grid.Column="0"
-			       Style="{StaticResource Heading}"
-			       VerticalOptions="Center"
-			       Text="Messages" />
+			       Text="Messages"
+			       FontSize="18"
+			       FontAttributes="Bold"
+			       VerticalOptions="Center" />
 
 			<Button Grid.Column="1"
 			        Text="New"
+			        FontSize="12"
 			        Padding="8,6"
 			        Clicked="OnComposeClicked" />
+
+			<Button Grid.Column="2"
+			        Text="Settings"
+			        FontSize="12"
+			        Padding="8,6"
+			        Clicked="OnSettingsClicked" />
 		</Grid>
 
 		<!--
 			The member is looking at a list that is missing something, and
 			without being told they would conclude the message was never
 			sent. The recovery is on Settings.
+
+			Rounded and inset like Hand's alert cards, because it is the
+			same kind of thing: the one item on the screen that wants
+			something doing.
 		-->
 		<Border Grid.Row="1"
+		        Margin="12,0,12,6"
 		        IsVisible="{Binding KeyFault}"
 		        BackgroundColor="{StaticResource Warning}"
 		        Padding="14"
 		        StrokeThickness="0">
+			<Border.StrokeShape>
+				<RoundRectangle CornerRadius="14" />
+			</Border.StrokeShape>
 			<Label TextColor="White"
+			       FontSize="14"
 			       Text="Some messages could not be opened on this phone. Go to Settings and choose 'Fix messages that will not open'." />
 		</Border>
 
@@ -64,18 +81,24 @@
 			behind it are the last they will receive until they do.
 		-->
 		<Border Grid.Row="1"
+		        Margin="12,0,12,6"
 		        IsVisible="{Binding SignedOut}"
 		        BackgroundColor="{StaticResource Warning}"
 		        Padding="14"
 		        StrokeThickness="0">
+			<Border.StrokeShape>
+				<RoundRectangle CornerRadius="14" />
+			</Border.StrokeShape>
 			<Label TextColor="White"
+			       FontSize="14"
 			       Text="{Binding SignedOutReason}" />
 		</Border>
 
 		<Label Grid.Row="2"
 		       IsVisible="{Binding Offline}"
-		       Style="{StaticResource Secondary}"
-		       Padding="16,8"
+		       FontSize="13"
+		       Opacity="0.6"
+		       Padding="12,0,12,8"
 		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
 
 		<RefreshView Grid.Row="3"
@@ -85,18 +108,42 @@
 			<CollectionView ItemsSource="{Binding Messages}"
 			                SelectionMode="None">
 
+				<!--
+					Hand's "All clear": said large and faint rather than as
+					a line of small print, because an empty screen is
+					indistinguishable from one that has stopped working.
+				-->
 				<CollectionView.EmptyView>
-					<Grid Padding="32">
-						<Label Style="{StaticResource Secondary}"
+					<VerticalStackLayout VerticalOptions="Center"
+					                     HorizontalOptions="Center"
+					                     Spacing="10"
+					                     Padding="32">
+						<Label Text="No messages"
+						       FontSize="32"
+						       HorizontalOptions="Center"
+						       Opacity="0.55" />
+						<Label Text="Pull down to check for new ones."
+						       FontSize="14"
 						       HorizontalTextAlignment="Center"
-						       VerticalOptions="Center"
-						       Text="No messages yet. Pull down to check for new ones." />
-					</Grid>
+						       Opacity="0.55" />
+					</VerticalStackLayout>
 				</CollectionView.EmptyView>
 
 				<CollectionView.ItemTemplate>
 					<DataTemplate x:DataType="models:LinkMessage">
-						<Border Style="{StaticResource Card}" Margin="12,6" StrokeShape="RoundRectangle 10">
+						<!--
+							Hand's history row rather than a bordered card: a
+							strip down the side and the text beside it, so a
+							list reads as a shape before it reads as words.
+
+							In Hand the strip is the alert's level. Link's
+							messages have no level, so it carries unread
+							instead - blue until opened, grey after. That is
+							in addition to the weight below, not instead of
+							it: weight survives sunlight and a member who
+							cannot tell the two colours apart.
+						-->
+						<Grid Margin="12,5" ColumnDefinitions="6,*">
 
 							<!--
 								The command lives on the page's view model, not on the
@@ -105,29 +152,31 @@
 								OpenCommand against LinkMessage, does not find it, and
 								raises XC0045 - which is now an error.
 
-								The tap worked before this: at runtime the RelativeSource
-								is honoured and reflection finds OpenCommand on the view
-								model. What was wrong was the compile-time type, and the
-								cost was a reflected binding on the one head whose
-								trimming can delete what it reflects over.
+								The whole row is the target, as it is in Hand: a
+								subject line is not what somebody should have to hit.
 							-->
-							<Border.GestureRecognizers>
+							<Grid.GestureRecognizers>
 								<TapGestureRecognizer
 									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenCommand, x:DataType=vm:MessagesViewModel}"
 									CommandParameter="{Binding .}" />
-							</Border.GestureRecognizers>
+							</Grid.GestureRecognizers>
 
-							<VerticalStackLayout Spacing="4">
+							<BoxView Grid.Column="0"
+							         CornerRadius="3"
+							         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
+								<BoxView.Triggers>
+									<DataTrigger TargetType="BoxView" Binding="{Binding IsRead}" Value="False">
+										<Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
+									</DataTrigger>
+								</BoxView.Triggers>
+							</BoxView>
 
-								<Grid ColumnDefinitions="*,Auto">
-									<!--
-										Unread is weight, not a coloured dot.
-										It survives being read in sunlight and
-										by someone who cannot distinguish the
-										dot from the background.
-									-->
+							<VerticalStackLayout Grid.Column="1" Padding="12,10" Spacing="4">
+
+								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
 									       Text="{Binding Subject}"
+									       FontSize="17"
 									       LineBreakMode="TailTruncation">
 										<Label.Triggers>
 											<DataTrigger TargetType="Label" Binding="{Binding IsRead}" Value="False">
@@ -137,19 +186,23 @@
 									</Label>
 
 									<Label Grid.Column="1"
-									       Style="{StaticResource Secondary}"
+									       FontSize="13"
+									       Opacity="0.6"
+									       VerticalOptions="Center"
 									       Text="{Binding Sent, StringFormat='{0:d MMM}'}" />
 								</Grid>
 
-								<Label Style="{StaticResource Secondary}" Text="{Binding Sender}" />
+								<Label Text="{Binding Sender}"
+								       FontSize="13"
+								       Opacity="0.6" />
 
 								<Label Text="{Binding Body}"
+								       FontSize="15"
 								       MaxLines="3"
 								       LineBreakMode="TailTruncation" />
 
 							</VerticalStackLayout>
-
-						</Border>
+						</Grid>
 					</DataTemplate>
 				</CollectionView.ItemTemplate>
 

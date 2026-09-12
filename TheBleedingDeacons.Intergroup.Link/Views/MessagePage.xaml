@@ -4,7 +4,6 @@
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagePage"
              x:DataType="vm:MessageViewModel"
-             Shell.TabBarIsVisible="False"
              Title="Message">
 
 	<!--
@@ -22,7 +21,7 @@
 	-->
 
 	<ScrollView>
-		<VerticalStackLayout Padding="16" Spacing="14">
+		<VerticalStackLayout Padding="20" Spacing="14">
 
 			<!--
 				Said plainly rather than left as an empty card. The history
@@ -31,27 +30,29 @@
 				happens rather than a bug.
 			-->
 			<Label IsVisible="{Binding Missing}"
-			       Style="{StaticResource Secondary}"
+			       FontSize="14"
+			       Opacity="0.7"
 			       Text="This message is no longer on this phone. It may have been cleared from history, or removed by the intergroup after its retention period." />
 
 			<VerticalStackLayout Spacing="14" IsVisible="{Binding Found}">
 
+				<!-- The size Hand gives an alert's title on its card. -->
 				<Label Text="{Binding Subject}"
-				       Style="{StaticResource Heading}"
-				       FontSize="22" />
+				       FontSize="24"
+				       FontAttributes="Bold" />
 
 				<!--
-					Sender and time on one line, quiet. Who it is from
-					matters; what matters more is the body, so this does
-					not compete with it.
+					Sender and time, quiet. Who it is from matters; what
+					matters more is the body, so this does not compete
+					with it.
 				-->
 				<VerticalStackLayout Spacing="2">
 					<Label Text="{Binding Sender}" FontSize="15" />
-					<Label Text="{Binding Sent}" Style="{StaticResource Secondary}" />
+					<Label Text="{Binding Sent}" FontSize="13" Opacity="0.6" />
 				</VerticalStackLayout>
 
-				<BoxView HeightRequest="1"
-				         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray500}}" />
+				<!-- Hand's divider: the implicit BoxView colour, faint. -->
+				<BoxView HeightRequest="1" Opacity="0.15" />
 
 				<!--
 					No MaxLines and no truncation: this screen exists
@@ -68,9 +69,9 @@
 				       LineHeight="1.35" />
 
 				<Button Text="Reply"
-				        Command="{Binding ReplyCommand}"
-				        HorizontalOptions="Start"
-				        Margin="0,8,0,0" />
+				        HeightRequest="48"
+				        Margin="0,8,0,0"
+				        Command="{Binding ReplyCommand}" />
 
 			</VerticalStackLayout>
 

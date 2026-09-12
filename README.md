@@ -468,7 +468,7 @@ first time.
   than degrading, which is why `LinkPaidTeam` gates the whole
   entitlements file. So an iOS build signed this way polls. The push code
   is in it and will stay dormant.
-* **The tab bar and sign-in are the point.** What Hot Restart is good for
+* **The message list and sign-in are the point.** What Hot Restart is good for
   is proving the UI, the Google browser leg and the `link` scheme return
   work on a real handset. It is not a way to hand Link to a member.
 
