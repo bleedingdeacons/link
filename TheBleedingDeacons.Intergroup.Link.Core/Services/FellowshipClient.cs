@@ -483,9 +483,10 @@ public sealed class FellowshipClient : IFellowshipClient
 				// book that the server was returning empty cost an evening
 				// and a database query to explain.
 				Log.Warning(
-					"GET {Path} refused with {Status}",
+					"GET {Path} refused with {Status}{Because}",
 					uri.AbsolutePath,
-					(int)response.StatusCode);
+					(int)response.StatusCode,
+					await BecauseAsync(response, cancellationToken).ConfigureAwait(false));
 
 				return (null, FailureFor(response.StatusCode));
 			}
@@ -542,11 +543,20 @@ public sealed class FellowshipClient : IFellowshipClient
 
 			if (!response.IsSuccessStatusCode)
 			{
-				// The status only. Every caller here reads the server's own
-				// message out of the body and shows it, and a request body
-				// on this route can carry a password — so the line says
-				// which route and what came back, and nothing else.
-				Log.Warning("POST {Route} refused with {Status}", route, (int)response.StatusCode);
+				// The route, the status, and the server's own sentence about
+				// why. Every caller already reads that sentence out of the
+				// body and puts it on screen, so the log was the only place
+				// it was being thrown away — and a bare status does not
+				// separate the three different 400s this API can answer a
+				// send with.
+				//
+				// Only the *response* is read. A request body on this route
+				// can carry a password, and still never reaches the log.
+				Log.Warning(
+					"POST {Route} refused with {Status}{Because}",
+					route,
+					(int)response.StatusCode,
+					await BecauseAsync(response, cancellationToken).ConfigureAwait(false));
 			}
 
 			return response;
@@ -565,6 +575,41 @@ public sealed class FellowshipClient : IFellowshipClient
 		{
 			request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 		}
+	}
+
+	/// <summary>
+	/// The server's own sentence about a refusal, ready to append to a log
+	/// line, or an empty string when it did not offer one.
+	///
+	/// <para><b>Why the log needs this at all.</b> Fellowship answers a
+	/// refused send with 400 for three quite different reasons — nobody
+	/// addressed, an audience the app may not use, and a subject or body
+	/// the server would not take — and it says which in the body. The
+	/// status alone cannot separate them, so a log carrying only the
+	/// number sends whoever reads it to the server's source to guess. That
+	/// happened once and is the reason this exists.</para>
+	///
+	/// <para><b>Safe to read here.</b> The response was fetched with the
+	/// default <c>ResponseContentRead</c>, so the content is already
+	/// buffered in memory and the caller's own read of it still returns
+	/// the whole body afterwards. Nothing is consumed.</para>
+	///
+	/// <para><b>Only the message field.</b> Never the whole body: a
+	/// gateway having a moment answers with a page of HTML, and a log line
+	/// is no place for it. Anything that is not JSON with a
+	/// <c>message</c> in it reads as nothing to add.</para>
+	/// </summary>
+	private static async Task<string> BecauseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+	{
+		var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+		if (json is null)
+		{
+			return string.Empty;
+		}
+
+		var message = Text(json.Value, "message");
+
+		return string.IsNullOrWhiteSpace(message) ? string.Empty : " - " + message;
 	}
 
 	private static async Task<JsonElement?> ReadJsonAsync(HttpResponseMessage response, CancellationToken cancellationToken)
