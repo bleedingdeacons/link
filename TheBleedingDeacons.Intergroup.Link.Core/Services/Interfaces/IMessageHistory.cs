@@ -75,4 +75,25 @@ public interface IMessageHistory
 	/// this handset must start from zero and fetch their own history.</para>
 	/// </summary>
 	Task ResetAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Say who this store now belongs to, emptying it first if it belonged
+	/// to somebody else.
+	///
+	/// <para><b>Called at enrolment, and it is what makes losing
+	/// authorisation safe.</b> A handset that is refused keeps its
+	/// messages — see <c>AuthenticationLost</c> — because the usual cause
+	/// is an administrator's change rather than a phone in the wrong
+	/// hands, and a member should not lose their correspondence over a
+	/// corrected email address. That decision is only defensible if the
+	/// messages cannot then be read by whoever signs in next, and this is
+	/// where that is enforced.</para>
+	///
+	/// <para>A store with no owner recorded is treated as somebody else's
+	/// and emptied. That is every handset upgrading from a build before
+	/// this existed, exactly once, and the alternative is a guess about
+	/// whose messages they are.</para>
+	/// </summary>
+	/// <param name="memberId">The Unity member id now signed in.</param>
+	Task AdoptAsync(long memberId, CancellationToken cancellationToken = default);
 }

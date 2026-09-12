@@ -54,6 +54,21 @@ public sealed partial class MessagesViewModel : ObservableObject
 
 				_ = LoadAsync();
 			}));
+
+		// And the other thing the sync loop can discover: that this phone
+		// is no longer signed in. It arrives the same way and for the same
+		// reason — MessageService has no view model and no navigation, and
+		// should not learn about either.
+		WeakReferenceMessenger.Default.Register<AuthenticationLost>(this, (_, lost) =>
+			_dispatcher.Invoke(() =>
+			{
+				SignedOutReason = lost.Reason;
+
+				// Not offline. The intergroup answered; it said no. Showing
+				// "could not be reached" here is the bug this whole path
+				// exists to fix.
+				Offline = false;
+			}));
 	}
 
 	public ObservableCollection<LinkMessage> Messages { get; } = [];
@@ -84,7 +99,22 @@ public sealed partial class MessagesViewModel : ObservableObject
 	[ObservableProperty]
 	private bool _offline;
 
+	/// <summary>
+	/// Why this phone was signed out, or empty while it still is signed
+	/// in.
+	///
+	/// <para>A banner rather than a redirect. The member keeps their
+	/// messages when authorisation is lost — see <c>AuthenticationLost</c>
+	/// — so throwing them at a sign-in screen would take away the one
+	/// thing still working while they read what happened.</para>
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(SignedOut))]
+	private string _signedOutReason = string.Empty;
+
 	public bool IsEmpty => Loaded && Messages.Count == 0;
+
+	public bool SignedOut => SignedOutReason.Length > 0;
 
 	/// <summary>
 	/// Fill the list from what is held, then sync, then fill it again.
@@ -105,7 +135,11 @@ public sealed partial class MessagesViewModel : ObservableObject
 		{
 			var result = await _messages.SyncAsync().ConfigureAwait(true);
 
-			Offline = !result.Succeeded;
+			// Only a sync that never arrived is "offline". A refusal has
+			// already announced itself through AuthenticationLost, and
+			// saying both would have the screen blame the network for a
+			// decision the intergroup made.
+			Offline = result.Failure == FellowshipFailure.Network;
 			KeyFault = result.KeyFault;
 
 			if (result.Received > 0)

@@ -54,8 +54,23 @@ public sealed record SyncResult
 	/// </summary>
 	public bool KeyFault { get; init; }
 
-	/// <summary>False when the server could not be reached at all.</summary>
+	/// <summary>False when the sync did not complete.</summary>
 	public bool Succeeded { get; init; } = true;
 
+	/// <summary>
+	/// Why, when it did not.
+	///
+	/// <para>A screen that shows "offline" for a revoked handset is worse
+	/// than one that shows nothing: it tells the member to check their
+	/// signal about a device the intergroup has deliberately cut off.
+	/// </para>
+	/// </summary>
+	public FellowshipFailure Failure { get; init; } = FellowshipFailure.None;
+
+	/// <summary>A sync that was never attempted — no session to attempt it with.</summary>
 	public static SyncResult Failed { get; } = new() { Succeeded = false };
+
+	/// <summary>A sync the server refused, or that never arrived.</summary>
+	public static SyncResult FailedWith(FellowshipFailure failure) =>
+		new() { Succeeded = false, Failure = failure };
 }

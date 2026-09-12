@@ -183,7 +183,11 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			// already empty must not un-clear the one cleared before it.
 			var mark = Math.Max(highest, held.ClearedUpTo);
 
-			await WriteUnguardedAsync(new Held([], mark), cancellationToken).ConfigureAwait(false);
+			// The owner is carried across. Clearing is a member emptying
+			// their own inbox, not handing the phone on — and a store that
+			// forgot whose it was would be adopted by the next sign-in as
+			// though it were nobody's.
+			await WriteUnguardedAsync(new Held([], mark, held.MemberId), cancellationToken).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -212,6 +216,34 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			// nothing useful to do and nothing worth failing the member's
 			// tap over — they asked for the history to be gone, and from
 			// where they are standing it is.
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	/// <inheritdoc />
+	public async Task AdoptAsync(long memberId, CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			if (memberId > 0 && held.MemberId == memberId)
+			{
+				// The same member signing back in — after a revoked token,
+				// a rotated salt, or their own sign-out from another
+				// device. Their messages are still theirs.
+				return;
+			}
+
+			// Somebody else, or a store from before owners were recorded.
+			// Emptied rather than kept, and the mark goes with it so the
+			// new member fetches their own history from the beginning.
+			await WriteUnguardedAsync(new Held([], 0, memberId), cancellationToken).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -322,7 +354,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			? Held.Nothing()
 			: new Held(
 				stored.Messages.Where(m => m.Id > 0).ToDictionary(m => m.Id),
-				Math.Max(0, stored.ClearedUpTo));
+				Math.Max(0, stored.ClearedUpTo),
+				Math.Max(0, stored.MemberId));
 	}
 
 	private async Task WriteUnguardedAsync(Held held, CancellationToken cancellationToken)
@@ -330,6 +363,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		var stored = new StoredHistory
 		{
 			ClearedUpTo = held.ClearedUpTo,
+			MemberId = held.MemberId,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
 		};
 
@@ -420,7 +454,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	/// would let an empty read from one call end up carrying another
 	/// call's messages.
 	/// </remarks>
-	private sealed record Held(Dictionary<long, LinkMessage> Messages, long ClearedUpTo)
+	private sealed record Held(Dictionary<long, LinkMessage> Messages, long ClearedUpTo, long MemberId = 0)
 	{
 		public static Held Nothing() => new([], 0);
 	}
@@ -437,6 +471,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	private sealed class StoredHistory
 	{
 		public long ClearedUpTo { get; set; }
+
+		/// <summary>
+		/// The member these messages belong to, or 0 on a file written
+		/// before anybody recorded one. Zero reads as "somebody else" —
+		/// see <see cref="IMessageHistory.AdoptAsync"/>.
+		/// </summary>
+		public long MemberId { get; set; }
 
 		public List<LinkMessage> Messages { get; set; } = [];
 	}

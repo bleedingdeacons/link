@@ -57,6 +57,21 @@
 			       Text="Some messages could not be opened on this phone. Go to Settings and choose 'Fix messages that will not open'." />
 		</Border>
 
+		<!--
+			Signed out, rather than merely out of signal. The same red as
+			the key-fault banner above, because it is the same kind of
+			thing: something the member has to act on, and the messages
+			behind it are the last they will receive until they do.
+		-->
+		<Border Grid.Row="1"
+		        IsVisible="{Binding SignedOut}"
+		        BackgroundColor="{StaticResource Warning}"
+		        Padding="14"
+		        StrokeThickness="0">
+			<Label TextColor="White"
+			       Text="{Binding SignedOutReason}" />
+		</Border>
+
 		<Label Grid.Row="2"
 		       IsVisible="{Binding Offline}"
 		       Style="{StaticResource Secondary}"

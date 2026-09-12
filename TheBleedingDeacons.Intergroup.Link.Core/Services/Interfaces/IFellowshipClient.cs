@@ -229,7 +229,23 @@ public sealed record InboxPage
 	/// </summary>
 	public bool Succeeded { get; init; } = true;
 
-	public static InboxPage Failed { get; } = new() { Succeeded = false };
+	/// <summary>
+	/// Which refusal it was, when it was one.
+	///
+	/// <para>The bool above says a fetch did not happen; this says whether
+	/// the handset should try again in twenty seconds or stop and ask its
+	/// member to sign in. Those are opposite responses and they used to be
+	/// the same value.</para>
+	/// </summary>
+	public FellowshipFailure Failure { get; init; } = FellowshipFailure.None;
+
+	/// <summary>A fetch that never reached the server.</summary>
+	public static InboxPage Failed { get; } =
+		new() { Succeeded = false, Failure = FellowshipFailure.Network };
+
+	/// <summary>A fetch the server answered, and refused.</summary>
+	public static InboxPage Refused(FellowshipFailure failure) =>
+		new() { Succeeded = false, Failure = failure };
 }
 
 /// <summary>What the app posts to send a message.</summary>

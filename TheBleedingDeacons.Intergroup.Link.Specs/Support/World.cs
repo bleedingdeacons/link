@@ -39,12 +39,17 @@ public sealed class World : IDisposable
 	private JsonMessageHistory? _history;
 	private MessageService? _handset;
 
-	public World() =>
+	public World()
+	{
 		// Registered for the whole scenario rather than by the step that
 		// asks, because the announcement is sent during the arrival and
 		// there is nowhere later to have been listening from.
 		WeakReferenceMessenger.Default.Register<World, MessageReceived>(
 			this, static (world, announcement) => world.Announced.Add(announcement.Message));
+
+		WeakReferenceMessenger.Default.Register<World, AuthenticationLost>(
+			this, static (world, lost) => world.SignedOut = lost);
+	}
 
 	public FakeFellowshipClient Fellowship { get; } = new();
 
@@ -54,6 +59,12 @@ public sealed class World : IDisposable
 
 	/// <summary>Every message announced to whoever is on screen, in order.</summary>
 	public List<LinkMessage> Announced { get; } = [];
+
+	/// <summary>
+	/// What the handset was told when it lost its authorisation, or null
+	/// while it still has it.
+	/// </summary>
+	public AuthenticationLost? SignedOut { get; set; }
 
 	/// <summary>Every envelope this scenario has sealed, by message id.</summary>
 	public Dictionary<long, SealedMessage> Built { get; } = [];
@@ -161,6 +172,7 @@ public sealed class World : IDisposable
 	public void Dispose()
 	{
 		WeakReferenceMessenger.Default.Unregister<MessageReceived>(this);
+		WeakReferenceMessenger.Default.Unregister<AuthenticationLost>(this);
 
 		_history?.Dispose();
 

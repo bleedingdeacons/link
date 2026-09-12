@@ -204,12 +204,15 @@ public sealed class FellowshipClient : IFellowshipClient
 	{
 		var query = "messages?since=" + sinceId.ToString(CultureInfo.InvariantCulture);
 
-		var json = await GetAsync(_configuration.Route(query), token, cancellationToken).ConfigureAwait(false);
+		var (json, failure) = await GetWithFailureAsync(
+			_configuration.Route(query), token, cancellationToken).ConfigureAwait(false);
 		if (json is null)
 		{
 			// Distinct from an empty page. A caller that conflated the two
-			// would clear its unread badge every time the network dropped.
-			return InboxPage.Failed;
+			// would clear its unread badge every time the network dropped —
+			// and distinct again between a dropped network and a refusal,
+			// because only one of those means stop asking.
+			return InboxPage.Refused(failure);
 		}
 
 		var sealedMessages = new List<SealedMessage>();
@@ -411,6 +414,23 @@ public sealed class FellowshipClient : IFellowshipClient
 
 	private async Task<JsonElement?> GetAsync(Uri uri, string? token, CancellationToken cancellationToken)
 	{
+		var (json, _) = await GetWithFailureAsync(uri, token, cancellationToken).ConfigureAwait(false);
+
+		return json;
+	}
+
+	/// <summary>
+	/// A GET, and why it did not work when it did not.
+	///
+	/// <para>Only the inbox reads the failure today, because the inbox is
+	/// the route every handset calls on a timer and therefore the one that
+	/// notices a revoked device first. The plain <see cref="GetAsync"/>
+	/// above stays for callers that have nothing different to do about a
+	/// 401 than about a 500.</para>
+	/// </summary>
+	private async Task<(JsonElement? Json, FellowshipFailure Failure)> GetWithFailureAsync(
+		Uri uri, string? token, CancellationToken cancellationToken)
+	{
 		try
 		{
 			using var request = new HttpRequestMessage(HttpMethod.Get, uri);
@@ -430,10 +450,10 @@ public sealed class FellowshipClient : IFellowshipClient
 					uri.AbsolutePath,
 					(int)response.StatusCode);
 
-				return null;
+				return (null, FailureFor(response.StatusCode));
 			}
 
-			return await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+			return (await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false), FellowshipFailure.None);
 		}
 		catch (Exception e) when (IsTransport(e))
 		{
@@ -442,9 +462,27 @@ public sealed class FellowshipClient : IFellowshipClient
 			// screen that looks the same as a refusal.
 			Log.Debug(e, "GET {Path} did not arrive", uri.AbsolutePath);
 
-			return null;
+			return (null, FellowshipFailure.Network);
 		}
 	}
+
+	/// <summary>
+	/// What a refusal means to a handset.
+	///
+	/// <para>401 is the token: revoked from the Devices page, revoked by a
+	/// sign-out elsewhere, or invalidated wholesale because somebody
+	/// rotated the site's WordPress salts. 403 is the person: the token
+	/// was recognised and the address behind it no longer matches a member
+	/// record Fellowship will talk to. Everything else is the server
+	/// having a bad day, and a handset that signed itself out over a 500
+	/// would be off the fellowship for the length of an outage.</para>
+	/// </summary>
+	private static FellowshipFailure FailureFor(HttpStatusCode status) => status switch
+	{
+		HttpStatusCode.Unauthorized => FellowshipFailure.Unauthenticated,
+		HttpStatusCode.Forbidden => FellowshipFailure.NotEligible,
+		_ => FellowshipFailure.Server,
+	};
 
 	private async Task<HttpResponseMessage?> PostAsync(
 		string route,
