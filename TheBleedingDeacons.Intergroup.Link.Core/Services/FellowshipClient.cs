@@ -371,16 +371,53 @@ public sealed class FellowshipClient : IFellowshipClient
 		return response is not null && response.IsSuccessStatusCode;
 	}
 
-	public async Task<bool> RotateKeyAsync(string token, string publicKey, CancellationToken cancellationToken = default)
+	public async Task<RotateKeyResult> RotateKeyAsync(
+		string token, RotateKeyRequest request, CancellationToken cancellationToken = default)
 	{
+		ArgumentNullException.ThrowIfNull(request);
+
+		// One credential shape, not all of them. Sending empty fields
+		// alongside a real one is how a server comes to guess which flow
+		// it is looking at.
 		var body = new Dictionary<string, string>(StringComparer.Ordinal)
 		{
-			["public_key"] = publicKey ?? string.Empty,
+			["public_key"] = request.PublicKey,
 		};
 
-		using var response = await PostAsync("auth/device/key", token, body, cancellationToken).ConfigureAwait(false);
+		Add(body, "code", request.Code);
+		Add(body, "state", request.State);
+		Add(body, "id_token", request.IdToken);
+		Add(body, "email", request.Email);
+		Add(body, "password", request.Password);
 
-		return response is not null && response.IsSuccessStatusCode;
+		using var response = await PostAsync("auth/device/key", token, body, cancellationToken).ConfigureAwait(false);
+		if (response is null)
+		{
+			return RotateKeyResult.Failed("Could not reach the intergroup. Check your connection and try again.");
+		}
+
+		if (response.IsSuccessStatusCode)
+		{
+			return RotateKeyResult.Ok();
+		}
+
+		var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+		var message = json is null ? string.Empty : Text(json.Value, "message");
+
+		// The server's own wording. "Sign in as the member this phone
+		// belongs to" is the one refusal here somebody can act on, and it
+		// must not be flattened into a generic failure.
+		return RotateKeyResult.Failed(string.IsNullOrEmpty(message)
+			? "That did not work. Please try again."
+			: message);
+
+		static void Add(Dictionary<string, string> into, string key, string value)
+		{
+			if (value.Length > 0)
+			{
+				into[key] = value;
+			}
+		}
 	}
 
 	public async Task<bool> ReportKeyFaultAsync(string token, CancellationToken cancellationToken = default)
