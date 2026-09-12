@@ -17,8 +17,48 @@ namespace TheBleedingDeacons.Intergroup.Link.Specs.Support;
 /// </summary>
 public sealed class FakeFellowshipClient : IFellowshipClient
 {
-	/// <summary>The next page the inbox will answer.</summary>
-	public InboxPage Inbox { get; set; } = new();
+	/// <summary>
+	/// The messages Fellowship holds, in the clear, as it actually holds
+	/// them.
+	///
+	/// <para><b>Plaintext, and sealed only when a handset asks.</b> That
+	/// is what the server does — <c>MessageController::inbox</c> calls
+	/// <c>seal(payloadFor($message), $device-&gt;publicKey)</c> on every
+	/// fetch, from a body stored as plain TEXT. A double that handed back
+	/// envelopes sealed once, when the scenario wrote them, would model a
+	/// store-sealed server this repository does not talk to — and it did,
+	/// which is how a feature file came to claim that replacing a key
+	/// loses every message sent before it. It does not.</para>
+	/// </summary>
+	public List<ServerMessage> Stored { get; } = [];
+
+	/// <summary>
+	/// The public half Fellowship holds for this device, and therefore the
+	/// one it seals to.
+	///
+	/// <para>Separate from whatever the handset is carrying, because the
+	/// two genuinely do come apart: a keystore entry is invalidated and
+	/// the server knows nothing about it until the handset presents a
+	/// replacement. Rotation is the moment they are put back in step.
+	/// </para>
+	/// </summary>
+	public string DevicePublicKey { get; set; } = string.Empty;
+
+	/// <summary>How many of this member's messages are unread, per the server.</summary>
+	public int Unread { get; set; }
+
+	/// <summary>A refusal to answer with instead of a page, or null.</summary>
+	public InboxPage? Refusal { get; set; }
+
+	/// <summary>
+	/// Message ids to corrupt on the way out, one byte of ciphertext each.
+	/// GCM authenticates, so these are payloads that will not open rather
+	/// than ones that open to nonsense.
+	///
+	/// <para>Per message rather than per page, because the scenario that
+	/// matters is one bad envelope among good ones.</para>
+	/// </summary>
+	public HashSet<long> Tampered { get; } = [];
 
 	public SignInStart? SignIn { get; set; } =
 		new() { State = "state-1", AuthorizationUrl = "https://aa-bristol.org/oauth/start" };
@@ -83,10 +123,18 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	{
 		PolledSince.Add(sinceId);
 
-		return Task.FromResult(
-			Inbox.Succeeded
-				? Inbox with { Messages = [.. Inbox.Messages.Where(m => m.Id > sinceId)] }
-				: Inbox);
+		if (Refusal is not null)
+		{
+			return Task.FromResult(Refusal);
+		}
+
+		var page = Stored
+			.Where(message => message.Id > sinceId)
+			.Select(message => Sealing.Seal(message.Id, message.Payload, DevicePublicKey))
+			.Select(envelope => Tampered.Contains(envelope.Id) ? Sealing.Tamper(envelope) : envelope)
+			.ToList();
+
+		return Task.FromResult(new InboxPage { Messages = page, Unread = Unread });
 	}
 
 	public Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken)
@@ -139,30 +187,22 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 /// themselves are real RSA-2048 — a scenario about a message that will
 /// not open has to be able to seal one that genuinely will not.</para>
 ///
-/// <para><b>Losing the key and losing the pair are different things,
-/// and the difference is the whole feature.</b> When a platform
-/// invalidates a keystore entry, the handset stops being able to read
-/// its private half; Fellowship goes on holding the public half it was
-/// given and goes on sealing to it, knowing nothing. So
-/// <see cref="ClearAsync"/> takes the pair away from the handset and
-/// leaves <see cref="SealingKey"/> where it was — which is what lets a
-/// scenario seal a message the handset genuinely cannot open, rather
-/// than one nobody could have sent.</para>
+/// <para><b>Losing the key here loses it only here.</b> When a platform
+/// invalidates a keystore entry the handset stops being able to read its
+/// private half, and Fellowship goes on holding the public half it was
+/// given and goes on sealing to it, knowing nothing. That asymmetry lives
+/// in <see cref="FakeFellowshipClient.DevicePublicKey"/>, which is the
+/// server's copy and is untouched by anything here — so a scenario can
+/// lose a key and still have messages arrive that genuinely cannot be
+/// opened.</para>
 /// </summary>
 public sealed class FakeDeviceKeyStore : IDeviceKeyStore
 {
-	private Sealing.Keypair _keys = Sealing.NewKeypair();
-	private bool _lost;
+	private Sealing.Keypair? _keys = Sealing.NewKeypair();
 
 	public int Regenerations { get; private set; }
 
-	/// <summary>
-	/// The public half Fellowship holds, and therefore the one a scenario
-	/// seals to. Survives the handset losing its own copy.
-	/// </summary>
-	public string SealingKey => _keys.PublicKey;
-
-	public Task<bool> HasKeyAsync() => Task.FromResult(!_lost);
+	public Task<bool> HasKeyAsync() => Task.FromResult(_keys is not null);
 
 	/// <summary>
 	/// A new keypair, which is also how a scenario reproduces the fault
@@ -173,14 +213,13 @@ public sealed class FakeDeviceKeyStore : IDeviceKeyStore
 	{
 		Regenerations++;
 		_keys = Sealing.NewKeypair();
-		_lost = false;
 
 		return Task.FromResult(_keys.PublicKey);
 	}
 
-	public Task<string> PublicKeyAsync() => Task.FromResult(_lost ? string.Empty : _keys.PublicKey);
+	public Task<string> PublicKeyAsync() => Task.FromResult(_keys?.PublicKey ?? string.Empty);
 
-	public Task<string> PrivateKeyAsync() => Task.FromResult(_lost ? string.Empty : _keys.PrivateKeyPem);
+	public Task<string> PrivateKeyAsync() => Task.FromResult(_keys?.PrivateKeyPem ?? string.Empty);
 
 	/// <summary>
 	/// A factory reset, a restored backup, a cleared keystore. Reads back
@@ -188,11 +227,17 @@ public sealed class FakeDeviceKeyStore : IDeviceKeyStore
 	/// </summary>
 	public Task ClearAsync()
 	{
-		_lost = true;
+		_keys = null;
 
 		return Task.CompletedTask;
 	}
 }
+
+/// <summary>
+/// One message as Fellowship holds it: an id, and the payload in the
+/// clear.
+/// </summary>
+public sealed record ServerMessage(long Id, Dictionary<string, object> Payload);
 
 /// <summary>The device token, held in memory rather than in a keychain.</summary>
 public sealed class FakeSessionStore : ISessionStore

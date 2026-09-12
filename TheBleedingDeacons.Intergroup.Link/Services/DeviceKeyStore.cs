@@ -27,12 +27,18 @@ public sealed class DeviceKeyStore : IDeviceKeyStore
 	/// Create a keypair, replacing any that exists, and return the public
 	/// half as base64 SubjectPublicKeyInfo.
 	///
-	/// <para>Replacing is destructive in a way worth being clear about:
-	/// every message already sealed to the old key becomes unreadable, and
-	/// nobody can undo that — Fellowship never held the private half
-	/// either, so it cannot re-seal them. That is why this is called at
-	/// enrolment and from an explicit "my messages will not open"
-	/// recovery, and never automatically.</para>
+	/// <para>Replacing costs less than it looks like it should, and the
+	/// reason is worth knowing: Fellowship holds message bodies in plain
+	/// text and seals them afresh on every fetch, so once the new public
+	/// half is presented the next sync re-delivers everything still inside
+	/// the retention window. What does not come back is what the server
+	/// has already swept, and any push sealed and sent before the change,
+	/// because nothing re-sends a push.</para>
+	///
+	/// <para>It is still called only at enrolment and from an explicit
+	/// "my messages will not open" recovery, never automatically — a
+	/// handset that quietly replaced its key would drop whatever was in
+	/// flight for no reason anybody could see.</para>
 	/// </summary>
 	public async Task<string> RegenerateAsync()
 	{

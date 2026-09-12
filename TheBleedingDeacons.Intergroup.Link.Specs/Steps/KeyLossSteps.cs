@@ -11,22 +11,47 @@ namespace TheBleedingDeacons.Intergroup.Link.Specs.Steps;
 public sealed class KeyLossSteps(World world)
 {
 	/// <summary>
-	/// Sealed to a keypair this handset has never held — what every
-	/// message looks like after a keystore entry is replaced.
+	/// The server is still sealing to a key this handset no longer holds.
+	///
+	/// <para>Which is what a lost keystore entry actually looks like from
+	/// the wire: Fellowship goes on sealing to the public half it was
+	/// given, knowing nothing, and every message it sends arrives
+	/// unopenable until the handset presents a replacement.</para>
 	/// </summary>
-	[Given(@"^message (\d+) was sealed to another handset$")]
-	public void ForSomebodyElse(long id) => world.Waiting(world.EnvelopeForSomebodyElse(id));
+	[Given(@"^message (\d+) is waiting, sealed to a key this handset has lost$")]
+	public async Task SealedToALostKey(long id)
+	{
+		world.ServerHolds(id);
 
-	[Given(@"^messages ([\d and]+) were sealed to another handset$")]
-	public void SeveralForSomebodyElse(string ids) =>
-		world.Waiting([.. MessageSteps.Ids(ids).Select(world.EnvelopeForSomebodyElse)]);
+		// A new pair on the handset, and Fellowship not told. The server's
+		// copy stays where it was, which is the whole asymmetry.
+		await world.Keys.RegenerateAsync();
+	}
+
+	[Given(@"^messages ([\d and]+) are waiting, sealed to a key this handset has lost$")]
+	public async Task SeveralSealedToALostKey(string ids)
+	{
+		foreach (var id in MessageSteps.Ids(ids))
+		{
+			world.ServerHolds(id);
+		}
+
+		await world.Keys.RegenerateAsync();
+	}
 
 	/// <summary>
 	/// One byte of the ciphertext turned over. GCM authenticates, so this
 	/// fails to open rather than decrypting to something plausible.
 	/// </summary>
 	[Given(@"^message (\d+) was altered in transit$")]
-	public void Tampered(long id) => world.Waiting(Sealing.Tamper(world.Envelope(id)));
+	public void Tampered(long id)
+	{
+		world.ServerHolds(id);
+		world.Fellowship.Tampered.Add(id);
+	}
+
+	[When(@"^this handset presents its new key to Fellowship$")]
+	public async Task PresentsKey() => await world.PresentKeyAsync();
 
 	[Then(@"^Fellowship was told once that this handset cannot read its messages$")]
 	public void ReportedOnce() => world.Fellowship.KeyFaultReports.ShouldBe(1);

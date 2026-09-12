@@ -155,11 +155,25 @@ shows a banner, the intergroup's Devices screen shows the handset in red,
 and Settings generates a new keypair and presents the public half. The
 device row survives, so nobody has to re-enrol.
 
-**Messages already sent stay unreadable, and nobody can undo that.** They
-were sealed to content keys wrapped to a public key whose private half no
-longer exists — and Fellowship never had that half either, so it cannot
-re-seal them. The app clears what it cannot open; the dialog says so
-before anybody taps it.
+**And then they come back**, which this file claimed the opposite of
+until 2026-09-12. The reasoning was that the messages were sealed to a
+public key whose private half no longer exists, and Fellowship never held
+that half, so nobody can re-seal them.
+
+The second step does not follow. Fellowship is not storing sealed
+messages. It stores the bodies in plain text and seals them **per fetch**,
+to whichever key the asking device presents — `MessageController::inbox`
+calls `seal(payloadFor($message), $device->publicKey)` on every poll. So
+once the new key is presented, the next sync re-delivers everything still
+inside the retention window.
+
+What is genuinely lost is narrower, and worth stating in its place: what
+the server has already swept past `retention_days`, and any push that was
+sealed and sent before the key changed, because nothing re-sends a push.
+
+Which means **the handset keypair protects the wire and the notification
+tray, and protects nothing in the database.** That is a reasonable thing
+for it to do, and it is not what this file used to imply.
 
 ## Project layout
 

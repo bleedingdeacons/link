@@ -48,19 +48,26 @@ Feature: What only a phone can answer
       # not ready at enrolment never heard from it, and stayed poll-only
       # permanently while looking healthy from both ends.
 
-  Rule: The private half never leaves, which is the whole design and the whole hazard
+  Rule: The private half never leaves, and the retention window is what that costs
 
-    Fellowship holds only the public half, so it cannot re-seal anything
-    to a key that no longer exists. Nobody can.
+    Fellowship holds only the public half of this handset's keypair — but
+    it holds the message bodies in plain text and seals them per fetch, so
+    losing the key costs nothing the server still has. What the key
+    protects is the wire and the notification tray.
 
-    Scenario: Uninstalling destroys every message ever sent to this handset
-      Given a handset holding messages
+    So the thing that actually loses a member's correspondence is not the
+    key at all: it is the retention window, and it is the only bound on
+    what a fresh install can recover.
+
+    Scenario: Uninstalling loses whatever the intergroup has already swept
+      Given a handset holding messages older than the retention window
       When the app is uninstalled and installed again
       Then it enrols as a new device
-      And every message sealed to the old key is unreadable forever
+      And only the messages the intergroup still holds come back
+      And the older ones are gone for good
       # This is what `adb uninstall` does, and what deleting and
       # reinstalling a sideloaded iOS build does. Re-signing in place
-      # keeps the key; removing the app does not.
+      # keeps the local history; removing the app does not.
 
     Scenario: A changed screen lock can invalidate the keystore entry
       Given a handset holding messages

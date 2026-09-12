@@ -68,9 +68,13 @@ public interface IFellowshipClient
 	/// Present a new public key after the platform invalidated the old
 	/// keypair.
 	///
-	/// <para>Messages already sealed to the old key stay unreadable, and
-	/// here that is a fact rather than a policy: the server never held the
-	/// private half, so it could not re-seal them even if asked.</para>
+	/// <para><b>And the messages come back.</b> This said the opposite,
+	/// and reasoned that the server never held the private half so could
+	/// not re-seal anything. It does not need to: it holds the bodies in
+	/// plain text and seals them afresh on every fetch, so the next sync
+	/// re-delivers everything still inside the retention window. Only what
+	/// the server has already swept, and pushes sent before the change,
+	/// are genuinely gone.</para>
 	/// </summary>
 	Task<bool> RotateKeyAsync(string token, string publicKey, CancellationToken cancellationToken = default);
 
