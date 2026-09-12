@@ -49,23 +49,28 @@ public sealed class MessageSteps(World world)
 
 	[Given(@"^message (\d+) is waiting on the server$")]
 	[When(@"^message (\d+) is waiting on the server$")]
-	public void Waiting(long id) => world.Waiting(world.Envelope(id));
+	public void Waiting(long id) => world.ServerHolds(id);
 
 	[Given(@"^messages ([\d and]+) are waiting on the server$")]
 	[When(@"^messages ([\d and]+) are waiting on the server$")]
-	public void SeveralWaiting(string ids) =>
-		world.Waiting([.. Ids(ids).Select(id => world.Envelope(id))]);
+	public void SeveralWaiting(string ids)
+	{
+		foreach (var id in Ids(ids))
+		{
+			world.ServerHolds(id);
+		}
+	}
 
 	[Given(@"^message (\d+) is waiting on the server, already read$")]
 	[When(@"^message (\d+) is waiting on the server, already read$")]
-	public void WaitingRead(long id) => world.Waiting(world.Envelope(id, readAt: 1788000100));
+	public void WaitingRead(long id) => world.ServerHolds(id, readAt: 1788000100);
 
 	[Given(@"^message (\d+) is waiting on the server, still unread$")]
 	[When(@"^message (\d+) is waiting on the server, still unread$")]
-	public void WaitingUnread(long id) => world.Waiting(world.Envelope(id));
+	public void WaitingUnread(long id) => world.ServerHolds(id);
 
 	[Given(@"^the server says (\d+) are unread$")]
-	public void UnreadTotal(int unread) => world.Fellowship.Inbox = world.Fellowship.Inbox with { Unread = unread };
+	public void UnreadTotal(int unread) => world.Fellowship.Unread = unread;
 
 	/// <summary>
 	/// Put a message on the phone without asking how it got there, for

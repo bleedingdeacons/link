@@ -38,7 +38,10 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// anything it ever sent. Here the private half never leaves this device
 /// — it is generated at enrolment and only the public half is sent — so a
 /// payload Fellowship sealed yesterday is one Fellowship cannot open
-/// today. The cost is that a lost key cannot be recovered, only replaced.
+/// today — for as long as the payload is the only copy, which on the
+/// push path it is. It is not what the server keeps: Fellowship stores
+/// bodies in plain text and re-seals them per fetch, so what this buys is
+/// the wire and the notification tray rather than the database.
 /// </para>
 ///
 /// <para>The rest is what Hand does: AES-256-GCM over gzip, with the

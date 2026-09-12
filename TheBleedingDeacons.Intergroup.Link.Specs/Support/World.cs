@@ -49,6 +49,11 @@ public sealed class World : IDisposable
 
 		WeakReferenceMessenger.Default.Register<World, AuthenticationLost>(
 			this, static (world, lost) => world.SignedOut = lost);
+
+		// Enrolled: Fellowship holds the public half this handset just
+		// generated. Every way a key goes wrong is these two coming apart
+		// again, and rotation is how they are put back.
+		Fellowship.DevicePublicKey = Keys.PublicKeyAsync().GetAwaiter().GetResult();
 	}
 
 	public FakeFellowshipClient Fellowship { get; } = new();
@@ -116,10 +121,9 @@ public sealed class World : IDisposable
 		_handset = null;
 	}
 
-	/// <summary>
-	/// An envelope sealed to this handset, as Fellowship sends it.
-	/// </summary>
-	public SealedMessage Envelope(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0)
+	/// <summary>The payload of one message, as Fellowship holds it.</summary>
+	public static Dictionary<string, object> Payload(
+		long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0)
 	{
 		var payload = Sealing.Payload(id);
 
@@ -136,31 +140,41 @@ public sealed class World : IDisposable
 		payload["reply_to"] = replyTo;
 		payload["read_at"] = readAt;
 
-		var envelope = Sealing.Seal(id, payload, Keys.SealingKey);
+		return payload;
+	}
+
+	/// <summary>
+	/// One envelope, sealed the way a push is: now, to the key Fellowship
+	/// holds for this device now.
+	///
+	/// <para>A push is sealed once, when it is sent, and then nothing
+	/// re-sends it — which makes it the one delivery in this system that
+	/// really can become unopenable. The poll is the opposite; see
+	/// <see cref="ServerHolds"/>.</para>
+	/// </summary>
+	public SealedMessage Envelope(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0)
+	{
+		var envelope = Sealing.Seal(
+			id, Payload(id, subject, sender, replyTo, readAt), Fellowship.DevicePublicKey);
 
 		Built[id] = envelope;
 
 		return envelope;
 	}
 
-	/// <summary>An envelope sealed to a handset that is not this one.</summary>
-	public SealedMessage EnvelopeForSomebodyElse(long id) =>
-		Sealing.Seal(id, Sealing.Payload(id), Sealing.NewKeypair().PublicKey);
+	/// <summary>
+	/// Put a message on the server, in the clear, where it will be sealed
+	/// afresh to whatever key the server holds when it is next asked.
+	/// </summary>
+	public void ServerHolds(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0) =>
+		Fellowship.Stored.Add(new ServerMessage(id, Payload(id, subject, sender, replyTo, readAt)));
 
 	/// <summary>
-	/// Put envelopes in front of the next sync, keeping whatever is
-	/// already there.
-	///
-	/// <para>Additive rather than replacing, because a feature file builds
-	/// a page a line at a time — "message 12 is waiting" and then "message
-	/// 13 was sealed to another handset" describe one page with two
-	/// envelopes on it, which is the whole point of that scenario.</para>
+	/// Hand Fellowship the public half this handset is carrying — what
+	/// <c>POST /auth/device/key</c> does.
 	/// </summary>
-	public void Waiting(params SealedMessage[] envelopes) =>
-		Fellowship.Inbox = Fellowship.Inbox with
-		{
-			Messages = [.. Fellowship.Inbox.Messages, .. envelopes],
-		};
+	public async Task PresentKeyAsync() =>
+		Fellowship.DevicePublicKey = await Keys.PublicKeyAsync();
 
 	/// <summary>What the handset holds, newest first.</summary>
 	public async Task<IReadOnlyList<LinkMessage>> HeldAsync() => await History.AllAsync();
