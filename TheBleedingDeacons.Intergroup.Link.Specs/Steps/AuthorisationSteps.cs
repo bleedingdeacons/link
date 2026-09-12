@@ -14,15 +14,15 @@ public sealed class AuthorisationSteps(World world)
 {
 	[Given(@"^Fellowship no longer accepts this handset's token$")]
 	public void TokenRevoked() =>
-		world.Fellowship.Inbox = InboxPage.Refused(FellowshipFailure.Unauthenticated);
+		world.Fellowship.Refusal = InboxPage.Refused(FellowshipFailure.Unauthenticated);
 
 	[Given(@"^Fellowship no longer has a member record for this address$")]
 	public void NotAMember() =>
-		world.Fellowship.Inbox = InboxPage.Refused(FellowshipFailure.NotEligible);
+		world.Fellowship.Refusal = InboxPage.Refused(FellowshipFailure.NotEligible);
 
 	[Given(@"^Fellowship answers with a server error$")]
 	public void ServerError() =>
-		world.Fellowship.Inbox = InboxPage.Refused(FellowshipFailure.Server);
+		world.Fellowship.Refusal = InboxPage.Refused(FellowshipFailure.Server);
 
 	/// <summary>
 	/// Enrolment, as far as the history is concerned: a member is now

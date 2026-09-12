@@ -21,7 +21,7 @@ public sealed class HandsetSteps(World world)
 	public void NotSignedIn() => world.Sessions.Session = null;
 
 	[Given(@"^Fellowship cannot be reached$")]
-	public void Unreachable() => world.Fellowship.Inbox = InboxPage.Failed;
+	public void Unreachable() => world.Fellowship.Refusal = InboxPage.Failed;
 
 	/// <summary>
 	/// A platform that has invalidated the keystore entry. Fellowship is

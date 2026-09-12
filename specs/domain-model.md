@@ -72,8 +72,10 @@ silently will not open — which is why 21 scenarios go red when it is.
 **Fellowship can still read your messages.** Bodies are stored in plain text
 server-side, which is what makes committee broadcasts, the message log and
 GDPR audit possible. This is not end-to-end encryption. What the server does
-*not* hold is any handset's private key, so a payload it sealed yesterday is
-one it cannot open today.
+*not* hold is any handset's private key, so a *payload* it sealed yesterday
+is one it cannot open today — which protects the push crossing Google, and
+nothing in the database, because it can seal the same message afresh to any
+key a device presents.
 
 ## Push is the fast path, not the reliable one
 
@@ -94,6 +96,25 @@ the poll's copy is where the read flag comes from. **No route reaches that
 branch**, because the poll cannot return a message this handset already
 holds. It is defensive code with a rationale that no longer holds; the
 specification says so rather than pretending to pin it down.
+
+## What a lost key actually costs
+
+Less than five places in these two repositories used to say, and the
+correction is worth stating plainly because the wrong version was load
+bearing.
+
+`MessageController::inbox` seals on **every fetch**, from a body stored as
+plain `TEXT`, to whichever public key the asking device presents. So:
+
+| | Recoverable? |
+| --- | --- |
+| Messages the server still holds | **Yes** — next sync, once the new key is presented |
+| Messages past `retention_days` | No |
+| A push sealed and sent before the change | No — nothing re-sends a push |
+
+The consequence for the threat model: the handset keypair protects the
+wire and the notification tray. It does not protect the corpus, and the
+retention window is the only thing that bounds it.
 
 ## Who can be written to
 
@@ -152,8 +173,10 @@ biometrics.
   show would be worse than raising nothing.
 - **The rest of the page still arrives.** One unopenable envelope does not
   take its neighbours with it.
-- **Messages already sent stay unreadable, and nobody can undo that** —
-  Fellowship never held the private half, so it cannot re-seal them either.
+- **Messages still on the server come back.** Fellowship holds bodies in
+  plain text and seals per fetch, so once a new key is presented the next
+  sync re-delivers everything inside the retention window. Only what the
+  sweep has already taken, and pushes sent before the change, are gone.
 
 ## Locked design decisions
 

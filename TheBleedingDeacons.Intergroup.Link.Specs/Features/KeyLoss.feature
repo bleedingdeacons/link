@@ -20,8 +20,8 @@ Feature: A handset that cannot open its messages
     payload altered in transit — because the app can do nothing different
     about any of them. What it does about all of them is the same.
 
-    Scenario: A message sealed to another handset is not shown
-      Given message 12 was sealed to another handset
+    Scenario: A message sealed to a key this handset has lost is not shown
+      Given message 12 is waiting, sealed to a key this handset has lost
       When the handset syncs
       Then nothing is held
 
@@ -36,13 +36,53 @@ Feature: A handset that cannot open its messages
       When the handset syncs
       Then nothing is held
 
-    Scenario: A new keypair leaves everything sealed to the old one unreadable
-      Given message 12 is waiting on the server
-      And this handset generates a new keypair
+  Rule: A replaced key costs nothing that is still on the server
+
+    This said the opposite until 2026-09-12, in this file and in five
+    other places, and it was wrong everywhere. The reasoning went:
+    messages were sealed to a public key whose private half is gone, and
+    Fellowship never held that private half, so nobody can re-seal them.
+
+    The second half does not follow. Fellowship is not holding sealed
+    messages — it holds the bodies in plain text and seals them afresh on
+    every single fetch, to whichever key the asking device presents. So
+    replacing a key loses nothing the retention window still covers. The
+    next sync brings all of it back.
+
+    What that does cost is real and worth keeping in view: it means the
+    handset's keypair protects the wire and the notification tray, and
+    protects nothing at all in the database.
+
+    Scenario: Everything comes back once the new key is presented
+      Given messages 12 and 13 are waiting, sealed to a key this handset has lost
       When the handset syncs
       Then nothing is held
-      # Nobody can undo this. Fellowship never held the private half, so
-      # it cannot re-seal them either.
+      When this handset presents its new key to Fellowship
+      And the handset syncs
+      Then 2 messages are held
+
+    Scenario: Until it is presented, the server goes on sealing to the old one
+      Given message 12 is waiting, sealed to a key this handset has lost
+      When the handset syncs
+      And the handset syncs
+      Then nothing is held
+      # Fellowship cannot tell. From the server a handset that has lost
+      # its private half looks perfectly healthy right up until a message
+      # it cannot read, which is why the fault has to be reported rather
+      # than inferred.
+
+    Scenario: The push is the delivery that is really lost, and the poll is not
+      Given this handset generates a new keypair
+      When message 12 arrives by push
+      Then nothing was opened
+      And nothing is held
+      When this handset presents its new key to Fellowship
+      And message 12 is waiting on the server
+      And the handset syncs
+      Then message 12 is held
+      # The asymmetry in one scenario. A push was sealed once, at send,
+      # and nothing re-sends it. The same message on the next poll is
+      # sealed afresh and arrives perfectly.
 
   Rule: The fault is reported once per sync, not once per message
 
@@ -50,7 +90,7 @@ Feature: A handset that cannot open its messages
     fifty.
 
     Scenario: Three unopenable messages are one report
-      Given messages 12 and 13 and 14 were sealed to another handset
+      Given messages 12 and 13 and 14 are waiting, sealed to a key this handset has lost
       When the handset syncs
       Then Fellowship was told once that this handset cannot read its messages
 
@@ -59,9 +99,9 @@ Feature: A handset that cannot open its messages
       When the handset syncs
       Then Fellowship was never told that this handset cannot read its messages
 
-    Scenario: The rest of the page still arrives
+    Scenario: A tampered message does not take the rest of the page with it
       Given message 12 is waiting on the server
-      And message 13 was sealed to another handset
+      And message 13 was altered in transit
       When the handset syncs
       Then message 12 is held
       And 1 message is held
@@ -73,7 +113,7 @@ Feature: A handset that cannot open its messages
     show a banner rather than a short list with no explanation.
 
     Scenario: A sync that lost something says it lost something
-      Given message 12 was sealed to another handset
+      Given message 12 is waiting, sealed to a key this handset has lost
       When the handset syncs
       Then the sync reports a key fault
 

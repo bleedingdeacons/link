@@ -375,12 +375,16 @@ public sealed class DeviceAuthService
 	/// <summary>
 	/// Replace this handset's keypair after it has lost the old one.
 	///
-	/// <para>The recovery for "my messages will not open". It keeps the
-	/// device row and its place in the intergroup's list, so nobody has to
-	/// re-enrol — but messages already sent stay unreadable, because they
-	/// were sealed to a key that no longer exists anywhere. Not even
-	/// Fellowship can recover them: it only ever held the public half.
-	/// </para>
+	/// <para>The recovery for "my messages will not open", and it recovers
+	/// more than this used to claim. It keeps the device row and its place
+	/// in the intergroup's list, so nobody re-enrols — and because
+	/// Fellowship stores bodies in plain text and seals them afresh on
+	/// every fetch, the next sync re-delivers everything still inside the
+	/// retention window, sealed to the new key.</para>
+	///
+	/// <para>What is actually lost is narrower: messages the server has
+	/// already swept, and any push sealed and sent before the key changed,
+	/// because nothing re-sends a push.</para>
 	/// </summary>
 	public async Task<bool> ReplaceKeyAsync(CancellationToken cancellationToken = default)
 	{

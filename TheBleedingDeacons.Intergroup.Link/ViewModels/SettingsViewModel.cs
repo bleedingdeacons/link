@@ -202,9 +202,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 	///
 	/// <para>Replaces the keypair and tells Fellowship the new public
 	/// half. The device row and its place in the intergroup's list
-	/// survive, so nobody has to re-enrol — but messages already sent stay
-	/// unreadable, because they were sealed to a key that no longer exists
-	/// anywhere, including on the server. The confirmation says that.
+	/// survive, so nobody has to re-enrol — and the messages come back.
+	/// Fellowship holds bodies in plain text and seals them afresh on every
+	/// fetch, so once the new key is presented the next sync re-delivers
+	/// everything still inside the retention window. What is genuinely
+	/// lost is what the server has already swept, and any push that was
+	/// sealed and sent before the key changed. The confirmation says
+	/// that, and said the opposite until 2026-09-12.
 	/// </para>
 	/// </summary>
 	[RelayCommand]
@@ -218,8 +222,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var confirmed = await page.DisplayAlertAsync(
 			"Fix messages that will not open?",
-			"This gives the intergroup a new key for this phone. New messages will open normally. "
-				+ "Messages already sent to this phone cannot be recovered — nobody, including the intergroup, can unlock them now.",
+			"This gives the intergroup a new key for this phone. Messages the intergroup still holds "
+				+ "will arrive again on the next sync. Anything older than it keeps, and any notification "
+				+ "already sent, cannot be recovered.",
 			"Get a new key",
 			"Cancel").ConfigureAwait(true);
 
