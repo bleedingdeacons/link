@@ -32,4 +32,7 @@ public partial class MessagesPage : ContentPage
 
 	private static async void OnComposeClicked(object? sender, EventArgs e) =>
 		await Shell.Current.GoToAsync("compose");
+
+	private static async void OnSettingsClicked(object? sender, EventArgs e) =>
+		await Shell.Current.GoToAsync("settings");
 }

@@ -6,14 +6,19 @@
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.ComposePage"
              x:DataType="vm:ComposeViewModel"
              x:Name="Page"
-             Shell.TabBarIsVisible="False"
              Title="New message">
+
+	<!--
+		Hand's compose form: a bold label over every field, the placeholder
+		left to say what goes in it, and a tall Send at the bottom.
+	-->
 
 	<ScrollView>
 		<VerticalStackLayout Padding="16" Spacing="14">
 
-			<Label Style="{StaticResource Secondary}"
-			       IsVisible="{Binding IsReply}"
+			<Label IsVisible="{Binding IsReply}"
+			       FontSize="13"
+			       Opacity="0.6"
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
 			<!--
@@ -27,7 +32,8 @@
 				the old order stranger still: the first thing on the page was
 				work, and the thing already done sat below the fold.
 			-->
-			<Entry Placeholder="Subject" Text="{Binding Subject}" MaxLength="200" />
+			<Label Text="Subject" FontAttributes="Bold" />
+			<Entry Placeholder="The line they read first" Text="{Binding Subject}" MaxLength="200" />
 
 			<Label Text="Send to" FontAttributes="Bold" />
 
@@ -60,14 +66,6 @@
 						        StrokeThickness="1">
 							<HorizontalStackLayout Spacing="6" VerticalOptions="Center">
 								<Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center" />
-								<!--
-									Bound through the page rather than the item: the
-									template's context is the Recipient, and the command
-									lives on the view model. x:Reference rather than a
-									relative source, because this project compiles its
-									bindings and a reference is the form that always
-									compiles.
-								-->
 								<!--
 									A Label rather than a Button, and that is not a
 									style preference. A transparent Button keeps the
@@ -102,8 +100,9 @@
 				</BindableLayout.ItemTemplate>
 			</FlexLayout>
 
-			<Label Style="{StaticResource Secondary}"
-			       IsVisible="{Binding HasChosenNothing}"
+			<Label IsVisible="{Binding HasChosenNothing}"
+			       FontSize="13"
+			       Opacity="0.6"
 			       Text="Nobody chosen yet. Tap a name or a committee below." />
 
 			<!--
@@ -124,7 +123,8 @@
 				SelectionChanged="OnCandidateSelected"
 				HeightRequest="240">
 				<CollectionView.EmptyView>
-					<Label Style="{StaticResource Secondary}"
+					<Label FontSize="13"
+					       Opacity="0.6"
 					       Text="No one left to show. Pull the message list down to reconnect." />
 				</CollectionView.EmptyView>
 				<CollectionView.ItemTemplate>
@@ -149,25 +149,32 @@
 				</CollectionView.ItemTemplate>
 			</CollectionView>
 
-			<Label Style="{StaticResource Secondary}"
+			<Label FontSize="12"
+			       Opacity="0.6"
 			       Text="A committee includes its sub-committees." />
 
-			<Editor Placeholder="Message"
+			<Label Text="Message" FontAttributes="Bold" />
+			<Editor Placeholder="What you want to say"
 			        Text="{Binding Body}"
 			        MaxLength="2000"
 			        AutoSize="TextChanges"
 			        HeightRequest="160" />
 
-			<Label Style="{StaticResource Secondary}"
+			<Label FontSize="12"
+			       Opacity="0.6"
 			       Text="Messages are encrypted before they leave your phone and are not shown in notifications." />
-
-			<Button Text="Send" Command="{Binding SendCommand}" />
-
-			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
 
 			<Label Text="{Binding Error}"
 			       IsVisible="{Binding HasError}"
-			       TextColor="{StaticResource Warning}" />
+			       TextColor="{StaticResource Warning}"
+			       FontSize="14" />
+
+			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
+
+			<Button Text="Send"
+			        HeightRequest="52"
+			        Margin="0,4,0,0"
+			        Command="{Binding SendCommand}" />
 
 		</VerticalStackLayout>
 	</ScrollView>

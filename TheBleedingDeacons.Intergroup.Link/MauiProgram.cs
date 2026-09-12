@@ -158,7 +158,11 @@ public static class MauiProgram
 		// Transient for the same reason its view model is.
 		builder.Services.AddTransient<MessagePage>();
 		builder.Services.AddTransient<ComposePage>();
-		builder.Services.AddSingleton<SettingsPage>();
+		// Transient now that it is pushed rather than a tab, like Compose:
+		// a page instance can sit in the navigation stack only once, and a
+		// singleton would be the same object pushed on every visit. Its
+		// view model stays a singleton, so nothing on it is lost.
+		builder.Services.AddTransient<SettingsPage>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

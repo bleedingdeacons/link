@@ -6,8 +6,8 @@
 	<true/>
 	<key>UIDeviceFamily</key>
 	<array>
-		<!-- iPhone and iPad. The UI is a two-tab Shell; it does not
-		     assume a phone-sized screen. -->
+		<!-- iPhone and iPad. The UI is a Shell of stacked pages; it does
+		     not assume a phone-sized screen. -->
 		<integer>1</integer>
 		<integer>2</integer>
 	</array>

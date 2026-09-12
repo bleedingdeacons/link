@@ -7,39 +7,27 @@
        Title="Link">
 
 	<!--
-		The sign-in page is a ShellContent rather than a modal, and the
-		tab bar below it is hidden until there is a session. A member who
-		is not enrolled has nothing to look at in Messages and nothing to
-		put in Compose, and offering them empty screens is a worse answer
-		than not offering them.
+		Two top-level routes and nothing else, which is Hand's shape.
+
+		There used to be a tab bar here - Messages and Settings - and it
+		was the most visible thing that made Link look like a different
+		family from Hand. Hand has no tabs: the duty screen carries its
+		own header with Settings in it, and Settings is a page you push,
+		look at, and come back from. Link now does the same, from the
+		message list's header, so a member holding both apps meets one
+		way of getting about.
+
+		With no tab bar and the flyout disabled there is nothing on screen
+		that could offer the page a member is not meant to be on, so
+		neither route needs hiding. Which one is showing is decided by
+		AppShell.RefreshAsync.
 	-->
-	<ShellContent x:Name="SignIn"
-	              Title="Sign in"
+	<ShellContent Route="signin"
 	              ContentTemplate="{DataTemplate views:SignInPage}"
-	              Route="signin" />
+	              Shell.NavBarIsVisible="False" />
 
-	<!--
-		Text-only tabs, and deliberately so rather than by omission.
-
-		Messages carried Icon="ic_message.png", which does not exist and
-		never did — no such file was ever added under Resources/Images. It
-		failed the way a missing Android drawable always does: silently on
-		screen, and loudly only in logcat, where Glide reported
-		FileNotFoundException on every render. Settings never had one, so
-		the tab bar looked intentional and the log was the only tell.
-
-		Removed rather than replaced. Two text labels read perfectly well,
-		and half an icon set is worse than none; adding real artwork is a
-		design decision, not a fix for a broken reference. If icons are
-		wanted later, both tabs get one in the same change.
-	-->
-	<TabBar x:Name="Tabs">
-		<ShellContent Title="Messages"
-		              ContentTemplate="{DataTemplate views:MessagesPage}"
-		              Route="messages" />
-		<ShellContent Title="Settings"
-		              ContentTemplate="{DataTemplate views:SettingsPage}"
-		              Route="settings" />
-	</TabBar>
+	<ShellContent Route="messages"
+	              ContentTemplate="{DataTemplate views:MessagesPage}"
+	              Shell.NavBarIsVisible="False" />
 
 </Shell>

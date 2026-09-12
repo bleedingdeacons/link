@@ -6,15 +6,18 @@
              x:DataType="vm:SettingsViewModel"
              Title="Settings">
 
-	<ScrollView>
-		<VerticalStackLayout Padding="16" Spacing="18">
+	<!--
+		Hand's settings page, section for section in its manner: flat, a
+		small faint label over each thing, a faint rule between groups, and
+		Sign out red and last. It was a stack of bordered cards, which is
+		the one layout neither app otherwise uses.
+	-->
 
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
-				<VerticalStackLayout Spacing="4">
-					<Label Text="Signed in as" Style="{StaticResource Secondary}" />
-					<Label Text="{Binding MemberName}" FontSize="18" />
-				</VerticalStackLayout>
-			</Border>
+	<ScrollView>
+		<VerticalStackLayout Padding="20" Spacing="16">
+
+			<Label Text="Signed in as" FontSize="13" Opacity="0.6" />
+			<Label Text="{Binding MemberName}" FontSize="18" FontAttributes="Bold" />
 
 			<!--
 				Whether push is available in this build and enabled on this
@@ -24,69 +27,66 @@
 				"Messages on this phone", which is where somebody goes when
 				they think a message is missing. It is usually not missing —
 				it is late, because nothing is being pushed — and this is
-				the card that says so before they clear their history
+				the line that says so before they clear their history
 				looking for it.
 
 				The colour is the indicator at a glance: green working,
 				amber still covered by the sync, red silenced, grey no push
 				in this build at all. See PushStatus.
 			-->
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
-				<VerticalStackLayout Spacing="6">
-					<HorizontalStackLayout Spacing="8">
-						<BoxView WidthRequest="12"
-						         HeightRequest="12"
-						         CornerRadius="6"
-						         VerticalOptions="Center"
-						         BackgroundColor="{Binding PushIndicatorColour}" />
-						<Label Text="{Binding PushHeadline}" VerticalOptions="Center" />
-					</HorizontalStackLayout>
-					<Label Style="{StaticResource Secondary}" Text="{Binding PushDetail}" />
-				</VerticalStackLayout>
-			</Border>
+			<HorizontalStackLayout Spacing="8">
+				<BoxView WidthRequest="12"
+				         HeightRequest="12"
+				         CornerRadius="6"
+				         VerticalOptions="Center"
+				         BackgroundColor="{Binding PushIndicatorColour}" />
+				<Label Text="{Binding PushHeadline}" FontSize="13" VerticalOptions="Center" />
+			</HorizontalStackLayout>
+			<Label Text="{Binding PushDetail}" FontSize="12" Opacity="0.6" />
 
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
-				<VerticalStackLayout Spacing="8">
-					<Label Text="Sound" />
-					<!--
-						The noise a message makes when it lands while Link is
-						open. A message that arrives with the app closed is
-						announced by the platform, with whatever tone the
-						member has set for the app - that is theirs to
-						configure and nothing here touches it.
+			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
-						A fellowship phone sits in meetings, so somewhere to
-						turn this off is not a nicety.
-					-->
-					<Grid ColumnDefinitions="*,Auto">
-						<Label Grid.Column="0"
-						       Style="{StaticResource Secondary}"
-						       VerticalOptions="Center"
-						       Text="Play a sound when a message arrives while Link is open." />
-						<Switch Grid.Column="1"
-						        IsToggled="{Binding SoundOn}"
-						        VerticalOptions="Center" />
-					</Grid>
-				</VerticalStackLayout>
-			</Border>
+			<!--
+				The noise a message makes when it lands while Link is open.
+				A message that arrives with the app closed is announced by
+				the platform, with whatever tone the member has set for the
+				app - that is theirs to configure and nothing here touches
+				it.
 
-			<Border Style="{StaticResource Card}" StrokeShape="RoundRectangle 10">
-				<VerticalStackLayout Spacing="8">
-					<Label Text="Messages on this phone" />
-					<Label Style="{StaticResource Secondary}"
-					       Text="{Binding Held, StringFormat='{0} kept on this handset, encrypted.'}" />
-					<!--
-						The wording matters. "Clear history" reads to most
-						people as "delete the messages", and it is not that.
-						The confirmation says so too.
-					-->
-					<Label Style="{StaticResource Secondary}"
-					       Text="Clearing removes only this phone's copies. Nothing is unsent, and the intergroup keeps its own record." />
-					<Button Text="Clear messages on this phone"
-					        Style="{StaticResource Quiet}"
-					        Command="{Binding ClearHistoryCommand}" />
-				</VerticalStackLayout>
-			</Border>
+				A fellowship phone sits in meetings, so somewhere to turn
+				this off is not a nicety.
+			-->
+			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+				<Label Grid.Column="0"
+				       FontSize="13"
+				       VerticalOptions="Center"
+				       Text="Play a sound when a message arrives while Link is open" />
+				<Switch Grid.Column="1"
+				        IsToggled="{Binding SoundOn}"
+				        VerticalOptions="Center" />
+			</Grid>
+
+			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
+
+			<Label Text="Messages on this phone" FontSize="13" Opacity="0.6" />
+			<Label FontSize="15"
+			       Text="{Binding Held, StringFormat='{0} kept on this handset, encrypted.'}" />
+			<!--
+				The wording matters. "Clear history" reads to most people as
+				"delete the messages", and it is not that. The confirmation
+				says so too.
+
+				A filled button, as Hand's Clear history is. It used to be
+				drawn as an outline to carry less weight than Sign out; Sign
+				out is red now, which says that far more plainly.
+			-->
+			<Button Text="Clear messages on this phone"
+			        HeightRequest="48"
+			        FontSize="14"
+			        Command="{Binding ClearHistoryCommand}" />
+			<Label FontSize="12"
+			       Opacity="0.6"
+			       Text="Removes only this phone's copies. Nothing is unsent, and the intergroup keeps its own record." />
 
 			<!--
 				Shown only while there is a fault to fix. The recovery asks
@@ -94,67 +94,106 @@
 				would put an alarming-looking repair in front of everybody
 				for something the usual member never meets.
 			-->
-			<Border Style="{StaticResource Card}"
-			        StrokeShape="RoundRectangle 10"
-			        IsVisible="{Binding KeyFault}">
-				<VerticalStackLayout Spacing="8">
-					<Label Text="Messages will not open?" />
-					<Label Style="{StaticResource Secondary}"
-					       Text="This usually happens after the screen lock changes, or after a phone is restored or transferred. Getting a new key fixes it, and your messages arrive again on the next sync." />
+			<VerticalStackLayout Spacing="16" IsVisible="{Binding KeyFault}">
 
-					<Button Text="Fix messages that will not open"
-					        IsVisible="{Binding NotReplacingKey}"
-					        Style="{StaticResource Quiet}"
-					        Command="{Binding StartKeyReplacementCommand}" />
+				<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
-					<!--
-						The same choices the sign-in page offers, because
-						this asks for the same proof. Fellowship refuses a
-						key replacement on a device token alone: substituting
-						the key is enough to have every message it still
-						holds re-sealed to it.
-					-->
-					<VerticalStackLayout Spacing="8" IsVisible="{Binding ReplacingKey}">
-						<Label Style="{StaticResource Secondary}"
-						       Text="Sign in again to prove this phone is yours." />
-
-						<Button Text="Continue with Google"
-						        Style="{StaticResource Quiet}"
-						        Command="{Binding ReplaceKeyWithProviderCommand}"
-						        CommandParameter="google" />
-						<Button Text="Continue with Microsoft"
-						        Style="{StaticResource Quiet}"
-						        Command="{Binding ReplaceKeyWithProviderCommand}"
-						        CommandParameter="microsoft" />
-						<Button Text="Continue with Apple"
-						        Style="{StaticResource Quiet}"
-						        IsVisible="{Binding IsAppleAvailable}"
-						        Command="{Binding ReplaceKeyWithAppleCommand}" />
-
-						<Entry Placeholder="Email address"
-						       Keyboard="Email"
-						       Text="{Binding KeyEmail}" />
-						<Entry Placeholder="Password"
-						       IsPassword="True"
-						       Text="{Binding KeyPassword}" />
-						<Button Text="Continue with a password"
-						        Style="{StaticResource Quiet}"
-						        Command="{Binding ReplaceKeyWithPasswordCommand}" />
-
-						<Button Text="Cancel"
-						        Style="{StaticResource Quiet}"
-						        Command="{Binding CancelKeyReplacementCommand}" />
+				<!-- Hand's amber notice: needs doing, not an emergency. -->
+				<Border Padding="14"
+				        BackgroundColor="#FFF4E5"
+				        StrokeThickness="0">
+					<Border.StrokeShape>
+						<RoundRectangle CornerRadius="10" />
+					</Border.StrokeShape>
+					<VerticalStackLayout Spacing="6">
+						<Label Text="Messages will not open?"
+						       TextColor="#663C00"
+						       FontSize="14"
+						       FontAttributes="Bold" />
+						<Label TextColor="#663C00"
+						       FontSize="13"
+						       Text="This usually happens after the screen lock changes, or after a phone is restored or transferred. Getting a new key fixes it, and your messages arrive again on the next sync." />
 					</VerticalStackLayout>
-				</VerticalStackLayout>
-			</Border>
+				</Border>
 
-			<Button Text="Sign out" Command="{Binding SignOutCommand}" />
+				<Button Text="Fix messages that will not open"
+				        HeightRequest="48"
+				        FontSize="14"
+				        IsVisible="{Binding NotReplacingKey}"
+				        Command="{Binding StartKeyReplacementCommand}" />
+
+				<!--
+					The same choices the sign-in page offers, laid out the
+					way it lays them out, because this asks for the same
+					proof. Fellowship refuses a key replacement on a device
+					token alone: substituting the key is enough to have
+					every message it still holds re-sealed to it.
+				-->
+				<VerticalStackLayout Spacing="12" IsVisible="{Binding ReplacingKey}">
+					<Label FontSize="13"
+					       Opacity="0.7"
+					       Text="Sign in again to prove this phone is yours." />
+
+					<Button Text="Continue with Google"
+					        HeightRequest="50"
+					        Command="{Binding ReplaceKeyWithProviderCommand}"
+					        CommandParameter="google" />
+					<Button Text="Continue with Microsoft"
+					        HeightRequest="50"
+					        Command="{Binding ReplaceKeyWithProviderCommand}"
+					        CommandParameter="microsoft" />
+					<Button Text="Continue with Apple"
+					        HeightRequest="50"
+					        IsVisible="{Binding IsAppleAvailable}"
+					        Command="{Binding ReplaceKeyWithAppleCommand}" />
+
+					<Label Text="or with a password"
+					       FontSize="13"
+					       Opacity="0.6"
+					       HorizontalOptions="Center"
+					       Margin="0,8,0,0" />
+
+					<Entry Placeholder="Email address"
+					       Keyboard="Email"
+					       Text="{Binding KeyEmail}" />
+					<Entry Placeholder="Password"
+					       IsPassword="True"
+					       Text="{Binding KeyPassword}" />
+					<Button Text="Continue with a password"
+					        HeightRequest="50"
+					        Command="{Binding ReplaceKeyWithPasswordCommand}" />
+
+					<Button Text="Cancel"
+					        Style="{StaticResource Quiet}"
+					        Command="{Binding CancelKeyReplacementCommand}" />
+				</VerticalStackLayout>
+			</VerticalStackLayout>
+
+			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
 			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
 
 			<Label Text="{Binding Notice}"
 			       IsVisible="{Binding HasNotice}"
-			       Style="{StaticResource Secondary}" />
+			       FontSize="13"
+			       Opacity="0.8" />
+
+			<!--
+				The one control here that cannot be undone, so it is red and
+				last, exactly as Hand's is. It was the ordinary blue button,
+				the same colour as Clear messages directly above it.
+			-->
+			<Button Text="Sign out"
+			        BackgroundColor="{StaticResource Warning}"
+			        TextColor="White"
+			        HeightRequest="48"
+			        FontSize="14"
+			        Command="{Binding SignOutCommand}" />
+
+			<Label FontSize="12"
+			       Opacity="0.6"
+			       TextColor="#663C00"
+			       Text="This phone stops receiving messages, and the messages held on it are deleted." />
 
 			<!--
 				The build, last and quiet, exactly as Hand shows it. It is the
