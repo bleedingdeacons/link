@@ -161,8 +161,17 @@
 									CommandParameter="{Binding .}" />
 							</Grid.GestureRecognizers>
 
+							<!--
+								BackgroundColor is set to Transparent on purpose. The
+								implicit BoxView style paints BackgroundColor near-black,
+								and CornerRadius rounds only Color, which is drawn on top.
+								Left unset, the square background showed through at each
+								rounded end as a dark cap. It was visible on a handset and
+								nowhere in the XAML.
+							-->
 							<BoxView Grid.Column="0"
 							         CornerRadius="3"
+							         BackgroundColor="Transparent"
 							         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
 								<BoxView.Triggers>
 									<DataTrigger TargetType="BoxView" Binding="{Binding IsRead}" Value="False">
