@@ -24,6 +24,7 @@ public sealed class DeviceAuthService
 	private readonly IDeviceKeyStore _keys;
 	private readonly ISessionStore _sessions;
 	private readonly IPushRegistrar _push;
+	private readonly IMessageHistory _history;
 	private readonly IAppleSignIn _apple;
 	private readonly FellowshipConfiguration _configuration;
 
@@ -33,6 +34,7 @@ public sealed class DeviceAuthService
 		ISessionStore sessions,
 		IPushRegistrar push,
 		IAppleSignIn apple,
+		IMessageHistory history,
 		FellowshipConfiguration configuration)
 	{
 		_apple = apple;
@@ -40,6 +42,7 @@ public sealed class DeviceAuthService
 		_keys = keys;
 		_sessions = sessions;
 		_push = push;
+		_history = history;
 		_configuration = configuration;
 	}
 
@@ -409,6 +412,14 @@ public sealed class DeviceAuthService
 		if (result.Succeeded && result.Session is not null)
 		{
 			await _sessions.SaveAsync(result.Session).ConfigureAwait(false);
+
+			// Whose messages are on this phone? A handset that was refused
+			// keeps its history rather than losing it to an administrator's
+			// correction, so the store may already hold somebody's — and
+			// this is the one moment it can be told whether that somebody
+			// is the person now holding the phone. Same member, keep it;
+			// anyone else, it is emptied before they see a list.
+			await _history.AdoptAsync(result.Session.MemberId, cancellationToken).ConfigureAwait(false);
 
 			// Enrolment carries the token itself rather than going through
 			// RegisterPushTokenAsync, so this is the other place the

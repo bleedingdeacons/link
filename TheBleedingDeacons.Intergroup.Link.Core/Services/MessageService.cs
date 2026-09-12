@@ -58,7 +58,9 @@ public sealed class MessageService : IMessageService
 		var page = await _client.FetchInboxAsync(session.Token, since, cancellationToken).ConfigureAwait(false);
 		if (!page.Succeeded)
 		{
-			return SyncResult.Failed;
+			await SignOutIfRefusedAsync(page.Failure).ConfigureAwait(false);
+
+			return SyncResult.FailedWith(page.Failure);
 		}
 
 		if (page.Messages.Count == 0)
@@ -186,6 +188,62 @@ public sealed class MessageService : IMessageService
 
 		return await _client.SendAsync(session.Token, request, cancellationToken).ConfigureAwait(false);
 	}
+
+	/// <summary>
+	/// Drop this handset's credentials, but only when the server actually
+	/// refused it.
+	///
+	/// <para><b>The narrowness of this test is the whole point.</b> A
+	/// network failure, a 500, a gateway having a moment — all ordinary,
+	/// and the next sync tries again. A handset that signed itself out
+	/// over any of them would leave the fellowship every time somebody
+	/// drove through a tunnel, which is a worse fault than the one this
+	/// exists to fix. Hand's alert loop draws the line in the same
+	/// place.</para>
+	///
+	/// <para><b>The history stays.</b> Losing authorisation is far more
+	/// often an administrator's change or a corrected email address than a
+	/// phone in the wrong hands, and taking a member's correspondence away
+	/// over a clerical fix would be the wrong default. The handset that
+	/// signs in next is where that gets decided — see
+	/// <see cref="IMessageHistory.AdoptAsync"/>.</para>
+	/// </summary>
+	private async Task SignOutIfRefusedAsync(FellowshipFailure failure)
+	{
+		if (failure is not (FellowshipFailure.Unauthenticated or FellowshipFailure.NotEligible))
+		{
+			return;
+		}
+
+		Log.Warning("This handset is no longer authorised ({Failure}) - signing out", failure);
+
+		await _sessions.ClearAsync().ConfigureAwait(false);
+
+		// The keypair goes too. It can no longer receive anything, and
+		// enrolment generates a fresh one on every sign-in regardless, so
+		// keeping a dead private key on the handset buys nothing.
+		await _keys.ClearAsync().ConfigureAwait(false);
+
+		WeakReferenceMessenger.Default.Send(new AuthenticationLost(failure, ReasonFor(failure)));
+	}
+
+	/// <summary>
+	/// What to tell the member.
+	///
+	/// <para>The two cases call for different things from whoever is
+	/// reading them: one is "sign in again", the other is "the intergroup
+	/// does not have you on its list, and that is what to go and sort
+	/// out". Flattening them into one message is how a lapsed member
+	/// spends an evening reinstalling an app that was never broken.</para>
+	/// </summary>
+	private static string ReasonFor(FellowshipFailure failure) => failure switch
+	{
+		FellowshipFailure.NotEligible =>
+			"This phone has been signed out because the intergroup no longer has a member "
+			+ "record for your address. Speak to your intergroup if that is wrong.",
+		_ =>
+			"This phone has been signed out. Sign in again to carry on receiving messages.",
+	};
 
 	/// <summary>
 	/// One envelope in, one message out — or null, which the callers

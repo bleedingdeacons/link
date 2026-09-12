@@ -64,6 +64,12 @@ internal static class HeadlessMessages
 			// it does not sign anybody in — and unavailable on Android in
 			// any case.
 			new AppleSignIn(),
+			// Nor is this, for the same reason: the history is adopted at
+			// enrolment and nothing here enrols. It comes from
+			// LinkServices rather than being built fresh all the same,
+			// because a second JsonMessageHistory over the same file would
+			// have a write lock of its own — see that class.
+			LinkServices.History,
 			LinkServices.Configuration);
 
 		return auth.RegisterPushTokenAsync(token);

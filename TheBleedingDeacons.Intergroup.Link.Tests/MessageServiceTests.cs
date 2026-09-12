@@ -392,6 +392,21 @@ public sealed class MessageServiceTests
 			return Task.CompletedTask;
 		}
 
+		public long Owner { get; private set; }
+
+		public Task AdoptAsync(long memberId, CancellationToken cancellationToken = default)
+		{
+			if (Owner != memberId || memberId <= 0)
+			{
+				Held.Clear();
+				Highest = 0;
+			}
+
+			Owner = memberId;
+
+			return Task.CompletedTask;
+		}
+
 		public Task ResetAsync(CancellationToken cancellationToken = default)
 		{
 			Held.Clear();
