@@ -422,6 +422,85 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  ios-test-release:
+    name: Publish the .ipa to the ios-test release
+
+    # Every run that builds the iOS head also puts its .ipa on one standing
+    # GitHub release, `ios-test`, replacing the file that was there. So the
+    # newest unsigned .ipa always lives at one fixed address, rather than as
+    # an artifact on whichever run last built it, which expires after 30
+    # days and has to be looked up by run id.
+    #
+    # A test release, and marked as one: a prerelease and never Latest, so it
+    # cannot be mistaken for a version. The release job's tags are v1.2.3 and
+    # bump-version.sh only reads tags matching v[0-9]*, so `ios-test` is
+    # invisible to it.
+    #
+    # Its own job, on ubuntu, rather than more steps in `ios`. That job runs
+    # a pull request's code on macOS with a read-only token. This one runs
+    # nothing from the checkout, and is the only place `contents: write` is
+    # granted for it.
+    #
+    # Pull-request runs publish too (with the `ios` label): the point is the
+    # newest build to sideload, merged or not. The notes say which commit and
+    # which run, so a PR build is never taken for main.
+    needs: ios
+    if: ${{ needs.ios.result == 'success' }}
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: read
+
+    # One at a time, and none cancelled. Overwriting is the design, so the
+    # only question is order, and a queue keeps two runs from interleaving
+    # the tag move, the notes and the upload.
+    concurrency:
+      group: ios-test-release
+      cancel-in-progress: false
+
+    steps:
+      - name: Publish link-unsigned.ipa to ios-test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/ios-test
+          # The branch commit for a pull request, not the synthetic merge
+          # commit, so the tag points at something that stays in history.
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          REF_LABEL: ${{ github.event.pull_request.number && format('pull request #{0}', github.event.pull_request.number) || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag=ios-test
+
+          gh run download "$RUN_ID" -n link-ipa-unsigned -D ipa
+          test -f ipa/link-unsigned.ipa
+          ls -la ipa/link-unsigned.ipa
+
+          notes=$(printf '%s\n' \
+            'The newest unsigned Link .ipa, replaced by every CI run that builds the iOS head.' \
+            '' \
+            "Built from ${REF_LABEL} at ${SHA}, $(date -u '+%Y-%m-%d %H:%M UTC')." \
+            "Run: ${RUN_URL}" \
+            '' \
+            'Unsigned: it installs on nothing until it is re-signed. Sideloadly (or /sideload) does that on the way onto an iPhone.')
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            # Move the tag to the commit this .ipa was built from, so the
+            # release page and the file agree about what they are.
+            gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/${tag}" -f sha="$SHA" -F force=true >/dev/null
+            gh release edit "$tag" --prerelease --latest=false --title 'Link iOS test build' --notes "$notes"
+          else
+            gh release create "$tag" --target "$SHA" --prerelease --latest=false \
+              --title 'Link iOS test build' --notes "$notes"
+          fi
+
+          gh release upload "$tag" ipa/link-unsigned.ipa --clobber
+          echo "Published: ${RELEASE_URL}"
+
   test:
     name: Test & coverage
     runs-on: ubuntu-latest
