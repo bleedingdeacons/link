@@ -208,15 +208,19 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	/// Add a recipient, from a tap on the list.
 	/// </summary>
 	/// <remarks>
-	/// The search box is cleared as well. Somebody who typed "sec" to find
-	/// the Secretary is, the moment they have them, looking at a list
+	/// <para>The search box is cleared as well. Somebody who typed "sec" to
+	/// find the Secretary is, the moment they have them, looking at a list
 	/// narrowed by a word that has nothing to do with whoever they want
-	/// next.
+	/// next.</para>
+	///
+	/// <para><b>A member with no registered device is refused here</b>, not
+	/// only greyed out in the list. The page stops the tap too, but this is
+	/// the rule, and the one a test can hold.</para>
 	/// </remarks>
 	[RelayCommand]
 	private void Choose(Recipient? recipient)
 	{
-		if (recipient is null || IsChosen(recipient))
+		if (recipient is null || !recipient.HasDevice || IsChosen(recipient))
 		{
 			return;
 		}

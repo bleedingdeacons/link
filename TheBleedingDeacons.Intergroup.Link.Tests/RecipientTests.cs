@@ -103,6 +103,29 @@ public sealed class RecipientTests
 		Assert.False(member.Matches("sue"));
 	}
 
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void AMemberCarriesWhetherTheyHaveADevice(bool hasDevice)
+	{
+		// Compose will not let a member with no registered device be chosen,
+		// so this has to survive the step from directory entry to recipient.
+		var member = Recipient.ForMember(new DirectoryMember { Id = 1, Name = "Dave P", HasDevice = hasDevice });
+
+		Assert.Equal(hasDevice, member.HasDevice);
+		Assert.Equal(!hasDevice, member.HasNoDevice);
+	}
+
+	[Fact]
+	public void ACommitteeCanAlwaysBeChosen()
+	{
+		// A committee message reaches its members whether or not each of
+		// them has a device; the flag governs choosing an individual.
+		var committee = Recipient.ForCommittee(new DirectoryCommittee { Slug = "pi", Name = "Public Information" });
+
+		Assert.True(committee.HasDevice);
+	}
+
 	[Fact]
 	public void ACommitteeIsFoundByTypingItsName()
 	{
