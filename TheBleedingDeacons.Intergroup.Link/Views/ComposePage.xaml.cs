@@ -55,7 +55,7 @@ public partial class ComposePage : ContentPage
 		}
 	}
 
-	private void OnCandidateSelected(object? sender, SelectionChangedEventArgs e)
+	private async void OnCandidateSelected(object? sender, SelectionChangedEventArgs e)
 	{
 		if (e?.CurrentSelection.FirstOrDefault() is not Recipient recipient)
 		{
@@ -71,6 +71,16 @@ public partial class ComposePage : ContentPage
 		{
 			list.SelectedItem = null;
 		}
+
+		// A pick closes the dropdown and puts the keyboard away, so the
+		// page is back in view with Subject under the search box. It
+		// stayed open for the next pick at first, and between the open
+		// list and the keyboard Subject was pushed off the bottom of the
+		// screen, with no way to see it without dismissing both by hand.
+		// Adding a second recipient is one tap on the search box.
+		ShowCandidates(false);
+		await RecipientSearch.HideSoftInputAsync(CancellationToken.None);
+		RecipientSearch.Unfocus();
 	}
 
 	private void OnSearchFocused(object? sender, FocusEventArgs e) =>
@@ -95,10 +105,9 @@ public partial class ComposePage : ContentPage
 	/// <summary>
 	/// Open or close the recipient dropdown.
 	///
-	/// <para>It closes on the search box losing focus, which is what happens
-	/// when the member moves on to Subject or Message. Picking a row does not
-	/// take focus from the box, so the dropdown stays open after a choice
-	/// and several recipients can be added in a row.</para>
+	/// <para>It closes on a pick (see <see cref="OnCandidateSelected"/>) and
+	/// on the search box losing focus, which is what happens when the member
+	/// moves on to Subject or Message.</para>
 	/// </summary>
 	private void ShowCandidates(bool show) =>
 		CandidateDropdown.IsVisible = show;

@@ -93,7 +93,8 @@
 				The searchable dropdown: a search box, and under it the list it
 				filters, shown only while the box is in use. The code-behind
 				opens it when the box takes focus or has text, and closes it
-				when focus moves to another field (see ShowCandidates).
+				on a pick or when focus moves to another field (see
+				ShowCandidates).
 
 				It opens in the page's flow rather than floating over it, so
 				while it is open it pushes Subject down instead of covering
@@ -124,10 +125,16 @@
 					<RoundRectangle CornerRadius="8" />
 				</Border.StrokeShape>
 
+				<!--
+					About three rows tall. With the keyboard up there is
+					little screen left, and every row of list pushes the
+					fields beneath it further under the keyboard; typing a
+					few letters narrows it faster than scrolling does.
+				-->
 				<CollectionView ItemsSource="{Binding Candidates}"
 				                SelectionMode="Single"
 				                SelectionChanged="OnCandidateSelected"
-				                MaximumHeightRequest="260">
+				                MaximumHeightRequest="190">
 					<CollectionView.EmptyView>
 						<Label Padding="12,10"
 						       FontSize="13"
