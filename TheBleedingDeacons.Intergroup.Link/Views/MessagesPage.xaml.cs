@@ -46,7 +46,7 @@ public partial class MessagesPage : ContentPage
 		return base.OnBackButtonPressed();
 	}
 
-	private static async void OnComposeClicked(object? sender, EventArgs e) =>
+	private static async void OnComposeTapped(object? sender, TappedEventArgs e) =>
 		await Shell.Current.GoToAsync("compose");
 
 	private void OnMoreClicked(object? sender, EventArgs e) =>
