@@ -37,7 +37,7 @@
 		-->
 		<Grid x:Name="Header"
 		      Grid.Row="0"
-		      ColumnDefinitions="*,Auto,Auto"
+		      ColumnDefinitions="*,Auto"
 		      Padding="12,14"
 		      ColumnSpacing="6">
 			<Label Grid.Column="0"
@@ -46,11 +46,11 @@
 			       FontAttributes="Bold"
 			       VerticalOptions="Center" />
 
-			<Button Grid.Column="1"
-			        Text="New"
-			        FontSize="12"
-			        Padding="8,6"
-			        Clicked="OnComposeClicked" />
+			<!--
+				No New button here any more. Writing a message is the round
+				send button floating at the bottom right (ComposeButton,
+				below), where a thumb already is.
+			-->
 
 			<!--
 				The overflow menu. One item today, Settings. Anything that is
@@ -74,7 +74,7 @@
 				nothing.
 			-->
 			<Button x:Name="MoreButton"
-			        Grid.Column="2"
+			        Grid.Column="1"
 			        Text="&#x22EE;"
 			        FontSize="24"
 			        FontAttributes="Bold"
@@ -142,6 +142,17 @@
 
 			<CollectionView ItemsSource="{Binding Messages}"
 			                SelectionMode="None">
+
+				<!--
+					Room under the last message for the floating compose
+					button, so it can always be scrolled clear rather than
+					sitting on top of the oldest row for good. BoxView with a
+					transparent BackgroundColor as well as Color: the implicit
+					style paints the background near-black.
+				-->
+				<CollectionView.Footer>
+					<BoxView HeightRequest="88" Color="Transparent" BackgroundColor="Transparent" />
+				</CollectionView.Footer>
 
 				<!--
 					Hand's "All clear": said large and faint rather than as
@@ -255,6 +266,59 @@
 		</RefreshView>
 
 	</Grid>
+
+		<!--
+			The compose button: small, round, floating at the bottom right,
+			with a send icon. It replaced a text "New" button in the header.
+
+			The icon is a vector Path rather than an image or a font glyph.
+			Link ships no icon images and no icon font, and a missing image
+			fails silently on Android (see AppShell.xaml on the tab icon that
+			never existed). A Path needs nothing that has to exist. The data is
+			the Material "send" paper plane.
+
+			A Border with a tap rather than a Button, because a Button cannot
+			hold a Path as its content. Drawn before the menu scrim below, so
+			an open ⋮ menu covers it and a tap there closes the menu instead
+			of opening compose. The list's footer leaves room under the last
+			message so this never sits on top of one for good.
+		-->
+		<Border x:Name="ComposeButton"
+		        HorizontalOptions="End"
+		        VerticalOptions="End"
+		        Margin="0,0,16,16"
+		        WidthRequest="56"
+		        HeightRequest="56"
+		        StrokeThickness="0"
+		        BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}"
+		        SemanticProperties.Description="New message">
+			<Border.StrokeShape>
+				<RoundRectangle CornerRadius="28" />
+			</Border.StrokeShape>
+			<!--
+				Shadow set explicitly. The implicit Shadow style is the
+				template's white glow offset 10,10.
+			-->
+			<Border.Shadow>
+				<Shadow Brush="Black" Opacity="0.3" Radius="10" Offset="0,4" />
+			</Border.Shadow>
+			<Border.GestureRecognizers>
+				<TapGestureRecognizer Tapped="OnComposeTapped" />
+			</Border.GestureRecognizers>
+
+			<!--
+				Nudged 2 right: the plane's weight is on its left, so centred
+				by its bounds it looks off to one side.
+			-->
+			<Path Data="M2.01,21 L23,12 L2.01,3 L2,10 L17,12 L2,14 Z"
+			      Fill="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}"
+			      Aspect="Uniform"
+			      WidthRequest="22"
+			      HeightRequest="22"
+			      Margin="2,0,0,0"
+			      HorizontalOptions="Center"
+			      VerticalOptions="Center" />
+		</Border>
 
 		<!--
 			The ⋮ dropdown, and the layer that closes it.
