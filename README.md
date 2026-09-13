@@ -489,6 +489,19 @@ Two ways to ask for it:
 * put the **`ios`** label on a pull request, and every run of that PR
   builds the head until the label comes off.
 
+**Every run that builds it also publishes it to the `ios-test` release**,
+replacing the `.ipa` that was there. So the newest unsigned build is always
+at one fixed address, `releases/tag/ios-test`, instead of on whichever run
+last built it, where it expires after 30 days. The release is a
+prerelease and never Latest, the version tags are `v1.2.3` and
+`bump-version.sh` ignores anything else, and its notes name the commit and
+run the `.ipa` came from. A pull request with the `ios` label publishes
+there too, so check the notes before assuming it is `main`.
+
+```bash
+gh release download ios-test -R bleedingdeacons/link -p link-unsigned.ipa -D C:/Data/link-artifacts --clobber
+```
+
 Label the PR whenever anything under `Platforms/iOS` or `MauiProgram`
 moves. The trade is stated plainly in the workflow: the release job still
 refuses to publish if the iOS head *fails*, but it publishes happily when
