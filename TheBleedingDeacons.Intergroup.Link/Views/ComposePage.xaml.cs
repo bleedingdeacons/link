@@ -62,6 +62,19 @@ public partial class ComposePage : ContentPage
 			return;
 		}
 
+		// A member with no registered device cannot be chosen. Clear the
+		// selection so the row does not stay highlighted, and leave the
+		// dropdown open for somebody who can.
+		if (!recipient.HasDevice)
+		{
+			if (sender is CollectionView refused)
+			{
+				refused.SelectedItem = null;
+			}
+
+			return;
+		}
+
 		_viewModel.ChooseCommand.Execute(recipient);
 
 		// Choosing takes the row out of the list, so the control has

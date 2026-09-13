@@ -49,6 +49,16 @@ public sealed record Recipient
 	public bool HasDetail => Detail.Length > 0;
 
 	/// <summary>
+	/// Whether this recipient can be chosen. False only for a member with no
+	/// registered device: a message to them individually would reach no
+	/// phone. Always true for a committee.
+	/// </summary>
+	public bool HasDevice { get; init; } = true;
+
+	/// <summary>The inverse of <see cref="HasDevice"/>, for the row's note.</summary>
+	public bool HasNoDevice => !HasDevice;
+
+	/// <summary>
 	/// Whether <paramref name="term"/> matches. Name, and whatever the
 	/// second line says: somebody who wants the Secretary, or the GSR from
 	/// Tuesday Bristol, is describing a person the only way they can.
@@ -68,6 +78,7 @@ public sealed record Recipient
 			Name = member.Name,
 			Detail = member.Standing,
 			MemberId = member.Id,
+			HasDevice = member.HasDevice,
 		};
 	}
 

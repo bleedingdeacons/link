@@ -232,6 +232,36 @@ public sealed class FellowshipClientTests
 	}
 
 	[Fact]
+	public async Task TheDirectorySaysWhichMembersHaveADevice()
+	{
+		var handler = new StubHandler(HttpStatusCode.OK, """
+			{"members":[{"id":3,"name":"Dave B","hasDevice":true},
+			            {"id":4,"name":"Sue M","hasDevice":false}],
+			 "committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.True(directory.Members[0].HasDevice);
+		Assert.False(directory.Members[1].HasDevice);
+	}
+
+	[Fact]
+	public async Task AFellowshipThatSendsNoDeviceFlagLeavesEveryMemberSelectable()
+	{
+		// An older Fellowship sends no hasDevice at all. Reading that as
+		// "no device" would lock every member out of compose at once, so
+		// absent means selectable, which is how the app behaved before.
+		var handler = new StubHandler(HttpStatusCode.OK, """
+			{"members":[{"id":3,"name":"Dave B"}],"committees":[]}
+			""");
+
+		var directory = await Client(handler).FetchDirectoryAsync("fdt_x");
+
+		Assert.True(directory.Members[0].HasDevice);
+	}
+
+	[Fact]
 	public async Task AnOlderFellowshipThatSendsNoneOfThemStillParses()
 	{
 		// The fields were added after handsets were already in use, so a

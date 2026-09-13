@@ -56,6 +56,22 @@ public sealed record DirectoryMember
 	public string Position { get; init; } = string.Empty;
 
 	/// <summary>
+	/// Whether any live handset is enrolled to this member, so a message
+	/// written to them individually will actually be delivered to a phone.
+	///
+	/// <para>Compose shows a member without one and does not let them be
+	/// chosen. Committees are unaffected: a committee message reaches every
+	/// member of it whether or not this is true for each.</para>
+	///
+	/// <para><b>True by default, on purpose.</b> A Fellowship older than the
+	/// flag does not send it, and reading its absence as "no device" would
+	/// make every member in the address book unselectable at once. Absent
+	/// means "not known to be unreachable", which is how the app behaved
+	/// before the flag existed.</para>
+	/// </summary>
+	public bool HasDevice { get; init; } = true;
+
+	/// <summary>
 	/// The second line of a row, or empty when there is nothing to put in
 	/// it.
 	///

@@ -152,12 +152,30 @@
 								address or a telephone number, so there is nothing to
 								reveal and no button to press.
 							-->
+							<!--
+								A member with no registered device stays in the
+								list, faded and saying why, and cannot be picked:
+								the code-behind ignores the tap and the view model
+								refuses it. Left in rather than filtered out, so
+								somebody looking for a particular person learns they
+								are not on Link instead of concluding they are not
+								a member.
+							-->
 							<VerticalStackLayout Padding="12,10" Spacing="2">
+								<VerticalStackLayout.Triggers>
+									<DataTrigger TargetType="VerticalStackLayout" Binding="{Binding HasDevice}" Value="False">
+										<Setter Property="Opacity" Value="0.45" />
+									</DataTrigger>
+								</VerticalStackLayout.Triggers>
 								<Label Text="{Binding Name}" FontSize="16" />
 								<Label Text="{Binding Detail}"
 								       IsVisible="{Binding HasDetail}"
 								       FontSize="12"
 								       Opacity="0.6" />
+								<Label Text="No device registered, so they can't be sent to"
+								       IsVisible="{Binding HasNoDevice}"
+								       FontSize="12"
+								       FontAttributes="Italic" />
 							</VerticalStackLayout>
 						</DataTemplate>
 					</CollectionView.ItemTemplate>

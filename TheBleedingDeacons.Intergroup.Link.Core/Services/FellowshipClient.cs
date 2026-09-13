@@ -333,6 +333,11 @@ public sealed class FellowshipClient : IFellowshipClient
 						HomeGroup = Text(element, "group"),
 						IsGsr = Flag(element, "gsr"),
 						Position = Text(element, "position"),
+						// Absent means selectable, not unreachable: a
+						// Fellowship older than the flag sends nothing, and
+						// reading that as false would lock out every member
+						// at once. See DirectoryMember.HasDevice.
+						HasDevice = !element.TryGetProperty("hasDevice", out _) || Flag(element, "hasDevice"),
 					});
 				}
 			}
