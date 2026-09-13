@@ -20,6 +20,13 @@
 		ToolbarItem on a page with no navigation bar renders nowhere at
 		all - worth reading before anybody puts one back.
 	-->
+	<!--
+		An outer single-cell Grid, holding the page and, over it, the ⋮
+		dropdown. See the note beside MoreMenu at the bottom on why the
+		menu cannot simply sit inside the rows below.
+	-->
+	<Grid>
+
 	<Grid RowDefinitions="Auto,Auto,Auto,*">
 
 		<!--
@@ -28,7 +35,8 @@
 			shared style's 14,10 padding is for a button that owns its
 			row; these sit beside a title.
 		-->
-		<Grid Grid.Row="0"
+		<Grid x:Name="Header"
+		      Grid.Row="0"
 		      ColumnDefinitions="*,Auto,Auto"
 		      Padding="12,14"
 		      ColumnSpacing="6">
@@ -44,11 +52,38 @@
 			        Padding="8,6"
 			        Clicked="OnComposeClicked" />
 
-			<Button Grid.Column="2"
-			        Text="Settings"
-			        FontSize="12"
-			        Padding="8,6"
-			        Clicked="OnSettingsClicked" />
+			<!--
+				The overflow menu. One item today, Settings. Anything that is
+				somewhere to go, rather than something to do, belongs in here
+				and not as another button beside New.
+
+				A dropdown drawn by this page (MoreMenu, at the bottom), not
+				anything the platform supplies:
+				- An action sheet was tried first. It opens as a dialog in
+				  the middle of the screen, not dropping from the button.
+				- A secondary ToolbarItem would get Android's own overflow,
+				  but the navigation bar is hidden on this page, and a
+				  toolbar item with no bar renders nowhere. See the comment
+				  at the top of this page.
+				- ContextFlyout is not implemented on Android or iOS.
+
+				The TextColor is set explicitly on purpose. A transparent
+				Button keeps the implicit style's TextColor, which is white:
+				the colour for text on a filled button. The compose chips
+				hit exactly that, a control that responds to a tap and draws
+				nothing.
+			-->
+			<Button x:Name="MoreButton"
+			        Grid.Column="2"
+			        Text="&#x22EE;"
+			        FontSize="24"
+			        FontAttributes="Bold"
+			        Padding="0"
+			        WidthRequest="44"
+			        BackgroundColor="Transparent"
+			        TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}"
+			        SemanticProperties.Description="More options"
+			        Clicked="OnMoreClicked" />
 		</Grid>
 
 		<!--
@@ -218,6 +253,67 @@
 			</CollectionView>
 
 		</RefreshView>
+
+	</Grid>
+
+		<!--
+			The ⋮ dropdown, and the layer that closes it.
+
+			Siblings of the page's Grid, not children spanning its rows.
+			They were children spanning the rows at first, and opening the
+			menu pushed the whole page down a few pixels: a child spanning
+			Auto rows counts towards their height, and the menu's top margin
+			plus its own height made the Auto rows taller.
+
+			Both come last so they draw on top. The page's code-behind
+			opens and closes them together (ShowMenu) and places the menu
+			under the button when it opens.
+
+			The scrim is a BoxView with BackgroundColor made Transparent
+			as well as Color, on purpose. The implicit BoxView style paints
+			BackgroundColor near-black - the same thing that gave the
+			message strips their dark corners - and left alone it would
+			black out the whole page behind the menu.
+		-->
+		<BoxView x:Name="MenuScrim"
+		         IsVisible="False"
+		         Color="Transparent"
+		         BackgroundColor="Transparent">
+			<BoxView.GestureRecognizers>
+				<TapGestureRecognizer Tapped="OnMenuScrimTapped" />
+			</BoxView.GestureRecognizers>
+		</BoxView>
+
+		<!--
+			Shadow set explicitly. The implicit Shadow style is the
+			template's white glow offset 10,10, which reads as a smudge
+			rather than as a menu lifted off the page.
+		-->
+		<Border x:Name="MoreMenu"
+		        IsVisible="False"
+		        HorizontalOptions="End"
+		        VerticalOptions="Start"
+		        MinimumWidthRequest="180"
+		        Padding="0,6"
+		        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
+		        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+		        StrokeThickness="1">
+			<Border.StrokeShape>
+				<RoundRectangle CornerRadius="8" />
+			</Border.StrokeShape>
+			<Border.Shadow>
+				<Shadow Brush="Black" Opacity="0.2" Radius="12" Offset="0,4" />
+			</Border.Shadow>
+
+			<VerticalStackLayout>
+				<Grid Padding="16,12" SemanticProperties.Description="Settings">
+					<Grid.GestureRecognizers>
+						<TapGestureRecognizer Tapped="OnSettingsTapped" />
+					</Grid.GestureRecognizers>
+					<Label Text="Settings" FontSize="16" VerticalOptions="Center" />
+				</Grid>
+			</VerticalStackLayout>
+		</Border>
 
 	</Grid>
 

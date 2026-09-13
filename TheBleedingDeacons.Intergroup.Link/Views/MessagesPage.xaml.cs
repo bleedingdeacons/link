@@ -30,9 +30,54 @@ public partial class MessagesPage : ContentPage
 		await _viewModel.RefreshAsync();
 	}
 
+	/// <summary>
+	/// Back closes an open menu first. Without this the back gesture would
+	/// leave the app with the menu still drawn, and it would still be open
+	/// when the member came back.
+	/// </summary>
+	protected override bool OnBackButtonPressed()
+	{
+		if (MoreMenu.IsVisible)
+		{
+			ShowMenu(false);
+			return true;
+		}
+
+		return base.OnBackButtonPressed();
+	}
+
 	private static async void OnComposeClicked(object? sender, EventArgs e) =>
 		await Shell.Current.GoToAsync("compose");
 
-	private static async void OnSettingsClicked(object? sender, EventArgs e) =>
+	private void OnMoreClicked(object? sender, EventArgs e) =>
+		ShowMenu(!MoreMenu.IsVisible);
+
+	private void OnMenuScrimTapped(object? sender, TappedEventArgs e) =>
+		ShowMenu(false);
+
+	private async void OnSettingsTapped(object? sender, TappedEventArgs e)
+	{
+		ShowMenu(false);
+
 		await Shell.Current.GoToAsync("settings");
+	}
+
+	/// <summary>
+	/// Open or close the ⋮ dropdown.
+	///
+	/// <para>The top margin is worked out when the menu opens, from where the
+	/// button actually is. A fixed number in XAML would be right on one
+	/// handset and wrong on the next: the header's height moves with the
+	/// member's font scale.</para>
+	/// </summary>
+	private void ShowMenu(bool show)
+	{
+		if (show)
+		{
+			MoreMenu.Margin = new Thickness(0, Header.Y + MoreButton.Y + MoreButton.Height, 8, 0);
+		}
+
+		MenuScrim.IsVisible = show;
+		MoreMenu.IsVisible = show;
+	}
 }
