@@ -130,10 +130,22 @@
 					little screen left, and every row of list pushes the
 					fields beneath it further under the keyboard; typing a
 					few letters narrows it faster than scrolling does.
+
+					A fixed height on iOS, and only a ceiling elsewhere. Inside
+					a VerticalStackLayout a CollectionView is measured against
+					unbounded height. Android sizes it to its rows, so a cap is
+					enough and one match leaves no blank space under it. iOS
+					sizes it to nothing: with only MaximumHeightRequest set, the
+					dropdown opened as an empty strip of border and padding,
+					with no rows and not even the EmptyView, because both are
+					drawn inside the list. It worked on iOS before only because
+					the old always-visible list had HeightRequest="240".
+					Default=-1 is "unset", which leaves Android as it was.
 				-->
 				<CollectionView ItemsSource="{Binding Candidates}"
 				                SelectionMode="Single"
 				                SelectionChanged="OnCandidateSelected"
+				                HeightRequest="{OnPlatform Default=-1, iOS=190}"
 				                MaximumHeightRequest="190">
 					<CollectionView.EmptyView>
 						<Label Padding="12,10"
