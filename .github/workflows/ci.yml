@@ -471,7 +471,13 @@ jobs:
           # The branch commit for a pull request, not the synthetic merge
           # commit, so the tag points at something that stays in history.
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          REF_LABEL: ${{ github.event.pull_request.number && format('pull request #{0}', github.event.pull_request.number) || github.ref_name }}
+          # Quoted, and no '#' inside. Unquoted, YAML read ' #{0}' as the
+          # start of a comment, cut the expression off before its closing
+          # braces, and GitHub rejected the whole workflow: every job on
+          # main and on pull requests stopped running, with nothing but
+          # "a workflow file issue" to say why. A YAML parser accepts the
+          # truncated line without complaint, which is how it merged.
+          REF_LABEL: "${{ github.event.pull_request.number && format('pull request {0}', github.event.pull_request.number) || github.ref_name }}"
         run: |
           set -euo pipefail
           tag=ios-test
