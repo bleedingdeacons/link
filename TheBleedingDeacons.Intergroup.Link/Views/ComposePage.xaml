@@ -22,36 +22,25 @@
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
 			<!--
-				Subject first, before the recipients.
+				Recipients first, at the top of the page.
 
-				It is the one field somebody arrives already knowing. Choosing
-				who a message is for is the slow part: a search, a scroll,
-				several taps, and putting it above the subject meant the
-				thought that brought the member here had to survive all of it.
-				On a reply it is filled in before the screen opens, which makes
-				the old order stranger still: the first thing on the page was
-				work, and the thing already done sat below the fold.
+				This reverses an earlier choice. The subject went first on
+				2026-09-11, because picking recipients was a search, a scroll
+				and several taps from a list that was always on screen, and
+				the subject was the one field somebody arrived knowing. The
+				list is a dropdown now, closed until the search box is used,
+				so choosing who a message is for is short again, and the page
+				reads in the order a message is addressed: to, subject, body.
 			-->
-			<Label Text="Subject" FontAttributes="Bold" />
-			<Entry Placeholder="The line they read first" Text="{Binding Subject}" MaxLength="200" />
-
 			<Label Text="Send to" FontAttributes="Bold" />
 
 			<!--
-				One list, not two behind a radio.
-
-				The radio existed because Fellowship refused a message
-				addressed to a committee and to named people at once, so the
-				screen had to make the sender choose a scope before it could
-				show them anything. That rule went on 2026-09-11: a message now
-				carries any number of members and committees together, the
-				server resolves the union, and somebody in both gets one copy.
-				With the rule gone the question "which list is showing?" is one
-				nobody should have to answer.
-
-				Chosen recipients are chips above the list. Each carries its own
-				×, because the alternative to removing one is starting the
+				Chosen recipients are chips above the search. Each carries its
+				own ×, because the alternative to removing one is starting the
 				message again.
+
+				Any number of members and committees together: Fellowship
+				resolves the union, and somebody in both gets one copy.
 			-->
 			<FlexLayout BindableLayout.ItemsSource="{Binding Chosen}"
 			            IsVisible="{Binding HasChosen}"
@@ -100,58 +89,80 @@
 				</BindableLayout.ItemTemplate>
 			</FlexLayout>
 
-			<Label IsVisible="{Binding HasChosenNothing}"
-			       FontSize="13"
-			       Opacity="0.6"
-			       Text="Nobody chosen yet. Tap a name or a committee below." />
-
 			<!--
+				The searchable dropdown: a search box, and under it the list it
+				filters, shown only while the box is in use. The code-behind
+				opens it when the box takes focus or has text, and closes it
+				when focus moves to another field (see ShowCandidates).
+
+				It opens in the page's flow rather than floating over it, so
+				while it is open it pushes Subject down instead of covering
+				it. A floating list inside a ScrollView has to be positioned
+				against a moving scroll offset, and nothing here is worth that.
+
 				Filters the list already in hand rather than asking Fellowship
 				again. Hand searches server-side because its member list is
 				paged; Link is handed the whole address book in one response,
 				so a round trip per keystroke would buy nothing and cost a
 				request.
 			-->
-			<SearchBar
-				Text="{Binding Search}"
-				Placeholder="Search names and committees" />
+			<SearchBar x:Name="RecipientSearch"
+			           Text="{Binding Search}"
+			           Placeholder="Add a name or committee"
+			           Focused="OnSearchFocused"
+			           Unfocused="OnSearchUnfocused"
+			           TextChanged="OnSearchTextChanged" />
 
-			<CollectionView
-				x:Name="CandidateList"
-				ItemsSource="{Binding Candidates}"
-				SelectionMode="Single"
-				SelectionChanged="OnCandidateSelected"
-				HeightRequest="240">
-				<CollectionView.EmptyView>
-					<Label FontSize="13"
-					       Opacity="0.6"
-					       Text="No one left to show. Pull the message list down to reconnect." />
-				</CollectionView.EmptyView>
-				<CollectionView.ItemTemplate>
-					<DataTemplate x:DataType="models:Recipient">
-						<!--
-							Hand's two-line row, and Hand's reason for it: a rota
-							has more than one Dave, and what tells them apart is
-							the home group. Where Hand puts a "Show number" button
-							and the numbers it fetches, this puts the member's
-							standing and nothing else: Link is never told an email
-							address or a telephone number, so there is nothing to
-							reveal and no button to press.
-						-->
-						<VerticalStackLayout Padding="12,10" Spacing="2">
-							<Label Text="{Binding Name}" FontSize="16" />
-							<Label Text="{Binding Detail}"
-							       IsVisible="{Binding HasDetail}"
-							       FontSize="12"
-							       Opacity="0.6" />
-						</VerticalStackLayout>
-					</DataTemplate>
-				</CollectionView.ItemTemplate>
-			</CollectionView>
+			<Border x:Name="CandidateDropdown"
+			        IsVisible="False"
+			        Margin="0,-8,0,0"
+			        Padding="0,4"
+			        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
+			        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+			        StrokeThickness="1">
+				<Border.StrokeShape>
+					<RoundRectangle CornerRadius="8" />
+				</Border.StrokeShape>
+
+				<CollectionView ItemsSource="{Binding Candidates}"
+				                SelectionMode="Single"
+				                SelectionChanged="OnCandidateSelected"
+				                MaximumHeightRequest="260">
+					<CollectionView.EmptyView>
+						<Label Padding="12,10"
+						       FontSize="13"
+						       Opacity="0.6"
+						       Text="Nobody matches. If nobody shows at all, pull the message list down to reconnect." />
+					</CollectionView.EmptyView>
+					<CollectionView.ItemTemplate>
+						<DataTemplate x:DataType="models:Recipient">
+							<!--
+								Hand's two-line row, and Hand's reason for it: a rota
+								has more than one Dave, and what tells them apart is
+								the home group. Where Hand puts a "Show number" button
+								and the numbers it fetches, this puts the member's
+								standing and nothing else: Link is never told an email
+								address or a telephone number, so there is nothing to
+								reveal and no button to press.
+							-->
+							<VerticalStackLayout Padding="12,10" Spacing="2">
+								<Label Text="{Binding Name}" FontSize="16" />
+								<Label Text="{Binding Detail}"
+								       IsVisible="{Binding HasDetail}"
+								       FontSize="12"
+								       Opacity="0.6" />
+							</VerticalStackLayout>
+						</DataTemplate>
+					</CollectionView.ItemTemplate>
+				</CollectionView>
+			</Border>
 
 			<Label FontSize="12"
 			       Opacity="0.6"
 			       Text="A committee includes its sub-committees." />
+
+			<Label Text="Subject" FontAttributes="Bold" />
+			<Entry Placeholder="The line they read first" Text="{Binding Subject}" MaxLength="200" />
 
 			<Label Text="Message" FontAttributes="Bold" />
 			<Editor Placeholder="What you want to say"

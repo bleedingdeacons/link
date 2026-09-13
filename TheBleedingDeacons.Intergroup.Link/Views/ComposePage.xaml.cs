@@ -72,4 +72,34 @@ public partial class ComposePage : ContentPage
 			list.SelectedItem = null;
 		}
 	}
+
+	private void OnSearchFocused(object? sender, FocusEventArgs e) =>
+		ShowCandidates(true);
+
+	private void OnSearchUnfocused(object? sender, FocusEventArgs e) =>
+		ShowCandidates(false);
+
+	/// <summary>
+	/// Typing opens the dropdown even when the box never reported focus.
+	/// It can arrive already focused, and the list should follow the text
+	/// rather than depend on catching that one event.
+	/// </summary>
+	private void OnSearchTextChanged(object? sender, TextChangedEventArgs e)
+	{
+		if (!string.IsNullOrEmpty(e.NewTextValue))
+		{
+			ShowCandidates(true);
+		}
+	}
+
+	/// <summary>
+	/// Open or close the recipient dropdown.
+	///
+	/// <para>It closes on the search box losing focus, which is what happens
+	/// when the member moves on to Subject or Message. Picking a row does not
+	/// take focus from the box, so the dropdown stays open after a choice
+	/// and several recipients can be added in a row.</para>
+	/// </summary>
+	private void ShowCandidates(bool show) =>
+		CandidateDropdown.IsVisible = show;
 }
