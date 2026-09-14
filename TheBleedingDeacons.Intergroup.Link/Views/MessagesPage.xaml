@@ -244,7 +244,7 @@
 									       FontSize="13"
 									       Opacity="0.6"
 									       VerticalOptions="Center"
-									       Text="{Binding Sent, StringFormat='{0:d MMM}'}" />
+									       Text="{Binding SentLocal, StringFormat='{0:d MMM, HH:mm}'}" />
 								</Grid>
 
 								<Label Text="{Binding Sender}"

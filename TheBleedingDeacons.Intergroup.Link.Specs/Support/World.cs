@@ -132,7 +132,7 @@ public sealed class World : IDisposable
 
 	/// <summary>The payload of one message, as Fellowship holds it.</summary>
 	public static Dictionary<string, object> Payload(
-		long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0)
+		long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0, long createdAt = 0)
 	{
 		var payload = Sealing.Payload(id);
 
@@ -144,6 +144,11 @@ public sealed class World : IDisposable
 		if (sender.Length > 0)
 		{
 			payload["sender"] = sender;
+		}
+
+		if (createdAt > 0)
+		{
+			payload["created_at"] = createdAt;
 		}
 
 		payload["reply_to"] = replyTo;
@@ -161,10 +166,10 @@ public sealed class World : IDisposable
 	/// really can become unopenable. The poll is the opposite; see
 	/// <see cref="ServerHolds"/>.</para>
 	/// </summary>
-	public SealedMessage Envelope(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0)
+	public SealedMessage Envelope(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0, long createdAt = 0)
 	{
 		var envelope = Sealing.Seal(
-			id, Payload(id, subject, sender, replyTo, readAt), Fellowship.DevicePublicKey);
+			id, Payload(id, subject, sender, replyTo, readAt, createdAt), Fellowship.DevicePublicKey);
 
 		Built[id] = envelope;
 
@@ -175,8 +180,8 @@ public sealed class World : IDisposable
 	/// Put a message on the server, in the clear, where it will be sealed
 	/// afresh to whatever key the server holds when it is next asked.
 	/// </summary>
-	public void ServerHolds(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0) =>
-		Fellowship.Stored.Add(new ServerMessage(id, Payload(id, subject, sender, replyTo, readAt)));
+	public void ServerHolds(long id, string subject = "", string sender = "", long replyTo = 0, long readAt = 0, long createdAt = 0) =>
+		Fellowship.Stored.Add(new ServerMessage(id, Payload(id, subject, sender, replyTo, readAt, createdAt)));
 
 	/// <summary>
 	/// Hand Fellowship the public half this handset is carrying — what
