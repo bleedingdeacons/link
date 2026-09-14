@@ -301,7 +301,70 @@ public sealed class FellowshipClient : IFellowshipClient
 		{
 			MessageId = Number(json.Value, "id"),
 			Recipients = (int)Number(json.Value, "recipients"),
+			CreatedAt = Number(json.Value, "created_at"),
 		};
+	}
+
+	public async Task<bool> MarkReceivedAsync(
+		string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(messageIds);
+
+		if (messageIds.Count == 0)
+		{
+			return true;
+		}
+
+		var body = new Dictionary<string, object>(StringComparer.Ordinal) { ["ids"] = messageIds };
+
+		using var response = await PostAsync("messages/received", token, body, cancellationToken).ConfigureAwait(false);
+
+		return response is not null && response.IsSuccessStatusCode;
+	}
+
+	public async Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(
+		string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(messageIds);
+
+		if (messageIds.Count == 0)
+		{
+			return [];
+		}
+
+		// Comma-separated, which WordPress accepts for an array argument
+		// and which keeps two hundred ids to one short query string rather
+		// than two hundred ids[]= pairs.
+		var query = "messages/receipts?ids="
+			+ string.Join(',', messageIds.Select(id => id.ToString(CultureInfo.InvariantCulture)));
+
+		var json = await GetAsync(_configuration.Route(query), token, cancellationToken).ConfigureAwait(false);
+		if (json is null)
+		{
+			return null;
+		}
+
+		var receipts = new List<MessageReceipt>();
+
+		if (json.Value.TryGetProperty("receipts", out var array) && array.ValueKind == JsonValueKind.Array)
+		{
+			foreach (var element in array.EnumerateArray())
+			{
+				var id = Number(element, "id");
+				if (id <= 0)
+				{
+					continue;
+				}
+
+				receipts.Add(new MessageReceipt(
+					id,
+					(int)Number(element, "recipients"),
+					(int)Number(element, "received"),
+					(int)Number(element, "read")));
+			}
+		}
+
+		return receipts;
 	}
 
 	public async Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default)

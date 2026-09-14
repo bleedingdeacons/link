@@ -464,6 +464,47 @@ public sealed class FellowshipClientTests
 		Assert.Equal("n0nce", start.Nonce);
 	}
 
+	[Fact]
+	public async Task AcknowledgingNamesTheIdsInTheBody()
+	{
+		var handler = new StubHandler(HttpStatusCode.OK, """{"ok":true}""");
+
+		var accepted = await Client(handler).MarkReceivedAsync("fdt_x", [12, 13]);
+
+		Assert.True(accepted);
+		Assert.EndsWith("/messages/received", handler.LastUri?.AbsolutePath, StringComparison.Ordinal);
+		Assert.Contains("[12,13]", handler.LastBody, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task AnOlderFellowshipRefusingTheAcknowledgementIsNotAccepted()
+	{
+		var handler = new StubHandler(HttpStatusCode.NotFound, """{"code":"rest_no_route"}""");
+
+		Assert.False(await Client(handler).MarkReceivedAsync("fdt_x", [12]));
+	}
+
+	[Fact]
+	public async Task ReceiptsAreAskedForAsOneListAndReadBack()
+	{
+		var handler = new StubHandler(HttpStatusCode.OK, """{"receipts":[{"id":20,"recipients":3,"received":"2","read":1}]}""");
+
+		var receipts = await Client(handler).FetchReceiptsAsync("fdt_x", [20, 21]);
+
+		Assert.Contains("ids=20,21", Uri.UnescapeDataString(handler.LastUri?.Query ?? string.Empty), StringComparison.Ordinal);
+		Assert.Equal([new MessageReceipt(20, 3, 2, 1)], receipts);
+	}
+
+	[Fact]
+	public async Task ReceiptsThatCouldNotBeFetchedAreNullRatherThanEmpty()
+	{
+		// Empty would read as "nothing has moved", which is a different
+		// thing from "could not ask".
+		var receipts = await Client(new ThrowingHandler(new HttpRequestException("no signal"))).FetchReceiptsAsync("fdt_x", [20]);
+
+		Assert.Null(receipts);
+	}
+
 	private static FellowshipClient Client(HttpMessageHandler handler) => new(new HttpClient(handler), Config);
 
 	/// <summary>Answers one canned response and records what it was asked.</summary>

@@ -249,6 +249,113 @@ public sealed class MessageServiceTests
 		Assert.False(client.SendCalled);
 	}
 
+	// ── Receipts ─────────────────────────────────────────────────────────
+
+	[Fact]
+	public async Task ASyncAcknowledgesWhatItOpened()
+	{
+		var sealed_ = Sealing.Seal();
+		var client = new FakeClient { Inbox = Page(sealed_) };
+		var history = new FakeHistory();
+
+		await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Equal([Sealing.ExpectedId], Assert.Single(client.Acknowledgements));
+		Assert.True(history.Held[0].Acknowledged);
+	}
+
+	[Fact]
+	public async Task AnAcknowledgementTheServerRefusedIsTriedAgainNextTime()
+	{
+		// A Fellowship too old to know the route, or one having a bad day.
+		// The message stays unacknowledged, so the next sync says it again.
+		var client = new FakeClient { AcknowledgementAccepted = false };
+		var history = new FakeHistory();
+		history.Held.Add(new LinkMessage { Id = 12 });
+
+		await Service(client, history, "key").SyncAsync();
+		await Service(client, history, "key").SyncAsync();
+
+		Assert.Equal(2, client.Acknowledgements.Count);
+		Assert.False(history.Held[0].Acknowledged);
+	}
+
+	[Fact]
+	public async Task WhatIsAlreadyAcknowledgedIsNotSaidTwice()
+	{
+		var client = new FakeClient();
+		var history = new FakeHistory();
+		history.Held.Add(new LinkMessage { Id = 12, Acknowledged = true });
+
+		await Service(client, history, "key").SyncAsync();
+
+		Assert.Empty(client.Acknowledgements);
+	}
+
+	[Fact]
+	public async Task ASendKeepsACopyWithTheNamesItWentTo()
+	{
+		var client = new FakeClient();
+		var history = new FakeHistory();
+
+		await Service(client, history, "key").SendAsync(new SendRequest { Subject = "Moved", Body = "The 14th.", To = "Jo B" });
+
+		var kept = Assert.Single(history.SentHeld);
+		Assert.Equal("Moved", kept.Subject);
+		Assert.Equal("Jo B", kept.To);
+		Assert.Equal(1, kept.Recipients);
+		Assert.Equal(ReceiptState.Sent, kept.State);
+	}
+
+	[Fact]
+	public async Task ASyncAsksOnlyAboutSentMessagesStillWaiting()
+	{
+		var client = new FakeClient();
+		var history = new FakeHistory();
+		history.SentHeld.Add(new SentMessage { Id = 20, Recipients = 1, Received = 1, Read = 1 });
+		history.SentHeld.Add(new SentMessage { Id = 21, Recipients = 1 });
+
+		await Service(client, history, "key").SyncAsync();
+
+		Assert.Equal([21L], Assert.Single(client.ReceiptsAskedFor));
+	}
+
+	[Fact]
+	public async Task NewCountsAreKeptAndAnnounced()
+	{
+		var client = new FakeClient { Receipts = [new MessageReceipt(21, 2, 2, 1)] };
+		var history = new FakeHistory();
+		history.SentHeld.Add(new SentMessage { Id = 21, Recipients = 2 });
+		var announced = new List<ReceiptsChanged>();
+		var listener = new object();
+		WeakReferenceMessenger.Default.Register<ReceiptsChanged>(listener, (_, changed) => announced.Add(changed));
+
+		try
+		{
+			await Service(client, history, "key").SyncAsync();
+		}
+		finally
+		{
+			WeakReferenceMessenger.Default.Unregister<ReceiptsChanged>(listener);
+		}
+
+		Assert.Equal(ReceiptState.Received, history.SentHeld[0].State);
+		Assert.Equal([21L], Assert.Single(announced).MessageIds);
+	}
+
+	[Fact]
+	public async Task ReceiptsThatCannotBeFetchedDoNotFailTheSync()
+	{
+		var client = new FakeClient { Receipts = null };
+		var history = new FakeHistory();
+		history.SentHeld.Add(new SentMessage { Id = 21, Recipients = 1 });
+
+		var result = await Service(client, history, "key").SyncAsync();
+
+		Assert.True(result.Succeeded);
+		Assert.Equal(ReceiptState.Sent, history.SentHeld[0].State);
+	}
+
 	// ── Constructor guards ───────────────────────────────────────────────
 	//
 	// Four dependencies, all resolved from the container. A missing
@@ -323,6 +430,30 @@ public sealed class MessageServiceTests
 		public Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken = default) =>
 			Task.FromResult(MarkReadSucceeds);
 
+		/// <summary>Every batch of ids acknowledged, in order.</summary>
+		public List<IReadOnlyCollection<long>> Acknowledgements { get; } = [];
+
+		public bool AcknowledgementAccepted { get; set; } = true;
+
+		/// <summary>What a receipts request answers, or null for one that never arrived.</summary>
+		public IReadOnlyList<MessageReceipt>? Receipts { get; set; } = [];
+
+		public List<IReadOnlyCollection<long>> ReceiptsAskedFor { get; } = [];
+
+		public Task<bool> MarkReceivedAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default)
+		{
+			Acknowledgements.Add(messageIds);
+
+			return Task.FromResult(AcknowledgementAccepted);
+		}
+
+		public Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default)
+		{
+			ReceiptsAskedFor.Add(messageIds);
+
+			return Task.FromResult(Receipts);
+		}
+
 		public Task<SendResult> SendAsync(string token, SendRequest request, CancellationToken cancellationToken = default)
 		{
 			SendCalled = true;
@@ -376,6 +507,50 @@ public sealed class MessageServiceTests
 		}
 
 		public Task<long> HighestIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(Highest);
+
+		public List<SentMessage> SentHeld { get; } = [];
+
+		public Task MarkAcknowledgedAsync(IEnumerable<long> messageIds, CancellationToken cancellationToken = default)
+		{
+			foreach (var id in messageIds.ToList())
+			{
+				var index = Held.FindIndex(m => m.Id == id);
+				if (index >= 0)
+				{
+					Held[index] = Held[index] with { Acknowledged = true };
+				}
+			}
+
+			return Task.CompletedTask;
+		}
+
+		public Task<IReadOnlyList<SentMessage>> SentAsync(CancellationToken cancellationToken = default) =>
+			Task.FromResult<IReadOnlyList<SentMessage>>(SentHeld.OrderByDescending(m => m.Id).ToList());
+
+		public Task SaveSentAsync(SentMessage message, CancellationToken cancellationToken = default)
+		{
+			SentHeld.RemoveAll(m => m.Id == message.Id);
+			SentHeld.Add(message);
+
+			return Task.CompletedTask;
+		}
+
+		public Task<IReadOnlyList<long>> ApplyReceiptsAsync(IEnumerable<MessageReceipt> receipts, CancellationToken cancellationToken = default)
+		{
+			var changed = new List<long>();
+
+			foreach (var receipt in receipts)
+			{
+				var index = SentHeld.FindIndex(m => m.Id == receipt.Id);
+				if (index >= 0 && SentHeld[index].With(receipt) != SentHeld[index])
+				{
+					SentHeld[index] = SentHeld[index].With(receipt);
+					changed.Add(receipt.Id);
+				}
+			}
+
+			return Task.FromResult<IReadOnlyList<long>>(changed);
+		}
 
 		public Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default)
 		{

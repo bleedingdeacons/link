@@ -283,6 +283,9 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 				MemberIds = [.. Chosen.Where(r => !r.IsCommittee).Select(r => r.MemberId)],
 				Committees = [.. Chosen.Where(r => r.IsCommittee).Select(r => r.CommitteeSlug)],
 				ReplyToId = ReplyToId,
+				// Kept with the sent copy on this phone, so the Sent list can
+				// say who it went to. Never sent to the server.
+				To = string.Join(", ", Chosen.Select(r => r.Name)),
 			}).ConfigureAwait(true);
 
 			if (!result.Succeeded)

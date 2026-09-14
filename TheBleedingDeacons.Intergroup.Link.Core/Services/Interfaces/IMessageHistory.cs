@@ -61,6 +61,30 @@ public interface IMessageHistory
 	Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Record that Fellowship has accepted this phone's acknowledgement of
+	/// these messages. See <see cref="LinkMessage.Acknowledged"/>.
+	/// </summary>
+	Task MarkAcknowledgedAsync(IEnumerable<long> messageIds, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// What this member has sent from this phone, newest first.
+	///
+	/// <para>In the same store as the inbox, so it is cleared, reset and
+	/// adopted with it — a phone handed on must not carry away what its
+	/// last member wrote any more than what they were sent.</para>
+	/// </summary>
+	Task<IReadOnlyList<SentMessage>> SentAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>Keep a copy of a message this phone has just sent.</summary>
+	Task SaveSentAsync(SentMessage message, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Apply the server's latest counts to the sent messages they are for.
+	/// Answers the ids of those that changed, or nothing.
+	/// </summary>
+	Task<IReadOnlyList<long>> ApplyReceiptsAsync(IEnumerable<MessageReceipt> receipts, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Delete this phone's copies, and remember how far they reached so
 	/// the next poll does not fetch them straight back. The member's
 	/// choice; see the interface remarks.

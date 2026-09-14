@@ -54,6 +54,26 @@ public interface IFellowshipClient
 	Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Tell the server this handset has opened these messages, so their
+	/// senders can be shown they arrived.
+	///
+	/// <para>True when the server accepted it. Ids that were never
+	/// addressed to this member are accepted and ignored, so true says
+	/// nothing about whether any of them were.</para>
+	/// </summary>
+	Task<bool> MarkReceivedAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// How far each of these sent messages has got, or null when the
+	/// server could not be asked.
+	///
+	/// <para>Only messages this member sent come back. An id they did not
+	/// send is simply absent, as is every id on a Fellowship too old to
+	/// know about receipts.</para>
+	/// </summary>
+	Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Send a message. Recipients are member ids or a committee slug,
 	/// never addresses — see <see cref="DirectoryMember"/>.
 	/// </summary>
@@ -330,6 +350,16 @@ public sealed record SendRequest
 
 	/// <summary>The message being replied to, or 0.</summary>
 	public long ReplyToId { get; init; }
+
+	/// <summary>
+	/// Who it is going to, in the names the sender picked — kept beside
+	/// the sent copy on this phone.
+	///
+	/// <para><b>Never sent.</b> The server addresses by id and has the
+	/// names already; <see cref="IFellowshipClient.SendAsync"/> builds its
+	/// body field by field and this is not one of them.</para>
+	/// </summary>
+	public string To { get; init; } = string.Empty;
 }
 
 /// <summary>The outcome of a send.</summary>
@@ -338,6 +368,9 @@ public sealed record SendResult
 	public long MessageId { get; init; }
 
 	public int Recipients { get; init; }
+
+	/// <summary>Unix seconds, as the server recorded the send, or 0 if it did not say.</summary>
+	public long CreatedAt { get; init; }
 
 	public string Error { get; init; } = string.Empty;
 

@@ -46,6 +46,19 @@ public sealed record LinkMessage
 
 	public bool IsRead => ReadAt is > 0;
 
+	/// <summary>
+	/// Whether Fellowship has been told this phone has the message, so its
+	/// sender can be shown it arrived.
+	///
+	/// <para>Never in the payload: it is this handset's own bookkeeping,
+	/// kept in the history beside the message and set by a sync once the
+	/// server has accepted the acknowledgement. Until then every sync
+	/// tries again — a push handler has no session to report with, and
+	/// the message it stored is never fetched a second time, so the sync
+	/// behind it is the only thing that can.</para>
+	/// </summary>
+	public bool Acknowledged { get; init; }
+
 	public DateTimeOffset Sent => DateTimeOffset.FromUnixTimeSeconds(CreatedAt);
 
 	/// <summary>

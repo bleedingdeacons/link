@@ -123,6 +123,31 @@ interval late. `App.OnStart` now calls `DeviceAuthService.RestoreAsync`,
 which sends the current token unconditionally rather than trying to guess
 what the server last stored.
 
+## Receipts: sent, received, read
+
+The message list has an **Inbox / Sent** switch. A sent message carries
+WhatsApp's ticks, because most members already read them without thinking:
+one grey tick is sent, two grey ticks are on every recipient's phone, two
+blue ticks are read by every recipient. For a committee the opened message
+says how many — "Read by 2 of 5" — which the ticks cannot.
+
+**Received means a phone opened it**, not that Fellowship stored it. Every
+sync tells Fellowship which held messages it has not yet acknowledged
+(`POST /messages/received`), whichever route brought them: a push handler has
+no session token, and a pushed message is never polled again. A message that
+will not open is never held, so it is never acknowledged. Reading a message
+counts as receiving it, so a lost acknowledgement does not leave its sender
+on one tick.
+
+**The phone keeps its own copy of what it sent**, at the moment of sending,
+in the same encrypted history file — so it is cleared, reset and adopted with
+the inbox. Fellowship is only asked for counts afterwards
+(`GET /messages/receipts`), and only about messages not yet read by everyone.
+A message sent from another handset does not appear in this one's Sent list.
+
+Both routes need Fellowship 1.10 or later. Against an older one the ticks
+stay at one and the sync carries on regardless.
+
 ## The clearable history
 
 `JsonMessageHistory` keeps one AES-256-GCM encrypted file. One file
