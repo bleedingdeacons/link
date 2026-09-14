@@ -107,10 +107,10 @@ public sealed partial class MessageViewModel : ObservableObject, IQueryAttributa
 		Sender = message.Sender;
 		Body = message.Body;
 
-		// Local time and spelled out. A list can afford "3 Sep" because it
-		// is scanned; the message somebody opened is the one they may want
-		// to quote a time from.
-		Sent = message.Sent.ToLocalTime().ToString("d MMMM yyyy, HH:mm", CultureInfo.CurrentCulture);
+		// Local time and spelled out. The list shows "3 Sep, 09:30" because
+		// it is scanned; the message somebody opened is the one they may
+		// want to quote a date from, year and all.
+		Sent = message.SentLocal.ToString("d MMMM yyyy, HH:mm", CultureInfo.CurrentCulture);
 	}
 
 	/// <summary>

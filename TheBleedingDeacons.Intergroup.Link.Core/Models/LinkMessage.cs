@@ -49,6 +49,17 @@ public sealed record LinkMessage
 	public DateTimeOffset Sent => DateTimeOffset.FromUnixTimeSeconds(CreatedAt);
 
 	/// <summary>
+	/// <see cref="Sent"/> on this phone's clock, which is what a screen
+	/// shows.
+	///
+	/// <para><see cref="Sent"/> is UTC, and the list used to format it
+	/// directly — so in British Summer Time a message sent at half past
+	/// midnight was filed under the day before, and any time shown beside
+	/// it would have been an hour out.</para>
+	/// </summary>
+	public DateTimeOffset SentLocal => Sent.ToLocalTime();
+
+	/// <summary>
 	/// Read a message out of an opened envelope, or null if the envelope
 	/// did not contain one.
 	///
