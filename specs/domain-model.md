@@ -53,6 +53,11 @@ one row rather than two.
   committee slug. Never an address.
 - **Cleared up to** — the mark a clear leaves behind, so what was cleared
   stays cleared.
+- **Acknowledged** — this phone has told Fellowship it has a message, so the
+  sender can be shown it arrived. Retried every sync until accepted.
+- **Receipt** — how far a sent message has got: recipients, how many have it
+  on a phone, how many have read it. A read counts as received. Shown as
+  ticks, which change only when it is true of **every** recipient.
 
 ## What is sealed, and what is not
 

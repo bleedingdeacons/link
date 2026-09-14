@@ -259,6 +259,78 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	}
 
 	[Fact]
+	public async Task ASentMessageSurvivesBeingReopened()
+	{
+		using (var writing = New())
+		{
+			await writing.SaveSentAsync(new SentMessage { Id = 20, Subject = "Moved", To = "Jo B", Recipients = 1 });
+		}
+
+		using var reading = New();
+		var sent = Assert.Single(await reading.SentAsync());
+
+		Assert.Equal("Jo B", sent.To);
+	}
+
+	[Fact]
+	public async Task ReceiptsAreAppliedToTheMessageTheyAreFor()
+	{
+		using var history = New();
+		await history.SaveSentAsync(new SentMessage { Id = 20, Recipients = 3 });
+
+		var changed = await history.ApplyReceiptsAsync([new MessageReceipt(20, 3, 3, 2), new MessageReceipt(99, 1, 1, 1)]);
+
+		Assert.Equal([20L], changed);
+		var sent = Assert.Single(await history.SentAsync());
+		Assert.Equal(ReceiptState.Received, sent.State);
+		Assert.Equal("Read by 2 of 3", sent.Summary);
+	}
+
+	[Fact]
+	public async Task ReceiptsThatSayNothingNewChangeNothing()
+	{
+		using var history = New();
+		await history.SaveSentAsync(new SentMessage { Id = 20, Recipients = 1, Received = 1 });
+
+		Assert.Empty(await history.ApplyReceiptsAsync([new MessageReceipt(20, 1, 1, 0)]));
+	}
+
+	[Fact]
+	public async Task ClearingTakesTheSentCopiesAsWell()
+	{
+		using var history = New();
+		await history.SaveSentAsync(new SentMessage { Id = 20, Recipients = 1 });
+
+		await history.ClearAsync();
+
+		Assert.Empty(await history.SentAsync());
+	}
+
+	[Fact]
+	public async Task AnotherMemberDoesNotInheritWhatWasSent()
+	{
+		using var history = New();
+		await history.AdoptAsync(7);
+		await history.SaveSentAsync(new SentMessage { Id = 20, Recipients = 1 });
+
+		await history.AdoptAsync(9);
+
+		Assert.Empty(await history.SentAsync());
+	}
+
+	[Fact]
+	public async Task AnAcknowledgementSurvivesTheSameMessageArrivingAgain()
+	{
+		using var history = New();
+		await history.SaveAsync([Message(12, "Moved")]);
+		await history.MarkAcknowledgedAsync([12]);
+
+		await history.SaveAsync([Message(12, "Moved")]);
+
+		Assert.True(Assert.Single(await history.AllAsync()).Acknowledged);
+	}
+
+	[Fact]
 	public async Task MessagesWithoutAnIdAreNotKept()
 	{
 		// An id is what marks read, replies and de-duplicates. A message

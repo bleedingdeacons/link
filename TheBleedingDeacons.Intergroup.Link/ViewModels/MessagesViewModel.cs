@@ -69,9 +69,30 @@ public sealed partial class MessagesViewModel : ObservableObject
 				// exists to fix.
 				Offline = false;
 			}));
+
+		// A sync that learned a sent message moved on. Redrawn from the
+		// history, like an arrival, so the ticks change in front of a
+		// sender who is watching for them.
+		WeakReferenceMessenger.Default.Register<ReceiptsChanged>(this, (_, _) =>
+			_dispatcher.Invoke(() => _ = LoadAsync()));
 	}
 
 	public ObservableCollection<LinkMessage> Messages { get; } = [];
+
+	/// <summary>What this member has sent from this phone, newest first, with its ticks.</summary>
+	public ObservableCollection<SentMessage> Sent { get; } = [];
+
+	/// <summary>
+	/// Which half of the switch is showing. The inbox is the default and
+	/// the app opens on it, because an arrival is why it is usually opened.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(ShowingInbox))]
+	[NotifyPropertyChangedFor(nameof(IsEmpty))]
+	[NotifyPropertyChangedFor(nameof(IsSentEmpty))]
+	private bool _showingSent;
+
+	public bool ShowingInbox => !ShowingSent;
 
 	[ObservableProperty]
 	private bool _busy;
@@ -114,6 +135,31 @@ public sealed partial class MessagesViewModel : ObservableObject
 
 	public bool IsEmpty => Loaded && Messages.Count == 0;
 
+	public bool IsSentEmpty => Loaded && Sent.Count == 0;
+
+	[RelayCommand]
+	private void ShowInbox() => ShowingSent = false;
+
+	[RelayCommand]
+	private void ShowSent() => ShowingSent = true;
+
+	/// <summary>
+	/// Open a sent message: what was written, who to, and how far it has
+	/// got. By id, for the same reason <see cref="OpenAsync"/> is.
+	/// </summary>
+	[RelayCommand]
+	public async Task OpenSentAsync(SentMessage? message)
+	{
+		if (message is null)
+		{
+			return;
+		}
+
+		var route = string.Create(CultureInfo.InvariantCulture, $"message?id={message.Id}&sent=true");
+
+		await Shell.Current.GoToAsync(route).ConfigureAwait(true);
+	}
+
 	public bool SignedOut => SignedOutReason.Length > 0;
 
 	/// <summary>
@@ -142,6 +188,8 @@ public sealed partial class MessagesViewModel : ObservableObject
 			Offline = result.Failure == FellowshipFailure.Network;
 			KeyFault = result.KeyFault;
 
+			// Receipts can move on a sync that brought nothing in; they
+			// announce themselves through ReceiptsChanged, which reloads.
 			if (result.Received > 0)
 			{
 				// The poll's arrival, which is the one that matters on a
@@ -213,7 +261,17 @@ public sealed partial class MessagesViewModel : ObservableObject
 			Messages.Add(message);
 		}
 
+		var sent = await _history.SentAsync().ConfigureAwait(true);
+
+		Sent.Clear();
+
+		foreach (var message in sent)
+		{
+			Sent.Add(message);
+		}
+
 		Loaded = true;
 		OnPropertyChanged(nameof(IsEmpty));
+		OnPropertyChanged(nameof(IsSentEmpty));
 	}
 }

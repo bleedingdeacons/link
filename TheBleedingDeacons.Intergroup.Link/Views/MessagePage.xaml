@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagePage"
              x:DataType="vm:MessageViewModel"
              Title="Message">
@@ -47,8 +48,21 @@
 					with it.
 				-->
 				<VerticalStackLayout Spacing="2">
-					<Label Text="{Binding Sender}" FontSize="15" />
+					<Label Text="{Binding Sender}" FontSize="15" IsVisible="{Binding IsReceivedMessage}" />
+					<Label Text="{Binding To}" FontSize="15" IsVisible="{Binding IsSentMessage}" />
 					<Label Text="{Binding Sent}" FontSize="13" Opacity="0.6" />
+
+					<!--
+						On a sent message, the ticks and the same thing in
+						words — with the count, which is the part the ticks
+						cannot show for a committee: "Read by 2 of 5".
+					-->
+					<HorizontalStackLayout Spacing="8"
+					                       Margin="0,4,0,0"
+					                       IsVisible="{Binding IsSentMessage}">
+						<views:ReceiptTicks State="{Binding Receipt}" VerticalOptions="Center" />
+						<Label Text="{Binding ReceiptSummary}" FontSize="13" Opacity="0.75" VerticalOptions="Center" />
+					</HorizontalStackLayout>
 				</VerticalStackLayout>
 
 				<!-- Hand's divider: the implicit BoxView colour, faint. -->

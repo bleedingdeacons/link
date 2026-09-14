@@ -98,14 +98,26 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				// The one thing not to lose is a local read that has not
 				// reached the server yet, which is why a locally-read
 				// message keeps its flag when the incoming copy is unread.
-				if (kept.TryGetValue(message.Id, out var existing) && existing.IsRead && !message.IsRead)
+				var merged = message;
+
+				if (kept.TryGetValue(message.Id, out var existing))
 				{
-					kept[message.Id] = message with { ReadAt = existing.ReadAt };
+					if (existing.IsRead && !message.IsRead)
+					{
+						merged = merged with { ReadAt = existing.ReadAt };
+					}
+
+					// An acknowledgement the server has already accepted
+					// is not undone by a second copy arriving, which never
+					// carries the flag: it is this phone's, not the
+					// payload's.
+					if (existing.Acknowledged)
+					{
+						merged = merged with { Acknowledged = true };
+					}
 				}
-				else
-				{
-					kept[message.Id] = message;
-				}
+
+				kept[message.Id] = merged;
 			}
 
 			await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
@@ -146,6 +158,110 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			held.Messages[messageId] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
 
 			await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async Task MarkAcknowledgedAsync(IEnumerable<long> messageIds, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(messageIds);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+			var changed = false;
+
+			foreach (var id in messageIds)
+			{
+				// A message cleared between the acknowledgement going out
+				// and coming back is simply not there to mark.
+				if (held.Messages.TryGetValue(id, out var message) && !message.Acknowledged)
+				{
+					held.Messages[id] = message with { Acknowledged = true };
+					changed = true;
+				}
+			}
+
+			if (changed)
+			{
+				await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
+			}
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async Task<IReadOnlyList<SentMessage>> SentAsync(CancellationToken cancellationToken = default)
+	{
+		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+		return held.Sent.Values.OrderByDescending(m => m.Id).ToList();
+	}
+
+	public async Task SaveSentAsync(SentMessage message, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(message);
+
+		if (message.Id <= 0)
+		{
+			return;
+		}
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			held.Sent[message.Id] = message;
+
+			await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	public async Task<IReadOnlyList<long>> ApplyReceiptsAsync(IEnumerable<MessageReceipt> receipts, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(receipts);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+			var changed = new List<long>();
+
+			foreach (var receipt in receipts)
+			{
+				if (!held.Sent.TryGetValue(receipt.Id, out var sent))
+				{
+					continue;
+				}
+
+				var updated = sent.With(receipt);
+				if (updated != sent)
+				{
+					held.Sent[receipt.Id] = updated;
+					changed.Add(receipt.Id);
+				}
+			}
+
+			if (changed.Count > 0)
+			{
+				await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
+			}
+
+			return changed;
 		}
 		finally
 		{
@@ -355,7 +471,10 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			: new Held(
 				stored.Messages.Where(m => m.Id > 0).ToDictionary(m => m.Id),
 				Math.Max(0, stored.ClearedUpTo),
-				Math.Max(0, stored.MemberId));
+				Math.Max(0, stored.MemberId))
+			{
+				Sent = stored.Sent.Where(m => m.Id > 0).ToDictionary(m => m.Id),
+			};
 	}
 
 	private async Task WriteUnguardedAsync(Held held, CancellationToken cancellationToken)
@@ -365,6 +484,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			ClearedUpTo = held.ClearedUpTo,
 			MemberId = held.MemberId,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
+			Sent = held.Sent.Values.OrderByDescending(m => m.Id).ToList(),
 		};
 
 		var json = JsonSerializer.SerializeToUtf8Bytes(stored, JsonOptions);
@@ -456,6 +576,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	/// </remarks>
 	private sealed record Held(Dictionary<long, LinkMessage> Messages, long ClearedUpTo, long MemberId = 0)
 	{
+		/// <summary>
+		/// What this member has sent. Empty on every Held built without
+		/// saying otherwise, which is what makes a clear, a reset and an
+		/// adoption take the sent copies with the inbox.
+		/// </summary>
+		public Dictionary<long, SentMessage> Sent { get; init; } = [];
+
 		public static Held Nothing() => new([], 0);
 	}
 
@@ -480,5 +607,11 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		public long MemberId { get; set; }
 
 		public List<LinkMessage> Messages { get; set; } = [];
+
+		/// <summary>
+		/// Messages sent from this phone. Absent from every file written
+		/// before receipts, which reads as none sent.
+		/// </summary>
+		public List<SentMessage> Sent { get; set; } = [];
 	}
 }

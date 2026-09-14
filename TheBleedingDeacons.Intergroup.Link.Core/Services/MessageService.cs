@@ -28,6 +28,12 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed class MessageService : IMessageService
 {
+	/// <summary>
+	/// The most ids one acknowledgement or one receipts request names —
+	/// Fellowship's own cap, and the size of its largest poll page.
+	/// </summary>
+	internal const int IdsPerRequest = 200;
+
 	private readonly IFellowshipClient _client;
 	private readonly IMessageHistory _history;
 	private readonly IDeviceKeyStore _keys;
@@ -69,6 +75,8 @@ public sealed class MessageService : IMessageService
 			// rather than left implied, because a screen that only ever
 			// hears about faults can never stop showing one.
 			WeakReferenceMessenger.Default.Send(new KeyFaultChanged(false));
+
+			await ReportReceiptsAsync(session.Token, cancellationToken).ConfigureAwait(false);
 
 			return new SyncResult { Received = 0, Unread = page.Unread };
 		}
@@ -115,6 +123,8 @@ public sealed class MessageService : IMessageService
 		}
 
 		WeakReferenceMessenger.Default.Send(new KeyFaultChanged(unopened > 0));
+
+		await ReportReceiptsAsync(session.Token, cancellationToken).ConfigureAwait(false);
 
 		return new SyncResult
 		{
@@ -193,7 +203,83 @@ public sealed class MessageService : IMessageService
 			return SendResult.Failed("This device is not signed in.");
 		}
 
-		return await _client.SendAsync(session.Token, request, cancellationToken).ConfigureAwait(false);
+		var result = await _client.SendAsync(session.Token, request, cancellationToken).ConfigureAwait(false);
+
+		if (result.Succeeded)
+		{
+			// Kept at the moment of sending, because this is the only
+			// moment the phone has the subject, the body and the names
+			// together. Fellowship will answer counts about it later; it
+			// will not hand the message back.
+			await _history.SaveSentAsync(
+				new SentMessage
+				{
+					Id = result.MessageId,
+					Subject = request.Subject,
+					Body = request.Body,
+					To = request.To,
+					CreatedAt = result.CreatedAt > 0 ? result.CreatedAt : DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+					Recipients = result.Recipients,
+				},
+				cancellationToken).ConfigureAwait(false);
+		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// The receipts half of a sync: say what this phone has, and ask what
+	/// became of what it sent.
+	///
+	/// <para><b>Neither can fail the sync.</b> The inbox is what a sync is
+	/// for, and it has already succeeded by the time this runs. A
+	/// Fellowship too old to know about receipts answers both with a
+	/// refusal, and a handset that reported "offline" over that would be
+	/// wrong about the thing the member can see.</para>
+	///
+	/// <para><b>Acknowledged from here, for both routes.</b> A push handler
+	/// has no session token, and a message it stored is never polled
+	/// again — the poll is strictly exclusive — so if the sync did not
+	/// report it nothing would. Anything held and not yet accepted is sent
+	/// again on every pass until it is. A message that would not open was
+	/// never held, so it is never acknowledged: a receipt for a message
+	/// nobody can read would tell its sender it got there, about the one
+	/// phone where it did not.</para>
+	/// </summary>
+	private async Task ReportReceiptsAsync(string token, CancellationToken cancellationToken)
+	{
+		var held = await _history.AllAsync(cancellationToken).ConfigureAwait(false);
+		var unacknowledged = held.Where(m => !m.Acknowledged).Select(m => m.Id).Take(IdsPerRequest).ToList();
+
+		if (unacknowledged.Count > 0
+			&& await _client.MarkReceivedAsync(token, unacknowledged, cancellationToken).ConfigureAwait(false))
+		{
+			await _history.MarkAcknowledgedAsync(unacknowledged, cancellationToken).ConfigureAwait(false);
+		}
+
+		// Newest first, and only those still waiting on somebody. A message
+		// everybody has read will not change again, so asking about it
+		// would be a query per sync for nothing.
+		var sent = await _history.SentAsync(cancellationToken).ConfigureAwait(false);
+		var waiting = sent.Where(m => !m.Settled).Select(m => m.Id).Take(IdsPerRequest).ToList();
+
+		if (waiting.Count == 0)
+		{
+			return;
+		}
+
+		var receipts = await _client.FetchReceiptsAsync(token, waiting, cancellationToken).ConfigureAwait(false);
+
+		if (receipts is not { Count: > 0 })
+		{
+			return;
+		}
+
+		var changed = await _history.ApplyReceiptsAsync(receipts, cancellationToken).ConfigureAwait(false);
+		if (changed.Count > 0)
+		{
+			WeakReferenceMessenger.Default.Send(new ReceiptsChanged(changed));
+		}
 	}
 
 	/// <summary>

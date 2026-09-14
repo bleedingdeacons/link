@@ -55,6 +55,28 @@ public sealed partial class MessageViewModel : ObservableObject, IQueryAttributa
 	[ObservableProperty]
 	private string _body = string.Empty;
 
+	/// <summary>True when this is a message the member sent, rather than one they received.</summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(IsReceivedMessage))]
+	private bool _isSentMessage;
+
+	public bool IsReceivedMessage => !IsSentMessage;
+
+	/// <summary>"To Jo B", on a sent message.</summary>
+	[ObservableProperty]
+	private string _to = string.Empty;
+
+	/// <summary>The ticks, on a sent message.</summary>
+	[ObservableProperty]
+	private ReceiptState _receipt;
+
+	/// <summary>
+	/// The ticks in words, with the count the ticks cannot show: "Read by
+	/// 2 of 5".
+	/// </summary>
+	[ObservableProperty]
+	private string _receiptSummary = string.Empty;
+
 	/// <summary>
 	/// Set when the message could not be found — the history was cleared,
 	/// or it aged out — so the screen can say so instead of showing an
@@ -88,11 +110,21 @@ public sealed partial class MessageViewModel : ObservableObject, IQueryAttributa
 		{
 			_id = id;
 		}
+
+		IsSentMessage = query.TryGetValue("sent", out var sent)
+			&& bool.TryParse(sent?.ToString(), out var isSent)
+			&& isSent;
 	}
 
 	[RelayCommand]
 	public async Task LoadAsync()
 	{
+		if (IsSentMessage)
+		{
+			await LoadSentAsync().ConfigureAwait(true);
+			return;
+		}
+
 		var held = await _history.AllAsync().ConfigureAwait(true);
 		var message = held.FirstOrDefault(m => m.Id == _id);
 
@@ -111,6 +143,28 @@ public sealed partial class MessageViewModel : ObservableObject, IQueryAttributa
 		// it is scanned; the message somebody opened is the one they may
 		// want to quote a date from, year and all.
 		Sent = message.SentLocal.ToString("d MMMM yyyy, HH:mm", CultureInfo.CurrentCulture);
+	}
+
+	/// <summary>
+	/// A message this member sent, from the copy kept when they sent it.
+	/// </summary>
+	private async Task LoadSentAsync()
+	{
+		var sent = (await _history.SentAsync().ConfigureAwait(true)).FirstOrDefault(m => m.Id == _id);
+
+		if (sent is null)
+		{
+			Missing = true;
+			return;
+		}
+
+		Missing = false;
+		Subject = string.IsNullOrWhiteSpace(sent.Subject) ? "(no subject)" : sent.Subject;
+		To = sent.To.Length > 0 ? "To " + sent.To : string.Empty;
+		Body = sent.Body;
+		Receipt = sent.State;
+		ReceiptSummary = sent.Summary;
+		Sent = sent.SentLocal.ToString("d MMMM yyyy, HH:mm", CultureInfo.CurrentCulture);
 	}
 
 	/// <summary>

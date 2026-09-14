@@ -76,6 +76,39 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 
 	public bool MarkReadAccepted { get; set; } = true;
 
+	/// <summary>
+	/// Every message id this handset has acknowledged, whether or not the
+	/// server accepted it.
+	/// </summary>
+	public List<long> Acknowledged { get; } = [];
+
+	/// <summary>
+	/// Whether an acknowledgement is accepted. False is a Fellowship too
+	/// old to have the route.
+	/// </summary>
+	public bool AcknowledgementAccepted { get; set; } = true;
+
+	/// <summary>
+	/// Whether the receipts route exists. False answers every request the
+	/// way an older Fellowship does — as a refusal.
+	/// </summary>
+	public bool ReceiptsAvailable { get; set; } = true;
+
+	/// <summary>Every sent-message id asked about, once per time it was asked.</summary>
+	public List<long> AskedForReceipts { get; } = [];
+
+	/// <summary>
+	/// What became of each message this member sent, per recipient by
+	/// name, as the server's recipient rows record it.
+	///
+	/// <para>Per recipient rather than a count, because the counts are the
+	/// server's arithmetic and that arithmetic is the thing being modelled:
+	/// a read counts as received even when the acknowledgement never
+	/// arrived, which a scenario can only show if the two are kept
+	/// apart.</para>
+	/// </summary>
+	public Dictionary<long, Dictionary<string, RecipientRow>> Recipients { get; } = [];
+
 	/// <summary>Every <c>sinceId</c> the handset has polled with, in order.</summary>
 	public List<long> PolledSince { get; } = [];
 
@@ -142,6 +175,39 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 		MarkedRead.Add(messageId);
 
 		return Task.FromResult(MarkReadAccepted);
+	}
+
+	public Task<bool> MarkReceivedAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken)
+	{
+		Acknowledged.AddRange(messageIds);
+
+		return Task.FromResult(AcknowledgementAccepted);
+	}
+
+	/// <summary>
+	/// Counts for the ids asked about that this member sent. Anything else
+	/// is left out, as Fellowship leaves it out.
+	/// </summary>
+	public Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(
+		string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken)
+	{
+		AskedForReceipts.AddRange(messageIds);
+
+		if (!ReceiptsAvailable)
+		{
+			return Task.FromResult<IReadOnlyList<MessageReceipt>?>(null);
+		}
+
+		var receipts = messageIds
+			.Where(Recipients.ContainsKey)
+			.Select(id => new MessageReceipt(
+				id,
+				Recipients[id].Count,
+				Recipients[id].Values.Count(row => row.Received || row.Read),
+				Recipients[id].Values.Count(row => row.Read)))
+			.ToList();
+
+		return Task.FromResult<IReadOnlyList<MessageReceipt>?>(receipts);
 	}
 
 	public Task<SendResult> SendAsync(string token, SendRequest request, CancellationToken cancellationToken)
@@ -248,6 +314,9 @@ public sealed class FakeDeviceKeyStore : IDeviceKeyStore
 /// clear.
 /// </summary>
 public sealed record ServerMessage(long Id, Dictionary<string, object> Payload);
+
+/// <summary>One recipient's row for a sent message: whether their phone said it had it, and whether they read it.</summary>
+public sealed record RecipientRow(bool Received, bool Read);
 
 /// <summary>The device token, held in memory rather than in a keychain.</summary>
 public sealed class FakeSessionStore : ISessionStore
