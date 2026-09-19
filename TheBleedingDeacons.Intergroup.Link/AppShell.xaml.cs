@@ -15,11 +15,12 @@ public partial class AppShell : Shell
 		// nobody in particular") that the send route refuses anyway.
 		Routing.RegisterRoute("compose", typeof(ComposePage));
 
-		// Reading one message. Pushed for the same reason Compose is:
-		// it is always entered from the list, and both platforms already
-		// know how to undo a push - the iOS back chevron and edge swipe,
-		// the Android back gesture - so nothing here draws a close button.
-		Routing.RegisterRoute("message", typeof(MessagePage));
+		// Reading one conversation, every message in it in full. Pushed
+		// for the same reason Compose is: it is always entered from the
+		// list, and both platforms already know how to undo a push - the
+		// iOS back chevron and edge swipe, the Android back gesture - so
+		// nothing here draws a close button.
+		Routing.RegisterRoute("conversation", typeof(ConversationPage));
 
 		// Settings is pushed from the message list's header, as Hand's is
 		// from its duty screen. It was a tab; a tab is somewhere the app

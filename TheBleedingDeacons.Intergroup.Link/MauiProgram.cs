@@ -145,18 +145,24 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton<SignInViewModel>();
 		builder.Services.AddSingleton<MessagesViewModel>();
-		// Transient, unlike the others: one instance per message opened.
-		// A singleton would keep the previous message's text on screen for
-		// the instant before the next one loads, which reads as the wrong
-		// message having opened.
-		builder.Services.AddTransient<MessageViewModel>();
-		builder.Services.AddSingleton<ComposeViewModel>();
+		// Transient, unlike the others: one instance per conversation
+		// opened. A singleton would keep the previous conversation on
+		// screen for the instant before the next one loads, which reads as
+		// the wrong one having opened.
+		builder.Services.AddTransient<ConversationViewModel>();
+		// Transient as well, and it was a singleton until conversations.
+		// A singleton kept the last draft's reply pointer, so a new message
+		// written after a reply went out answering it — harmless while the
+		// list was flat, and filed under the wrong conversation once it was
+		// not. A forward has to answer nothing, and a fresh Compose is the
+		// only way to be sure it does.
+		builder.Services.AddTransient<ComposeViewModel>();
 		builder.Services.AddSingleton<SettingsViewModel>();
 
 		builder.Services.AddSingleton<SignInPage>();
 		builder.Services.AddSingleton<MessagesPage>();
 		// Transient for the same reason its view model is.
-		builder.Services.AddTransient<MessagePage>();
+		builder.Services.AddTransient<ConversationPage>();
 		builder.Services.AddTransient<ComposePage>();
 		// Transient now that it is pushed rather than a tab, like Compose:
 		// a page instance can sit in the navigation stack only once, and a

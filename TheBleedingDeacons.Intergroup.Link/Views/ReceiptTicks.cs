@@ -10,7 +10,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Views;
 ///
 /// <para><b>The convention most members already read without
 /// thinking</b>, which is the whole reason for choosing it over words: a
-/// Sent list is scanned, and a shape is recognised before a word is
+/// message list is scanned, and a shape is recognised before a word is
 /// read.</para>
 ///
 /// <para><b>Drawn as Paths, not as a font glyph.</b> Link ships no icon

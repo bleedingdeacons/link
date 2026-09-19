@@ -73,11 +73,11 @@ Feature: Knowing a message got there, and that it was read
 
     The phone keeps its own copy of what it sent, at the moment it sends
     it, and asks Fellowship only for counts afterwards. So a message sent
-    from another handset does not appear in this one's Sent list.
+    from another handset does not appear among this one's conversations.
 
     Scenario: A message sent from this phone is kept, with who it went to
       When this member sends message 20 to Jo B
-      Then message 20 is in the Sent list, to "Jo B"
+      Then message 20 is kept on this phone, to "Jo B"
       And message 20 shows as sent
 
     Scenario: A message no phone has opened yet shows as sent and nothing more
@@ -204,7 +204,7 @@ Feature: Knowing a message got there, and that it was read
 
     Given two handsets signed in as different members
     When the first sends a message to the second from Compose
-    Then the first's Sent list shows it with one grey tick
+    Then the first's conversation list shows it with one grey tick
     When the second syncs
     And the first pulls down to refresh
     Then the first's row shows two grey ticks

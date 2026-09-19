@@ -103,8 +103,8 @@ public sealed class ReceiptSteps(World world)
 		world.Fellowship.ReceiptsAvailable = true;
 	}
 
-	[Then(@"^message (\d+) is in the Sent list, to ""(.+)""$")]
-	public async Task InSentList(long id, string to) =>
+	[Then(@"^message (\d+) is kept on this phone, to ""(.+)""$")]
+	public async Task KeptWithRecipients(long id, string to) =>
 		(await SentAsync(id)).To.ShouldBe(to);
 
 	/// <summary>

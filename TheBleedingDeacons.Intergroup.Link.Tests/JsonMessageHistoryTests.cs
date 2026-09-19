@@ -273,6 +273,30 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	}
 
 	[Fact]
+	public async Task ASentReplyRemembersWhatItAnsweredAcrossAReopen()
+	{
+		using (var writing = New())
+		{
+			await writing.SaveSentAsync(new SentMessage { Id = 21, ReplyToId = 12, Recipients = 1 });
+		}
+
+		using var reading = New();
+
+		Assert.Equal(12, Assert.Single(await reading.SentAsync()).ReplyToId);
+	}
+
+	[Fact]
+	public async Task ReceiptsKeepWhatASentReplyAnswered()
+	{
+		using var history = New();
+		await history.SaveSentAsync(new SentMessage { Id = 21, ReplyToId = 12, Recipients = 1 });
+
+		await history.ApplyReceiptsAsync([new MessageReceipt(21, 1, 1, 1)]);
+
+		Assert.Equal(12, Assert.Single(await history.SentAsync()).ReplyToId);
+	}
+
+	[Fact]
 	public async Task ReceiptsAreAppliedToTheMessageTheyAreFor()
 	{
 		using var history = New();

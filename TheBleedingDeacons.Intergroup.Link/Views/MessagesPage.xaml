@@ -28,7 +28,7 @@
 	-->
 	<Grid>
 
-	<Grid RowDefinitions="Auto,Auto,Auto,Auto,*">
+	<Grid RowDefinitions="Auto,Auto,Auto,*">
 
 		<!--
 			Hand's status-line proportions: 18 bold, and the buttons as
@@ -88,87 +88,6 @@
 		</Grid>
 
 		<!--
-			Inbox or Sent. Two halves of one rounded control rather than two
-			buttons: it is a choice between two views of the same list, and
-			a pair of filled blue buttons would read as two things to do.
-
-			Labels with a tap rather than Buttons, because the implicit
-			Button style fills every button blue, and here only the half
-			that is showing should be.
-		-->
-		<Border Grid.Row="1"
-		        Margin="12,0,12,8"
-		        Padding="3"
-		        StrokeThickness="0"
-		        BackgroundColor="{AppThemeBinding Light={StaticResource Gray100}, Dark={StaticResource Gray900}}">
-			<Border.StrokeShape>
-				<RoundRectangle CornerRadius="10" />
-			</Border.StrokeShape>
-
-			<Grid ColumnDefinitions="*,*" ColumnSpacing="3">
-
-				<Border Grid.Column="0"
-				        StrokeThickness="0"
-				        Padding="0,8"
-				        BackgroundColor="Transparent"
-				        SemanticProperties.Description="Inbox">
-					<Border.StrokeShape>
-						<RoundRectangle CornerRadius="8" />
-					</Border.StrokeShape>
-					<Border.GestureRecognizers>
-						<TapGestureRecognizer Command="{Binding ShowInboxCommand}" />
-					</Border.GestureRecognizers>
-					<Border.Triggers>
-						<DataTrigger TargetType="Border" Binding="{Binding ShowingInbox}" Value="True">
-							<Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
-						</DataTrigger>
-					</Border.Triggers>
-					<Label Text="Inbox"
-					       FontSize="15"
-					       HorizontalOptions="Center"
-					       TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}">
-						<Label.Triggers>
-							<DataTrigger TargetType="Label" Binding="{Binding ShowingInbox}" Value="True">
-								<Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
-								<Setter Property="FontAttributes" Value="Bold" />
-							</DataTrigger>
-						</Label.Triggers>
-					</Label>
-				</Border>
-
-				<Border Grid.Column="1"
-				        StrokeThickness="0"
-				        Padding="0,8"
-				        BackgroundColor="Transparent"
-				        SemanticProperties.Description="Sent">
-					<Border.StrokeShape>
-						<RoundRectangle CornerRadius="8" />
-					</Border.StrokeShape>
-					<Border.GestureRecognizers>
-						<TapGestureRecognizer Command="{Binding ShowSentCommand}" />
-					</Border.GestureRecognizers>
-					<Border.Triggers>
-						<DataTrigger TargetType="Border" Binding="{Binding ShowingSent}" Value="True">
-							<Setter Property="BackgroundColor" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
-						</DataTrigger>
-					</Border.Triggers>
-					<Label Text="Sent"
-					       FontSize="15"
-					       HorizontalOptions="Center"
-					       TextColor="{AppThemeBinding Light={StaticResource Black}, Dark={StaticResource White}}">
-						<Label.Triggers>
-							<DataTrigger TargetType="Label" Binding="{Binding ShowingSent}" Value="True">
-								<Setter Property="TextColor" Value="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource PrimaryDarkText}}" />
-								<Setter Property="FontAttributes" Value="Bold" />
-							</DataTrigger>
-						</Label.Triggers>
-					</Label>
-				</Border>
-
-			</Grid>
-		</Border>
-
-		<!--
 			The member is looking at a list that is missing something, and
 			without being told they would conclude the message was never
 			sent. The recovery is on Settings.
@@ -177,7 +96,7 @@
 			same kind of thing: the one item on the screen that wants
 			something doing.
 		-->
-		<Border Grid.Row="2"
+		<Border Grid.Row="1"
 		        Margin="12,0,12,6"
 		        IsVisible="{Binding KeyFault}"
 		        BackgroundColor="{StaticResource Warning}"
@@ -197,7 +116,7 @@
 			thing: something the member has to act on, and the messages
 			behind it are the last they will receive until they do.
 		-->
-		<Border Grid.Row="2"
+		<Border Grid.Row="1"
 		        Margin="12,0,12,6"
 		        IsVisible="{Binding SignedOut}"
 		        BackgroundColor="{StaticResource Warning}"
@@ -211,30 +130,22 @@
 			       Text="{Binding SignedOutReason}" />
 		</Border>
 
-		<Label Grid.Row="3"
+		<Label Grid.Row="2"
 		       IsVisible="{Binding Offline}"
 		       FontSize="13"
 		       Opacity="0.6"
 		       Padding="12,0,12,8"
 		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
 
-		<RefreshView Grid.Row="4"
+		<RefreshView Grid.Row="3"
 		             IsRefreshing="{Binding Busy}"
 		             Command="{Binding RefreshCommand}">
 
-			<!--
-				A RefreshView holds one child, so both lists sit in a Grid
-				and only the one showing is visible. Pulling down syncs
-				either way: a sync is what moves the ticks on.
-			-->
-			<Grid>
-
-			<CollectionView ItemsSource="{Binding Messages}"
-			                IsVisible="{Binding ShowingInbox}"
+			<CollectionView ItemsSource="{Binding Conversations}"
 			                SelectionMode="None">
 
 				<!--
-					Room under the last message for the floating compose
+					Room under the last row for the floating compose
 					button, so it can always be scrolled clear rather than
 					sitting on top of the oldest row for good. BoxView with a
 					transparent BackgroundColor as well as Color: the implicit
@@ -266,27 +177,34 @@
 				</CollectionView.EmptyView>
 
 				<CollectionView.ItemTemplate>
-					<DataTemplate x:DataType="models:LinkMessage">
+					<DataTemplate x:DataType="models:Conversation">
 						<!--
-							Hand's history row rather than a bordered card: a
-							strip down the side and the text beside it, so a
-							list reads as a shape before it reads as words.
+							One row per conversation, in Hand's history-row
+							shape: a strip down the side and the text beside it,
+							so a list reads as a shape before it reads as words.
 
-							In Hand the strip is the alert's level. Link's
-							messages have no level, so it carries unread
-							instead - blue until opened, grey after. That is
-							in addition to the weight below, not instead of
-							it: weight survives sunlight and a member who
+							The strip carries unread - blue while anything in
+							the conversation is unopened, grey after - and the
+							subject is bold for the same reason. Weight as well
+							as colour: weight survives sunlight and a member who
 							cannot tell the two colours apart.
+
+							The subject is the first message's, which is what
+							the conversation is about. The time is the newest
+							message's, which is what put it at the top. The
+							ticks are the newest message's too, and only when
+							this member sent it: they answer "has my last word
+							landed?", and under somebody else's answer they
+							would answer nothing.
 						-->
 						<Grid Margin="12,5" ColumnDefinitions="6,*">
 
 							<!--
 								The command lives on the page's view model, not on the
-								message, so this binding's x:DataType has to override the
-								DataTemplate's. Without it the compiler resolves
-								OpenCommand against LinkMessage, does not find it, and
-								raises XC0045 - which is now an error.
+								conversation, so this binding's x:DataType has to
+								override the DataTemplate's. Without it the compiler
+								resolves OpenCommand against Conversation, does not
+								find it, and raises XC0045 - which is an error.
 
 								The whole row is the target, as it is in Hand: a
 								subject line is not what somebody should have to hit.
@@ -302,15 +220,14 @@
 								implicit BoxView style paints BackgroundColor near-black,
 								and CornerRadius rounds only Color, which is drawn on top.
 								Left unset, the square background showed through at each
-								rounded end as a dark cap. It was visible on a handset and
-								nowhere in the XAML.
+								rounded end as a dark cap.
 							-->
 							<BoxView Grid.Column="0"
 							         CornerRadius="3"
 							         BackgroundColor="Transparent"
 							         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
 								<BoxView.Triggers>
-									<DataTrigger TargetType="BoxView" Binding="{Binding IsRead}" Value="False">
+									<DataTrigger TargetType="BoxView" Binding="{Binding HasUnread}" Value="True">
 										<Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
 									</DataTrigger>
 								</BoxView.Triggers>
@@ -320,11 +237,11 @@
 
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
-									       Text="{Binding Subject}"
+									       Text="{Binding Root.Subject}"
 									       FontSize="17"
 									       LineBreakMode="TailTruncation">
 										<Label.Triggers>
-											<DataTrigger TargetType="Label" Binding="{Binding IsRead}" Value="False">
+											<DataTrigger TargetType="Label" Binding="{Binding HasUnread}" Value="True">
 												<Setter Property="FontAttributes" Value="Bold" />
 											</DataTrigger>
 										</Label.Triggers>
@@ -334,14 +251,23 @@
 									       FontSize="13"
 									       Opacity="0.6"
 									       VerticalOptions="Center"
-									       Text="{Binding SentLocal, StringFormat='{0:d MMM, HH:mm}'}" />
+									       Text="{Binding LatestLocal, StringFormat='{0:d MMM, HH:mm}'}" />
 								</Grid>
 
-								<Label Text="{Binding Sender}"
-								       FontSize="13"
-								       Opacity="0.6" />
+								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+									<Label Grid.Column="0"
+									       Text="{Binding Summary}"
+									       FontSize="13"
+									       Opacity="0.6"
+									       LineBreakMode="TailTruncation" />
 
-								<Label Text="{Binding Body}"
+									<views:ReceiptTicks Grid.Column="1"
+									                    State="{Binding Latest.Receipt}"
+									                    IsVisible="{Binding Latest.IsSent}" />
+								</Grid>
+
+								<!-- The newest message's words: what is new in it. -->
+								<Label Text="{Binding Latest.Body}"
 								       FontSize="15"
 								       MaxLines="3"
 								       LineBreakMode="TailTruncation" />
@@ -352,87 +278,6 @@
 				</CollectionView.ItemTemplate>
 
 			</CollectionView>
-
-			<CollectionView ItemsSource="{Binding Sent}"
-			                IsVisible="{Binding ShowingSent}"
-			                SelectionMode="None">
-
-				<CollectionView.Footer>
-					<BoxView HeightRequest="88" Color="Transparent" BackgroundColor="Transparent" />
-				</CollectionView.Footer>
-
-				<CollectionView.EmptyView>
-					<VerticalStackLayout VerticalOptions="Center"
-					                     HorizontalOptions="Center"
-					                     Spacing="10"
-					                     Padding="32">
-						<Label Text="Nothing sent"
-						       FontSize="32"
-						       HorizontalOptions="Center"
-						       Opacity="0.55" />
-						<Label Text="Messages you send from this phone appear here, with ticks for when they arrive and are read."
-						       FontSize="14"
-						       HorizontalTextAlignment="Center"
-						       Opacity="0.55" />
-					</VerticalStackLayout>
-				</CollectionView.EmptyView>
-
-				<CollectionView.ItemTemplate>
-					<DataTemplate x:DataType="models:SentMessage">
-						<!--
-							The inbox row's shape, with the strip left empty:
-							nothing sent is ever unread, and keeping the column
-							lines the two lists up when switching between them.
-							The ticks sit where the inbox row has nothing,
-							under the time, so a column of them can be read
-							straight down the right-hand edge.
-						-->
-						<Grid Margin="12,5" ColumnDefinitions="6,*">
-
-							<Grid.GestureRecognizers>
-								<TapGestureRecognizer
-									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenSentCommand, x:DataType=vm:MessagesViewModel}"
-									CommandParameter="{Binding .}" />
-							</Grid.GestureRecognizers>
-
-							<VerticalStackLayout Grid.Column="1" Padding="12,10" Spacing="4">
-
-								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-									<Label Grid.Column="0"
-									       Text="{Binding Subject}"
-									       FontSize="17"
-									       LineBreakMode="TailTruncation" />
-
-									<Label Grid.Column="1"
-									       FontSize="13"
-									       Opacity="0.6"
-									       VerticalOptions="Center"
-									       Text="{Binding SentLocal, StringFormat='{0:d MMM, HH:mm}'}" />
-								</Grid>
-
-								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-									<Label Grid.Column="0"
-									       Text="{Binding To, StringFormat='To {0}'}"
-									       FontSize="13"
-									       Opacity="0.6"
-									       LineBreakMode="TailTruncation" />
-
-									<views:ReceiptTicks Grid.Column="1" State="{Binding State}" />
-								</Grid>
-
-								<Label Text="{Binding Body}"
-								       FontSize="15"
-								       MaxLines="3"
-								       LineBreakMode="TailTruncation" />
-
-							</VerticalStackLayout>
-						</Grid>
-					</DataTemplate>
-				</CollectionView.ItemTemplate>
-
-			</CollectionView>
-
-			</Grid>
 
 		</RefreshView>
 
