@@ -9,7 +9,13 @@ using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 
 /// <summary>
-/// The message list.
+/// The message list: one row per conversation.
+///
+/// <para><b>One list, not two.</b> It was an Inbox and a Sent list behind
+/// a switch, which put an answer and the message it answered on different
+/// screens. What was received and what was sent now sit together, grouped
+/// by what they answer — see <see cref="Models.Conversations"/> and
+/// Conversations.feature.</para>
 ///
 /// <para><b>It shows the local history, not the server's answer.</b> The
 /// list is filled from <see cref="IMessageHistory"/> every time, and a
@@ -77,22 +83,8 @@ public sealed partial class MessagesViewModel : ObservableObject
 			_dispatcher.Invoke(() => _ = LoadAsync()));
 	}
 
-	public ObservableCollection<LinkMessage> Messages { get; } = [];
-
-	/// <summary>What this member has sent from this phone, newest first, with its ticks.</summary>
-	public ObservableCollection<SentMessage> Sent { get; } = [];
-
-	/// <summary>
-	/// Which half of the switch is showing. The inbox is the default and
-	/// the app opens on it, because an arrival is why it is usually opened.
-	/// </summary>
-	[ObservableProperty]
-	[NotifyPropertyChangedFor(nameof(ShowingInbox))]
-	[NotifyPropertyChangedFor(nameof(IsEmpty))]
-	[NotifyPropertyChangedFor(nameof(IsSentEmpty))]
-	private bool _showingSent;
-
-	public bool ShowingInbox => !ShowingSent;
+	/// <summary>Every conversation, the one with the newest message first.</summary>
+	public ObservableCollection<Conversation> Conversations { get; } = [];
 
 	[ObservableProperty]
 	private bool _busy;
@@ -133,32 +125,7 @@ public sealed partial class MessagesViewModel : ObservableObject
 	[NotifyPropertyChangedFor(nameof(SignedOut))]
 	private string _signedOutReason = string.Empty;
 
-	public bool IsEmpty => Loaded && Messages.Count == 0;
-
-	public bool IsSentEmpty => Loaded && Sent.Count == 0;
-
-	[RelayCommand]
-	private void ShowInbox() => ShowingSent = false;
-
-	[RelayCommand]
-	private void ShowSent() => ShowingSent = true;
-
-	/// <summary>
-	/// Open a sent message: what was written, who to, and how far it has
-	/// got. By id, for the same reason <see cref="OpenAsync"/> is.
-	/// </summary>
-	[RelayCommand]
-	public async Task OpenSentAsync(SentMessage? message)
-	{
-		if (message is null)
-		{
-			return;
-		}
-
-		var route = string.Create(CultureInfo.InvariantCulture, $"message?id={message.Id}&sent=true");
-
-		await Shell.Current.GoToAsync(route).ConfigureAwait(true);
-	}
+	public bool IsEmpty => Loaded && Conversations.Count == 0;
 
 	public bool SignedOut => SignedOutReason.Length > 0;
 
@@ -207,71 +174,40 @@ public sealed partial class MessagesViewModel : ObservableObject
 	}
 
 	/// <summary>
-	/// Open a message: mark it read, then show it.
+	/// Open a conversation, which marks what is unread in it as read.
 	///
-	/// <para>Reading is the point, and until there was a screen for it
-	/// this did only the marking — so a body longer than the three lines
-	/// the row shows could not be read at all. See
-	/// <see cref="MessageViewModel"/>.</para>
-	///
-	/// <para>The list is not reloaded after marking: the record is
-	/// replaced in place so the row stops being bold without the view
-	/// jumping back to the top, which is what a full reload would do to
-	/// somebody halfway down.</para>
+	/// <para>By id rather than by handing the record over: the page is
+	/// recreated if Android reclaims the process, and an id survives that
+	/// where an object does not. The newest message's id rather than the
+	/// root's, so a conversation whose root changes while it is open — an
+	/// original arriving after its answer — is still found.</para>
 	/// </summary>
 	[RelayCommand]
-	public async Task OpenAsync(LinkMessage? message)
+	public async Task OpenAsync(Conversation? conversation)
 	{
-		if (message is null)
+		if (conversation is null)
 		{
 			return;
 		}
 
-		// Only when it is new. The navigation below happens either way —
-		// an already-read message is still one somebody wants to open, and
-		// an early return here is what used to make the second tap on a
-		// message do nothing at all.
-		if (!message.IsRead)
-		{
-			await _messages.MarkReadAsync(message.Id).ConfigureAwait(true);
-
-			var index = Messages.IndexOf(message);
-			if (index >= 0)
-			{
-				Messages[index] = message with { ReadAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() };
-			}
-		}
-
-		// By id rather than by handing the record over: the page is
-		// recreated if Android reclaims the process, and an id survives
-		// that where an object does not.
-		var route = string.Create(CultureInfo.InvariantCulture, $"message?id={message.Id}");
+		var route = string.Create(CultureInfo.InvariantCulture, $"conversation?id={conversation.Latest.Id}");
 
 		await Shell.Current.GoToAsync(route).ConfigureAwait(true);
 	}
 
 	internal async Task LoadAsync()
 	{
-		var held = await _history.AllAsync().ConfigureAwait(true);
-
-		Messages.Clear();
-
-		foreach (var message in held)
-		{
-			Messages.Add(message);
-		}
-
+		var received = await _history.AllAsync().ConfigureAwait(true);
 		var sent = await _history.SentAsync().ConfigureAwait(true);
 
-		Sent.Clear();
+		Conversations.Clear();
 
-		foreach (var message in sent)
+		foreach (var conversation in Models.Conversations.Build(received, sent))
 		{
-			Sent.Add(message);
+			Conversations.Add(conversation);
 		}
 
 		Loaded = true;
 		OnPropertyChanged(nameof(IsEmpty));
-		OnPropertyChanged(nameof(IsSentEmpty));
 	}
 }

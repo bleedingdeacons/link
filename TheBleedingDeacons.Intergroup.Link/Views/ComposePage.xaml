@@ -22,6 +22,15 @@
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
 			<!--
+				A forward starts a conversation of its own, so this says what
+				is being passed on and nothing about answering it.
+			-->
+			<Label IsVisible="{Binding IsForward}"
+			       FontSize="13"
+			       Opacity="0.6"
+			       Text="{Binding ForwardingSubject, StringFormat='Forwarding: {0}'}" />
+
+			<!--
 				Recipients first, at the top of the page.
 
 				This reverses an earlier choice. The subject went first on

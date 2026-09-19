@@ -135,6 +135,10 @@ public sealed class ComposeSteps(World world)
 	public void Answered(long replyTo) =>
 		world.Fellowship.Sent.ShouldHaveSingleItem().ReplyToId.ShouldBe(replyTo);
 
+	[Then(@"^the copy kept on this phone answers message (\d+)$")]
+	public async Task KeptAnswering(long replyTo) =>
+		(await world.History.SentAsync()).ShouldHaveSingleItem().ReplyToId.ShouldBe(replyTo);
+
 	[Then(@"^the send answered nothing$")]
 	public void AnsweredNothing() =>
 		world.Fellowship.Sent.ShouldHaveSingleItem().ReplyToId.ShouldBe(0);

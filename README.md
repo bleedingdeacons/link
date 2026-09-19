@@ -123,9 +123,29 @@ interval late. `App.OnStart` now calls `DeviceAuthService.RestoreAsync`,
 which sends the current token unconditionally rather than trying to guess
 what the server last stored.
 
+## Conversations
+
+The message list is one list of **conversations**, not an Inbox and a
+Sent list. A conversation is a message that answers nothing, plus
+every later message that answers it, whether received or sent. Replies to
+replies sit one level deep under the first message, oldest first. The
+conversation with the newest activity is at the top, and opening one
+shows every message in full, in the message view's own style.
+
+It is derived from `reply_to` and from nothing else, and never
+stored. A **forward** is sent answering nothing on purpose, so it starts
+a new conversation. A reply whose original is not on this phone (it was
+cleared, swept, or sent from another handset) stands alone until the
+original turns up. The message view says **"You replied"** when this
+phone has answered it.
+
+Sent replies have kept their `reply_to` on the phone only since this
+landed. Anything sent before then was stored without it, so it shows as
+its own conversation. `Conversations.feature` is the specification.
+
 ## Receipts: sent, received, read
 
-The message list has an **Inbox / Sent** switch. A sent message carries
+A sent message carries
 WhatsApp's ticks, because most members already read them without thinking:
 one grey tick is sent, two grey ticks are on every recipient's phone, two
 blue ticks are read by every recipient. For a committee the opened message
@@ -143,7 +163,7 @@ on one tick.
 in the same encrypted history file — so it is cleared, reset and adopted with
 the inbox. Fellowship is only asked for counts afterwards
 (`GET /messages/receipts`), and only about messages not yet read by everyone.
-A message sent from another handset does not appear in this one's Sent list.
+A message sent from another handset does not appear among this one's conversations.
 
 Both routes need Fellowship 1.10 or later. Against an older one the ticks
 stay at one and the sync carries on regardless.
@@ -350,11 +370,6 @@ exactly the padding Fellowship uses, so the wire format would not change.
 touching. It was not done in the same pass that built the rest because it
 needs Java interop and a real device to test on, and a documented
 compromise beats an undocumented one.
-
-**Threaded conversations.** A reply points at what it answers
-(`reply_to`) and the list is flat. A thread model can be derived from
-that pointer later; a thread id invented now would have to be guessed for
-every existing message.
 
 **Attachments.** None, and none designed. FCM's 4KB data limit means a
 photo cannot travel in the envelope at all, so it would need a

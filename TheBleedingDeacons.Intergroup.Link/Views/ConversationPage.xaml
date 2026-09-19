@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.ConversationPage"
+             x:DataType="vm:ConversationViewModel"
+             Title="Conversation">
+
+	<!--
+		Deliberately a pushed page rather than a modal or an expanding row.
+
+		Pushed is what both platforms already know how to undo: iOS gives
+		it a back chevron and the edge swipe, Android the system back
+		gesture and the app bar arrow. Nothing here has to draw a close
+		button, and nobody has to be taught how to leave.
+
+		Title is a fixed word and not the subject. A subject is
+		member-typed and can be 200 characters; a nav bar that truncates
+		mid-word tells you less than a fixed word does, and the subject is
+		the first thing on the page anyway.
+	-->
+
+	<Grid>
+
+		<!--
+			Said plainly rather than left as an empty screen. The history
+			is clearable from Settings and the server ages messages out,
+			so arriving here to find nothing is a thing that happens
+			rather than a bug.
+		-->
+		<Label IsVisible="{Binding Missing}"
+		       Padding="20"
+		       FontSize="14"
+		       Opacity="0.7"
+		       Text="This conversation is no longer on this phone. It may have been cleared from history, or removed by the intergroup after its retention period." />
+
+		<CollectionView ItemsSource="{Binding Items}"
+		                IsVisible="{Binding Found}"
+		                SelectionMode="None">
+
+			<CollectionView.Footer>
+				<BoxView HeightRequest="24" Color="Transparent" BackgroundColor="Transparent" />
+			</CollectionView.Footer>
+
+			<CollectionView.ItemTemplate>
+				<DataTemplate x:DataType="vm:ConversationItem">
+					<!--
+						One message, drawn as the message view drew one:
+						subject, who, when, a divider, the whole body. The
+						root carries the subject at full size and heads the
+						screen; a reply carries its own smaller, because
+						"Re: Re: Literature order" repeated at 24pt down a
+						page is mostly noise.
+					-->
+					<VerticalStackLayout Padding="20,16,20,4" Spacing="14">
+
+						<Label Text="{Binding Subject}"
+						       FontSize="24"
+						       FontAttributes="Bold"
+						       IsVisible="{Binding IsRoot}" />
+
+						<Label Text="{Binding Subject}"
+						       FontSize="17"
+						       FontAttributes="Bold"
+						       IsVisible="{Binding IsReply}" />
+
+						<!--
+							Who and when, quiet. Who it is from matters; what
+							matters more is the body, so this does not compete
+							with it.
+						-->
+						<VerticalStackLayout Spacing="2">
+							<Label Text="{Binding Entry.Counterpart}" FontSize="15" />
+							<Label Text="{Binding Sent}" FontSize="13" Opacity="0.6" />
+
+							<!--
+								On a sent message, the ticks and the same thing in
+								words — with the count, which is the part the ticks
+								cannot show for a committee: "Read by 2 of 5".
+							-->
+							<HorizontalStackLayout Spacing="8"
+							                       Margin="0,4,0,0"
+							                       IsVisible="{Binding Entry.IsSent}">
+								<views:ReceiptTicks State="{Binding Entry.Receipt}" VerticalOptions="Center" />
+								<Label Text="{Binding Entry.ReceiptSummary}" FontSize="13" Opacity="0.75" VerticalOptions="Center" />
+							</HorizontalStackLayout>
+
+							<!--
+								Said here as well as shown below it, because the
+								answer may be several messages further down, and
+								"have I already written back?" is the question
+								somebody opening an old message is usually asking.
+							-->
+							<Label Text="{Binding Replied}"
+							       IsVisible="{Binding HasReplied}"
+							       FontSize="13"
+							       Opacity="0.75"
+							       Margin="0,4,0,0" />
+						</VerticalStackLayout>
+
+						<!-- Hand's divider: the implicit BoxView colour, faint. -->
+						<BoxView HeightRequest="1" Opacity="0.15" />
+
+						<!--
+							No MaxLines and no truncation: this screen exists
+							precisely because the list has both.
+
+							Not selectable, and not by choice - MAUI's Label has
+							no selection property at all, so a member cannot copy
+							a number out of a message. Worth revisiting with an
+							Editor made read-only, which can be selected but
+							looks like a field somebody is meant to type in.
+						-->
+						<Label Text="{Binding Entry.Body}"
+						       FontSize="16"
+						       LineHeight="1.35" />
+
+						<!--
+							Handled in the code-behind, not bound to commands:
+							reaching the page's view model from inside a
+							DataTemplate typed to ConversationItem is XC0045
+							under compiled bindings. See ComposePage.xaml.cs.
+						-->
+						<Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,4,0,0">
+							<Button Grid.Column="0"
+							        Text="Reply"
+							        HeightRequest="44"
+							        Clicked="OnReplyClicked" />
+							<Button Grid.Column="1"
+							        Text="Forward"
+							        HeightRequest="44"
+							        Clicked="OnForwardClicked" />
+						</Grid>
+
+						<!-- Between messages, heavier than the divider inside one. -->
+						<BoxView HeightRequest="6"
+						         Margin="-20,10,-20,0"
+						         Opacity="0.08" />
+
+					</VerticalStackLayout>
+				</DataTemplate>
+			</CollectionView.ItemTemplate>
+
+		</CollectionView>
+
+	</Grid>
+
+</ContentPage>

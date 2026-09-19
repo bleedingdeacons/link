@@ -94,15 +94,22 @@ Feature: Addressing a message to somebody
 
   Rule: A reply points at what it answers
 
-    The list is flat. A thread model can be derived from that pointer
-    later; a thread id invented now would have to be guessed for every
-    existing message.
+    That pointer is the whole of the thread model: conversations are
+    derived from it and from nothing else — see Conversations.feature.
+    So it is kept on this phone as well as sent, or a member's own
+    answers could not be filed under what they answered.
 
     Scenario: A reply carries the message it answers
       Given the address book holds Dave B and Jo B
       When a message is addressed to Dave B
       And it is sent in reply to message 12
       Then the send answered message 12
+
+    Scenario: The copy kept on this phone remembers what it answered
+      Given the address book holds Dave B and Jo B
+      When a message is addressed to Dave B
+      And it is sent in reply to message 12
+      Then the copy kept on this phone answers message 12
 
     Scenario: A message that is not a reply answers nothing
       Given the address book holds Dave B and Jo B

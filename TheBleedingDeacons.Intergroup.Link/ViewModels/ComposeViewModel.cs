@@ -35,12 +35,17 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	private readonly IMessageService _messages;
 	private readonly IFellowshipClient _client;
 	private readonly ISessionStore _sessions;
+	private readonly IMessageHistory _history;
 
-	public ComposeViewModel(IMessageService messages, IFellowshipClient client, ISessionStore sessions)
+	/// <summary>The message being forwarded, until it has been quoted; then 0.</summary>
+	private long _forwardId;
+
+	public ComposeViewModel(IMessageService messages, IFellowshipClient client, ISessionStore sessions, IMessageHistory history)
 	{
 		_messages = messages;
 		_client = client;
 		_sessions = sessions;
+		_history = history;
 	}
 
 	/// <summary>
@@ -104,6 +109,17 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	[ObservableProperty]
 	private string _replyToSubject = string.Empty;
 
+	/// <summary>
+	/// The subject of the message being forwarded, or empty. Only for the
+	/// line at the top of the screen: a forward answers nothing, so there
+	/// is no id to keep.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(IsForward))]
+	private string _forwardingSubject = string.Empty;
+
+	public bool IsForward => ForwardingSubject.Length > 0;
+
 	public bool HasError => !string.IsNullOrEmpty(Error);
 
 	public bool IsReply => ReplyToId > 0;
@@ -121,11 +137,24 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	public bool HasChosenNothing => Chosen.Count == 0;
 
 	/// <summary>
-	/// Fill in the reply target, when Compose was opened from a message.
+	/// Fill in the reply target, or the message being forwarded, when
+	/// Compose was opened from a message.
 	/// </summary>
+	/// <remarks>
+	/// A forward is only noted here and quoted in <see cref="LoadAsync"/>:
+	/// the original has to be read from the history, which this cannot
+	/// wait for, and its body is too long and too private to travel
+	/// through a route.
+	/// </remarks>
 	public void ApplyQueryAttributes(IDictionary<string, object> query)
 	{
 		ArgumentNullException.ThrowIfNull(query);
+
+		if (query.TryGetValue("forward", out var forward)
+			&& long.TryParse(forward?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var forwardId))
+		{
+			_forwardId = forwardId;
+		}
 
 		if (query.TryGetValue("replyTo", out var id) && long.TryParse(id?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
 		{
@@ -147,6 +176,8 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	[RelayCommand]
 	public async Task LoadAsync()
 	{
+		await QuoteForwardAsync().ConfigureAwait(true);
+
 		var session = await _sessions.LoadAsync().ConfigureAwait(true);
 		if (session is null || !session.IsSignedIn)
 		{
@@ -176,6 +207,45 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 		}
 
 		ApplySearch();
+	}
+
+	/// <summary>
+	/// Start a forward from the message it passes on: <c>Fwd:</c> subject,
+	/// the original quoted, nobody chosen, and no reply pointer. See
+	/// <see cref="Forwarding"/>.
+	/// </summary>
+	private async Task QuoteForwardAsync()
+	{
+		if (_forwardId <= 0)
+		{
+			return;
+		}
+
+		var id = _forwardId;
+
+		// Once. LoadAsync runs every time the page appears, and a member
+		// who has started typing does not want the quote put back.
+		_forwardId = 0;
+
+		var received = await _history.AllAsync().ConfigureAwait(true);
+		var sent = await _history.SentAsync().ConfigureAwait(true);
+
+		var original = Conversations.Build(received, sent)
+			.SelectMany(c => c.Messages)
+			.FirstOrDefault(m => m.Id == id);
+
+		if (original is null)
+		{
+			return;
+		}
+
+		var draft = Forwarding.Prefill(original);
+
+		ReplyToId = 0;
+		ReplyToSubject = string.Empty;
+		ForwardingSubject = string.IsNullOrWhiteSpace(original.Subject) ? "(no subject)" : original.Subject;
+		Subject = draft.Subject;
+		Body = draft.Body;
 	}
 
 	/// <summary>
@@ -283,7 +353,7 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 				MemberIds = [.. Chosen.Where(r => !r.IsCommittee).Select(r => r.MemberId)],
 				Committees = [.. Chosen.Where(r => r.IsCommittee).Select(r => r.CommitteeSlug)],
 				ReplyToId = ReplyToId,
-				// Kept with the sent copy on this phone, so the Sent list can
+				// Kept with the sent copy on this phone, so a conversation can
 				// say who it went to. Never sent to the server.
 				To = string.Join(", ", Chosen.Select(r => r.Name)),
 			}).ConfigureAwait(true);

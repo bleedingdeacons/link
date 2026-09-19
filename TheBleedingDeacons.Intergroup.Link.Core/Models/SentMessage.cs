@@ -34,6 +34,17 @@ public sealed record SentMessage
 	/// <summary>Unix seconds, as the server recorded the send.</summary>
 	public long CreatedAt { get; init; }
 
+	/// <summary>
+	/// The message this one answered, or 0.
+	///
+	/// <para>Kept so a reply can be filed under the conversation it
+	/// belongs to — see <see cref="Conversations"/>. Sent messages kept
+	/// before this existed read as 0, and so each stands as a conversation
+	/// of its own: the pointer went to the server and was never written
+	/// down here, and nothing can recover it.</para>
+	/// </summary>
+	public long ReplyToId { get; init; }
+
 	/// <summary>How many members it reached — a committee counts each of them.</summary>
 	public int Recipients { get; init; }
 
@@ -147,7 +158,7 @@ public sealed record MessageReceipt(long Id, int Recipients, int Received, int R
 
 /// <summary>
 /// Sent when a sync learned something new about a sent message's receipts,
-/// so the Sent list can redraw without being asked.
+/// so the message list can redraw without being asked.
 /// </summary>
 /// <param name="MessageIds">The sent messages whose counts moved.</param>
 public sealed record ReceiptsChanged(IReadOnlyList<long> MessageIds);

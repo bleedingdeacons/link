@@ -85,6 +85,45 @@ Feature: What only a phone can answer
       # History.feature settles what reset does; this is the criterion
       # that sign-out is what calls it.
 
+  Rule: Conversations look like the message they open onto
+
+    Conversations.feature settles which messages sit together and in
+    what order. What only a screen can show is that the list is one list,
+    and that opening a conversation reads the way opening a message
+    always has.
+
+    Scenario: There is one list, not two
+      When the message list is shown
+      Then there is no Inbox and Sent switch
+      And what was received and what was sent are in the same list
+
+    Scenario: A row stands for the whole conversation
+      Given a conversation of a sent message and two answers to it
+      When the message list is shown
+      Then its row carries the first message's subject
+      And its second line reads "To Jo B · 2 replies"
+      And its time is the newest answer's
+      And the ticks are drawn only when the newest message is one this member sent
+      And the strip down its side is blue while any message in it is unread
+
+    Scenario: Opening a conversation shows every message in the message view's style
+      Given a conversation of three messages
+      When its row is tapped
+      Then each message is shown in full, oldest first, as the message view shows one
+      And each has its own sender or "To …" line, time, and — if sent — ticks
+      And the unread ones are marked read
+
+    Scenario: Every message in a conversation can be answered or passed on
+      When a conversation is opened
+      Then each message carries Reply and Forward
+      And Reply opens Compose answering that message
+      And Forward opens Compose with nobody chosen and the original quoted
+
+    Scenario: A message that has been answered says so
+      Given a message this member has answered from this phone
+      When it is opened
+      Then under its time it reads "You replied" and when
+
   Rule: Notifications are the platform's to refuse
 
     Scenario: A first run asks for what it needs

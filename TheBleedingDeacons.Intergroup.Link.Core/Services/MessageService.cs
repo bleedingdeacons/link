@@ -218,6 +218,7 @@ public sealed class MessageService : IMessageService
 					Subject = request.Subject,
 					Body = request.Body,
 					To = request.To,
+					ReplyToId = request.ReplyToId,
 					CreatedAt = result.CreatedAt > 0 ? result.CreatedAt : DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
 					Recipients = result.Recipients,
 				},

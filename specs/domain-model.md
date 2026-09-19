@@ -55,6 +55,15 @@ one row rather than two.
   stays cleared.
 - **Acknowledged** — this phone has told Fellowship it has a message, so the
   sender can be shown it arrived. Retried every sync until accepted.
+- **Sent message** — one send, as this phone kept it at the moment of
+  sending: `(id, subject, body, to, created_at, reply_to)` plus its receipt
+  counts. Fellowship never hands a sender their own messages back.
+- **Conversation** — a root and every later message that answers it,
+  received and sent together. Derived, never stored.
+- **Root** — the message a conversation starts from: one that answers
+  nothing, or one whose original is not on this phone.
+- **Forward** — a new message whose body quotes another, sent answering
+  nothing, so it starts a conversation of its own.
 - **Receipt** — how far a sent message has got: recipients, how many have it
   on a phone, how many have read it. A read counts as received. Shown as
   ticks, which change only when it is true of **every** recipient.
@@ -183,6 +192,38 @@ biometrics.
   sync re-delivers everything inside the retention window. Only what the
   sweep has already taken, and pushes sent before the change, are gone.
 
+## Conversations are derived, never stored
+
+The list is one list of conversations. Each is worked out from the
+history every time it is drawn, by following `reply_to`:
+
+```
+received 12 ──────────────────────────────┐  root
+  sent 20      reply_to 12                │
+  received 21  reply_to 20                ├─ one level, oldest first
+  sent 22      reply_to 21                │
+received 30 (a forward of 12, reply_to 0) ┘  a new root
+```
+
+- **Walked up to the first message that answers nothing, or that is not
+  held.** A reply to a reply sits under the root beside its parent, not
+  beneath it. A phone read with a thumb has no room for a tree.
+- **A pointer is only followed downwards.** Fellowship's ids rise with
+  time, so a reply answers a lower id than its own. Refusing any other
+  pointer is what makes the walk finite.
+- **An orphan stands alone, and joins when it can.** The original of a
+  reply may have been cleared, swept by retention, or sent from another
+  handset. The reply is shown as its own conversation, and because
+  nothing is stored, it moves under the original if that ever arrives.
+- **Sent wins a tie.** A member writing to a committee they sit on
+  receives their own message under the same id; the sent copy has the
+  ticks, so it is the one kept.
+- **Ordered by the newest message in each**, not by when it began.
+- **The cost:** sent messages only kept their `reply_to` on the phone from
+  the change that introduced conversations. Anything sent earlier went to
+  the server with its pointer and was stored here without it, so each
+  stands as its own conversation. Nothing can recover them.
+
 ## Locked design decisions
 
 - **Nothing readable crosses Google.** The tray shows the sender's name and
@@ -199,6 +240,12 @@ biometrics.
 - **A cancelled sign-in is not a failure** and shows nothing. A refused one
   carries the server's own words, because "that address does not match a
   member record" is the only thing the member can act on.
+- **Threads are derived from `reply_to` and nothing else.** A thread id
+  invented now would have to be guessed for every message already held,
+  and the guess would be the same walk. See `Conversations.feature`.
+- **A forward answers nothing.** Its recipients were not part of the
+  exchange it came from, and folding their answers into it would show the
+  original correspondents words never addressed to them.
 - **The four states of the push indicator**, in the order they can fail:
   transport, then permission, then registration. Amber is for a phone the
   sync is still carrying; red is kept for the state where a message can
@@ -214,5 +261,6 @@ biometrics.
   the exclusive poll above. Nobody has yet been troubled by it.
 - The arrival sound is a single on/off. A phone that should be quiet in
   meetings and loud otherwise has no way to say so.
-- Threads are derived from `reply_to` or not at all. A thread id invented now
-  would have to be guessed for every existing message.
+- Conversations nest one level deep. A branching exchange (two answers to
+  the same message, each answered in turn) reads as one interleaved
+  sequence. Nobody has yet had a conversation shaped like that.
