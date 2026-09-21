@@ -517,9 +517,12 @@ first time.
 `link-apk` on every run, kept for 30 days.
 
 **`link-ipa-unsigned` on every run too**, built in parallel with the APK.
-Both build jobs run on [Namespace](https://namespace.so) runners, on the
-profiles `namespace-profile-link-linux` and `namespace-profile-link-macos`,
-which are defined in the Namespace dashboard rather than in this repo.
+Both build jobs run on [Namespace](https://namespace.so) runners, with the
+labels `namespace-profile-namespace-profile-link-linux` and
+`namespace-profile-namespace-profile-link-macos`. The profiles are defined
+in the Namespace dashboard rather than in this repo, and the doubled prefix
+is real: Namespace prepends `namespace-profile-` to a profile's name, these
+were named with the full label, and a profile cannot be renamed.
 
 From 2026-09-11 until that move the iOS head was opt-in, behind an `ios`
 PR label or dispatch input: on a GitHub-hosted macOS runner it took around

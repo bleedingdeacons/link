@@ -114,7 +114,14 @@ jobs:
     # slower of the pair is how long a PR waits. The profile is defined in
     # the Namespace dashboard, not here — rename it there and this breaks
     # with a job that never gets a runner.
-    runs-on: namespace-profile-link-linux
+    #
+    # The doubled prefix is not a typo. Namespace prepends
+    # `namespace-profile-` to a profile's name to make its label, and these
+    # profiles were created with the full label as their name, which cannot
+    # be changed afterwards. "Fixing" it to namespace-profile-link-* leaves
+    # both build jobs queued forever with no runner, which is exactly what
+    # the first run on Namespace did.
+    runs-on: namespace-profile-namespace-profile-link-linux
 
     steps:
       - name: Checkout
@@ -250,7 +257,7 @@ jobs:
     # wants 26.6 and refuses anything older. If the image does not carry
     # 26.6, the Select Xcode step below falls back to the newest installed
     # and `xcodebuild -version` in the log says which it got.
-    runs-on: namespace-profile-link-macos
+    runs-on: namespace-profile-namespace-profile-link-macos
 
     steps:
       - name: Checkout
