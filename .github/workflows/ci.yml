@@ -88,25 +88,10 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-    # `labeled` is here for the `ios` label the iOS job reads. Without it
-    # the default types are opened/synchronize/reopened, so labelling a PR
-    # changes nothing until somebody pushes to it — and the run that
-    # already decided to skip the iOS head does not reconsider. Asking for
-    # the head would then mean making a commit to ask, which is the sort of
-    # instruction nobody follows twice.
-    #
-    # The cost is that *any* label change starts a run, not just this one:
-    # GitHub cannot filter `types` by label name, and the filtering has to
-    # happen in the job's own `if`. PR runs share a concurrency group with
-    # cancel-in-progress, so the waste is bounded by whatever the previous
-    # run had got through.
-    types: [ opened, synchronize, reopened, labeled ]
+  # A dispatch builds both heads, like every other run. It used to take an
+  # `ios` input, and PRs listened for an `ios` label, while the iOS head was
+  # opt-in (2026-09-11 to the move to Namespace); both went with the gate.
   workflow_dispatch:
-    inputs:
-      ios:
-        description: 'Also build and archive the iOS head'
-        type: boolean
-        default: false
 
 # Pull request runs share one group per ref, so pushing again cancels the
 # superseded run and saves runner minutes. Runs on main get a group of their
@@ -123,7 +108,13 @@ permissions:
 jobs:
   build:
     name: Build & analyze (net10.0-android)
-    runs-on: ubuntu-latest
+
+    # Namespace rather than GitHub-hosted, alongside the iOS job below: the
+    # two heads build in parallel and nothing waits on the other, so the
+    # slower of the pair is how long a PR waits. The profile is defined in
+    # the Namespace dashboard, not here — rename it there and this breaks
+    # with a job that never gets a runner.
+    runs-on: namespace-profile-link-linux
 
     steps:
       - name: Checkout
@@ -245,42 +236,21 @@ jobs:
   ios:
     name: Build & archive (net10.0-ios)
 
-    # Off unless asked for, from 2026-09-11. Two ways to ask:
+    # Runs on every push, PR and dispatch, in parallel with the Android
+    # job. From 2026-09-11 until the move to Namespace it was off unless
+    # asked for (an `ios` label or dispatch input), because on a
+    # GitHub-hosted macOS runner it took around eleven minutes after an
+    # unbounded queue, and every merge waited behind it. The cost of that
+    # was that iOS breakage surfaced in batches; building it every time is
+    # what puts `ios` back in `version.needs` as a real gate.
     #
-    #   * run the workflow manually with the `ios` input ticked;
-    #   * put the `ios` label on a pull request, which makes every run of
-    #     that PR build the head until the label comes off.
-    #
-    # Why: it is far and away the slowest thing here — around eleven
-    # minutes against three to four for Android, and that is once a macOS
-    # runner picks it up, which is itself a wait nobody can see the end of.
-    # Every merge queued behind it, for a head that nothing installs
-    # automatically: the .ipa is archived unsigned and goes onto a handset
-    # through Sideloadly by hand.
-    #
-    # What it costs, and it is a real cost rather than a formality: the
-    # comment on `version.needs` below argues that a broken iOS head must
-    # stop an Android release while the two share every line above the
-    # platform folders. That guarantee is now only as good as the last run
-    # somebody asked for. Label the PR when anything under Platforms/iOS
-    # or MauiProgram moves, and expect to find breakage in a batch rather
-    # than on the commit that caused it.
-    #
-    # Turning it back on for good is deleting the `if:` below.
-    if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.ios)
-      || contains(github.event.pull_request.labels.*.name, 'ios')
-
-    # macOS is not a preference here: the iOS toolchain will not run anywhere
-    # else. Public repository, so GitHub-hosted macOS minutes are free; on a
-    # private one this job would be the expensive part of the workflow.
-    #
-    # macos-26, not macos-15. The .NET for iOS SDK pins the Xcode it will
-    # build against and refuses anything older -- 26.5.10315 wants Xcode 26.6,
-    # and the macos-15 image tops out at 16.4, which fails at the first
-    # target with a clear message and no build. macos-26 ships 26.6 as its
-    # default.
-    runs-on: macos-26
+    # macOS is not a preference here: the iOS toolchain will not run
+    # anywhere else. The Namespace profile has to be macOS on Apple
+    # Silicon with an Xcode the .NET for iOS SDK accepts — 26.5.10315
+    # wants 26.6 and refuses anything older. If the image does not carry
+    # 26.6, the Select Xcode step below falls back to the newest installed
+    # and `xcodebuild -version` in the log says which it got.
+    runs-on: namespace-profile-link-macos
 
     steps:
       - name: Checkout
@@ -441,11 +411,21 @@ jobs:
     # nothing from the checkout, and is the only place `contents: write` is
     # granted for it.
     #
-    # Pull-request runs publish too (with the `ios` label): the point is the
-    # newest build to sideload, merged or not. The notes say which commit and
-    # which run, so a PR build is never taken for main.
+    # Pull-request runs publish too: the point is the newest build to
+    # sideload, merged or not. The notes say which commit and which run, so
+    # a PR build is never taken for main. Now that iOS builds on every PR,
+    # that means every PR moves it — check the notes before sideloading.
+    #
+    # Except Dependabot's and forks'. Both get a read-only token whatever
+    # `permissions:` asks for, so the upload would fail and turn a dependency
+    # bump red for a release it was never meant to touch. While the head was
+    # opt-in nobody labelled those, so the question never came up.
     needs: ios
-    if: ${{ needs.ios.result == 'success' }}
+    if: >-
+      ${{ needs.ios.result == 'success'
+      && (github.event_name != 'pull_request'
+          || (github.event.pull_request.head.repo.full_name == github.repository
+              && github.actor != 'dependabot[bot]')) }}
 
     runs-on: ubuntu-latest
 
@@ -632,14 +612,11 @@ jobs:
     # main only, and only for a real push - not for pull_request runs of this
     # same workflow, and not for workflow_dispatch.
     #
-    # The result checks are what keeps releases working now that `ios` is
-    # off unless asked for. A skipped dependency skips everything that
-    # needs it, so `needs: [..., ios, ...]` alone would have quietly ended
-    # releasing altogether — the failure mode being a merge that publishes
-    # nothing and says nothing. `!cancelled()` makes this job evaluate when
-    # a dependency was skipped, and since that also overrides the ordinary
-    # "a needed job failed" skip, every gate is then named explicitly. iOS
-    # is the one allowed to be absent: skipped releases, failed does not.
+    # Every gate is named explicitly rather than left to `needs:` alone.
+    # That dates from when `ios` was opt-in and a skipped dependency would
+    # have silently ended releasing; it is kept because it states the rule
+    # at the point it is enforced. iOS is built on every run again, so it
+    # must succeed like the rest — no longer merely not fail.
     if: >-
       ${{ !cancelled()
       && github.ref == 'refs/heads/main'
@@ -647,7 +624,7 @@ jobs:
       && needs.build.result == 'success'
       && needs.test.result == 'success'
       && needs.semgrep.result == 'success'
-      && needs.ios.result != 'failure' }}
+      && needs.ios.result == 'success' }}
 
     runs-on: ubuntu-latest
 
