@@ -517,11 +517,13 @@ first time.
 `link-apk` on every run, kept for 30 days.
 
 **`link-ipa-unsigned` on every run too**, built in parallel with the APK.
-Both build jobs run on [Namespace](https://namespace.so) runners, with the
-labels `namespace-profile-link-linux` and
-`namespace-profile-link-macos`. The profiles are defined
-in the Namespace dashboard rather than in this repo: the label is
-`namespace-profile-` plus the profile's own name.
+The iOS job runs on a [Namespace](https://namespace.so) macOS runner
+(`namespace-profile-link-macos`, defined in the Namespace dashboard rather
+than in this repo) — about four minutes end to end, against eleven plus an
+unbounded queue on a GitHub-hosted macOS runner. Android stays on the free
+`ubuntu-latest`: Namespace was tried there too, but that workspace's Linux
+profile is ARM64 and .NET's Android SDK ships an x64-only `aapt2`, so the
+build fails with `XA0111`.
 
 From 2026-09-11 until that move the iOS head was opt-in, behind an `ios`
 PR label or dispatch input: on a GitHub-hosted macOS runner it took around

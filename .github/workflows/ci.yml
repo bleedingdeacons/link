@@ -109,19 +109,16 @@ jobs:
   build:
     name: Build & analyze (net10.0-android)
 
-    # Namespace rather than GitHub-hosted, alongside the iOS job below: the
-    # two heads build in parallel and nothing waits on the other, so the
-    # slower of the pair is how long a PR waits. The profile is defined in
-    # the Namespace dashboard, not here — rename it there and this breaks
-    # with a job that never gets a runner.
-    #
-    # `namespace-profile-` + the profile's own name, which is `link-linux`.
-    # Proven rather than assumed: a throwaway probe workflow asked for this
-    # label and the doubled-prefix variant at once, and only this one was
-    # ever claimed. A label nothing answers to does not fail — it sits
-    # `queued` until GitHub's 24-hour timeout, which is how the first two
-    # attempts here were spent.
-    runs-on: namespace-profile-link-linux
+    # GitHub-hosted, unlike the iOS job below, and x64 on purpose.
+    # Namespace was tried here on 2026-09-24 and the Android head cannot
+    # build on it: that workspace's Linux profile is ARM64, and .NET's
+    # Microsoft.Android.Sdk.Linux pack ships an x64-only aapt2, so the
+    # build dies with "Exec format error" and XA0111 rather than anything
+    # this file can fix. An AMD64 profile would work, but this repo is
+    # public, ubuntu-latest is free, and the job takes three to four
+    # minutes either way — the queue this change set out to kill was the
+    # macOS one.
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -252,11 +249,15 @@ jobs:
     # what puts `ios` back in `version.needs` as a real gate.
     #
     # macOS is not a preference here: the iOS toolchain will not run
-    # anywhere else. The Namespace profile has to be macOS on Apple
-    # Silicon with an Xcode the .NET for iOS SDK accepts — 26.5.10315
-    # wants 26.6 and refuses anything older. If the image does not carry
-    # 26.6, the Select Xcode step below falls back to the newest installed
-    # and `xcodebuild -version` in the log says which it got.
+    # anywhere else, and this is the job Namespace was brought in for —
+    # around four minutes end to end against eleven plus an unbounded
+    # queue on a GitHub-hosted macOS runner.
+    #
+    # The image carries Xcode 26.4.1, not the 26.6 this file used to
+    # insist on; the Select Xcode step below falls back to the newest
+    # installed and the .NET for iOS SDK accepted it (proven 2026-09-24,
+    # a green .ipa). `xcodebuild -version` in the log says which it got,
+    # so the day that stops being true it says so.
     runs-on: namespace-profile-link-macos
 
     steps:
