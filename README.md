@@ -517,13 +517,22 @@ first time.
 `link-apk` on every run, kept for 30 days.
 
 **`link-ipa-unsigned` on every run too**, built in parallel with the APK.
-The iOS job runs on a [Namespace](https://namespace.so) macOS runner
-(`namespace-profile-link-macos`, defined in the Namespace dashboard rather
-than in this repo) — about four minutes end to end, against eleven plus an
-unbounded queue on a GitHub-hosted macOS runner. Android stays on the free
-`ubuntu-latest`: Namespace was tried there too, but that workspace's Linux
-profile is ARM64 and .NET's Android SDK ships an x64-only `aapt2`, so the
-build fails with `XA0111`.
+The iOS job runs on **GitHub's own `macos-26` by default** — free on this
+public repository, and around eleven minutes once a runner picks it up.
+Setting the **`IOS_RUNNER`** repository variable to a
+[Namespace](https://namespace.so) macOS label
+(`namespace-profile-link-macos`) moves it there instead: about four minutes
+end to end, and billed. It is the only job here that costs anything, which
+is why it is not the default.
+
+```bash
+gh variable set IOS_RUNNER -R bleedingdeacons/link -b namespace-profile-link-macos  # fast, paid
+gh variable delete IOS_RUNNER -R bleedingdeacons/link                              # free, slow
+```
+
+Android stays on the free `ubuntu-latest`: Namespace was tried there too,
+but that workspace's Linux profile is ARM64 and .NET's Android SDK ships an
+x64-only `aapt2`, so the build fails with `XA0111`.
 
 From 2026-09-11 until that move the iOS head was opt-in, behind an `ios`
 PR label or dispatch input: on a GitHub-hosted macOS runner it took around
