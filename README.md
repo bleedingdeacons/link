@@ -516,18 +516,21 @@ first time.
 
 `link-apk` on every run, kept for 30 days.
 
-**`link-ipa-unsigned` only when the iOS job is asked for**, which since
-2026-09-11 is not by default. It was the slowest thing in the workflow by
-a wide margin — around eleven minutes against three or four for Android,
-after a wait for a macOS runner that nobody can see the end of — and
-every merge queued behind it for a head that nothing installs
-automatically anyway.
+**`link-ipa-unsigned` on every run too**, built in parallel with the APK.
+The iOS job runs on a [Namespace](https://namespace.so) macOS runner
+(`namespace-profile-link-macos`, defined in the Namespace dashboard rather
+than in this repo) — about four minutes end to end, against eleven plus an
+unbounded queue on a GitHub-hosted macOS runner. Android stays on the free
+`ubuntu-latest`: Namespace was tried there too, but that workspace's Linux
+profile is ARM64 and .NET's Android SDK ships an x64-only `aapt2`, so the
+build fails with `XA0111`.
 
-Two ways to ask for it:
-
-* run the `CI` workflow manually and tick **`ios`**;
-* put the **`ios`** label on a pull request, and every run of that PR
-  builds the head until the label comes off.
+From 2026-09-11 until that move the iOS head was opt-in, behind an `ios`
+PR label or dispatch input: on a GitHub-hosted macOS runner it took around
+eleven minutes after an unbounded queue, and every merge waited behind it.
+The cost was iOS breakage surfacing in batches rather than on the commit
+that caused it. Building it every run removes that, and the release job
+again requires the iOS head to *succeed*, not merely not fail.
 
 **Every run that builds it also publishes it to the `ios-test` release**,
 replacing the `.ipa` that was there. So the newest unsigned build is always
@@ -535,18 +538,13 @@ at one fixed address, `releases/tag/ios-test`, instead of on whichever run
 last built it, where it expires after 30 days. The release is a
 prerelease and never Latest, the version tags are `v1.2.3` and
 `bump-version.sh` ignores anything else, and its notes name the commit and
-run the `.ipa` came from. A pull request with the `ios` label publishes
-there too, so check the notes before assuming it is `main`.
+run the `.ipa` came from. Pull requests publish there too (except
+Dependabot's and forks', whose token cannot), so check the notes before
+assuming it is `main`.
 
 ```bash
 gh release download ios-test -R bleedingdeacons/link -p link-unsigned.ipa -D C:/Data/link-artifacts --clobber
 ```
-
-Label the PR whenever anything under `Platforms/iOS` or `MauiProgram`
-moves. The trade is stated plainly in the workflow: the release job still
-refuses to publish if the iOS head *fails*, but it publishes happily when
-the head was never built, so iOS breakage now surfaces in a batch rather
-than on the commit that caused it.
 
 Both are built against the **`LINK_BASE_URL`** repository variable, which
 CI writes into `appsettings.json` before compiling. Without it the
