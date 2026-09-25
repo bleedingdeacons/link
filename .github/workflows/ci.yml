@@ -249,16 +249,32 @@ jobs:
     # what puts `ios` back in `version.needs` as a real gate.
     #
     # macOS is not a preference here: the iOS toolchain will not run
-    # anywhere else, and this is the job Namespace was brought in for —
-    # around four minutes end to end against eleven plus an unbounded
-    # queue on a GitHub-hosted macOS runner.
+    # anywhere else. Which macOS is a repository variable, because the two
+    # options trade against each other and the answer changes:
     #
-    # The image carries Xcode 26.4.1, not the 26.6 this file used to
-    # insist on; the Select Xcode step below falls back to the newest
-    # installed and the .NET for iOS SDK accepted it (proven 2026-09-24,
-    # a green .ipa). `xcodebuild -version` in the log says which it got,
-    # so the day that stops being true it says so.
-    runs-on: namespace-profile-link-macos
+    #  * unset (the default) — GitHub's own macos-26. Free on a public
+    #    repository, and around eleven minutes once a runner picks it up,
+    #    which is itself an unbounded wait.
+    #  * IOS_RUNNER set to `namespace-profile-link-macos` — a Namespace
+    #    macOS runner, about four minutes end to end, and billed. That is
+    #    why it is not the default: this is the only job here that costs
+    #    anything, and it runs on every push and PR.
+    #
+    # Flipping between them is a variable, not a pull request:
+    #   gh variable set IOS_RUNNER -R bleedingdeacons/link     #     -b namespace-profile-link-macos      # fast, paid
+    #   gh variable delete IOS_RUNNER -R bleedingdeacons/link  # free, slow
+    #
+    # A `runs-on` expression sees no secrets and only `vars`, so the label
+    # has to be a variable rather than a secret. A typo'd value is a job
+    # that sits `queued` until GitHub's 24-hour timeout rather than one
+    # that fails — check `runs-on` in the log if a build never starts.
+    #
+    # On Namespace the image carried Xcode 26.4.1, not the 26.6 this file
+    # used to insist on, and the .NET for iOS SDK accepted it (proven
+    # 2026-09-24, a green .ipa). The Select Xcode step below falls back to
+    # the newest installed on whichever image it lands, and
+    # `xcodebuild -version` in the log says which it got.
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-26' }}
 
     steps:
       - name: Checkout
