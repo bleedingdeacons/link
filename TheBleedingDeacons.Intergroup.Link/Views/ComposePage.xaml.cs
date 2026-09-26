@@ -31,7 +31,7 @@ public partial class ComposePage : ContentPage
 	}
 
 	/// <summary>
-	/// A tap on a chip's cross, and a tap on a row of the list.
+	/// A tap anywhere on a chip, and a tap on a row of the list.
 	/// </summary>
 	/// <remarks>
 	/// <para>Handled here rather than bound to the view model's commands,

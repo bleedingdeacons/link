@@ -58,10 +58,23 @@
 			            AlignItems="Start">
 				<BindableLayout.ItemTemplate>
 					<DataTemplate x:DataType="models:Recipient">
+						<!--
+							The whole chip removes, not only its ×. The × alone was
+							about 11dp wide - measured on a Pixel 6a, where a tap
+							6dp to its right did nothing - so a thumb mostly missed
+							it and the only sure way to drop somebody was to start
+							the message again. A chip does nothing else when tapped,
+							so the name costs nothing as a target, and the × stays
+							as the sign that tapping takes it away.
+						-->
 						<Border Margin="0,0,6,6"
 						        Padding="10,4"
 						        StrokeShape="RoundRectangle 14"
-						        StrokeThickness="1">
+						        StrokeThickness="1"
+						        SemanticProperties.Description="{Binding Name, StringFormat='Remove {0}'}">
+							<Border.GestureRecognizers>
+								<TapGestureRecognizer Tapped="OnDropTapped" />
+							</Border.GestureRecognizers>
 							<HorizontalStackLayout Spacing="6" VerticalOptions="Center">
 								<Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center" />
 								<!--
@@ -75,8 +88,9 @@
 									invisible control looks identical to a missing one
 									in every dump of the view tree.
 
-									The tap is handled in the code-behind rather than
-									bound to the view model's command. This project
+									The tap is the chip's (see the Border above), and it
+									is handled in the code-behind rather than bound to
+									the view model's command. This project
 									compiles its bindings, and a compiled binding
 									resolves its Path against the x:DataType in scope -
 									here a Recipient - never against Source. Reaching the
@@ -87,11 +101,7 @@
 								<Label Text="×"
 								       FontSize="20"
 								       VerticalOptions="Center"
-								       SemanticProperties.Description="Remove recipient">
-									<Label.GestureRecognizers>
-										<TapGestureRecognizer Tapped="OnDropTapped" />
-									</Label.GestureRecognizers>
-								</Label>
+								       SemanticProperties.Description="Remove recipient" />
 							</HorizontalStackLayout>
 						</Border>
 					</DataTemplate>
