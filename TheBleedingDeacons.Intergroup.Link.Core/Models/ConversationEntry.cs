@@ -30,6 +30,9 @@ public sealed record ConversationEntry
 	/// <summary>Who it came from, on a received message.</summary>
 	public string Sender { get; init; } = string.Empty;
 
+	/// <summary>Who it came from as a member id, on a received message, or 0. See <see cref="Replying"/>.</summary>
+	public long SenderId { get; init; }
+
 	/// <summary>Who it went to, on a sent message.</summary>
 	public string To { get; init; } = string.Empty;
 
@@ -75,6 +78,7 @@ public sealed record ConversationEntry
 			Subject = message.Subject,
 			Body = message.Body,
 			Sender = message.Sender,
+			SenderId = message.SenderId,
 			IsRead = message.IsRead,
 		};
 	}

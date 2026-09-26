@@ -120,6 +120,10 @@ public sealed partial class ConversationViewModel : ObservableObject, IQueryAttr
 	/// The subject is escaped because it is member-typed text going into a
 	/// query string, and an unescaped <c>&amp;</c> in a subject would
 	/// truncate it and take the rest of the parameters with it.
+	///
+	/// <para><c>to</c> is who the reply starts addressed to, as a member id;
+	/// Compose chooses them once the directory is in. See
+	/// <see cref="Replying"/>.</para>
 	/// </remarks>
 	public static Task ReplyAsync(ConversationItem item)
 	{
@@ -127,7 +131,7 @@ public sealed partial class ConversationViewModel : ObservableObject, IQueryAttr
 
 		var route = string.Create(
 			CultureInfo.InvariantCulture,
-			$"compose?replyTo={item.Entry.Id}&subject={Uri.EscapeDataString(item.Subject)}");
+			$"compose?replyTo={item.Entry.Id}&to={Replying.AddressFor(item.Entry)}&subject={Uri.EscapeDataString(item.Subject)}");
 
 		return Shell.Current.GoToAsync(route);
 	}

@@ -117,6 +117,49 @@ Feature: Addressing a message to somebody
       And it is sent
       Then the send answered nothing
 
+  Rule: A reply starts addressed to whoever sent the message
+
+    A reply used to open with nobody chosen, and Send stays grey until
+    somebody is, so it looked broken until the sender was found by hand.
+    The sender is chosen by member id rather than by name: Fellowship
+    sends the id with every message, and an intergroup has more than one
+    Dave B. They are an ordinary chip, so the member can remove them or
+    add other people.
+
+    Scenario: Replying chooses the sender
+      Given the address book holds Dave B and Jo B
+      And a message from Jo B
+      When it is replied to
+      Then the reply starts addressed to Jo B
+
+    Scenario: Two members sharing a name are told apart
+      Given the address book holds Dave B and Dave B
+      And a message from the second Dave B
+      When it is replied to
+      Then the reply starts addressed to the second Dave B
+
+    Scenario: A sender with no registered device is not chosen
+      A chip for somebody Link cannot reach would enable a send that
+      reaches nobody.
+
+      Given the address book holds Dave B and Jo B
+      And Jo B has no registered device
+      And a message from Jo B
+      When it is replied to
+      Then the reply starts addressed to nobody
+
+    Scenario Outline: Nobody is chosen when there is nothing safe to choose
+      Given the address book holds Dave B and Jo B
+      And <message>
+      When it is replied to
+      Then the reply starts addressed to nobody
+
+      Examples:
+        | message                                         |
+        | a message this member sent to Jo B              |
+        | a message composed in WordPress admin           |
+        | a message from somebody not in the address book |
+
   Rule: A send that does not happen says why
 
     Scenario: A refused send carries the server's own reason

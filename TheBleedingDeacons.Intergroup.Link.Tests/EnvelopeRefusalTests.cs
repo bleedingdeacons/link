@@ -130,6 +130,22 @@ public sealed class EnvelopeRefusalTests
 		Assert.Equal(1800000000, message.CreatedAt);
 	}
 
+	[Theory]
+	[InlineData("""{"id":7,"sender":"Dave B","sender_id":42}""", 42)]
+	[InlineData("""{"id":7,"sender":"Dave B","sender_id":"42"}""", 42)]
+	[InlineData("""{"id":7,"sender":"Dave B"}""", 0)]
+	[InlineData("""{"id":7,"sender":"Dave B","sender_id":{"nested":true}}""", 0)]
+	public void TheSenderIsReadAsAMemberIdOrZero(string json, long expected)
+	{
+		// What a reply is addressed back to. Absent — an admin send, or a
+		// server older than the field — is 0, which addresses nobody,
+		// rather than a refusal of the whole message.
+		var message = LinkMessage.FromPayload(Payload(json));
+
+		Assert.NotNull(message);
+		Assert.Equal(expected, message.SenderId);
+	}
+
 	[Fact]
 	public void AbsentFieldsBecomeEmptyRatherThanNull()
 	{

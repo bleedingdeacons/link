@@ -259,6 +259,22 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	}
 
 	[Fact]
+	public async Task WhoSentAMessageSurvivesBeingReopened()
+	{
+		// A reply is addressed from this, and the message it answers may
+		// have been held for weeks. A poll never fetches it a second time,
+		// so an id lost on disk would never come back.
+		using (var writing = New())
+		{
+			await writing.SaveAsync([Message(7, "Kept") with { SenderId = 42 }]);
+		}
+
+		using var reading = New();
+
+		Assert.Equal(42, Assert.Single(await reading.AllAsync()).SenderId);
+	}
+
+	[Fact]
 	public async Task ASentMessageSurvivesBeingReopened()
 	{
 		using (var writing = New())
