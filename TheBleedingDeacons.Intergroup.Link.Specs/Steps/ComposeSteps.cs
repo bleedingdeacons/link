@@ -166,6 +166,78 @@ public sealed class ComposeSteps(World world)
 			.ShouldNotBeNull()
 			.Detail.ShouldBe(detail);
 
+	// ── Who a reply starts addressed to ───────────────────────────────
+
+	private const string Stranger = "somebody not in the address book";
+
+	private ConversationEntry? _original;
+
+	private Recipient? _addressee;
+
+	[Given(@"^(.+) has no registered device$")]
+	public void NoDevice(string name)
+	{
+		var index = world.Addressable.IndexOf(Named(name));
+		world.Addressable[index] = world.Addressable[index] with { HasDevice = false };
+	}
+
+	/// <summary>
+	/// A message received from somebody, carrying their member id as
+	/// Fellowship's envelope does. The name travels too, and deliberately
+	/// agrees with the id: what is being proved is that the id is what
+	/// chooses, which only shows where two members share the name.
+	/// </summary>
+	[Given(@"^a message from (.+)$")]
+	public void From(string name)
+	{
+		var sender = string.Equals(name, Stranger, StringComparison.Ordinal)
+			? new Recipient { Key = "m:999", Name = "Pat Q", MemberId = 999 }
+			: Named(name);
+
+		_original = new ConversationEntry { Id = 12, Sender = sender.Name, SenderId = sender.MemberId };
+	}
+
+	[Given(@"^a message this member sent to (.+)$")]
+	public void SentTo(string name) =>
+		_original = new ConversationEntry { Id = 12, IsSent = true, To = Named(name).Name };
+
+	[Given(@"^a message composed in WordPress admin$")]
+	public void FromAdmin() => _original = new ConversationEntry { Id = 12, Sender = "Intergroup Secretary" };
+
+	[When(@"^it is replied to$")]
+	public void RepliedTo() =>
+		_addressee = Replying.Addressee(world.Addressable, Replying.AddressFor(_original.ShouldNotBeNull()));
+
+	[Then(@"^the reply starts addressed to nobody$")]
+	public void AddressedToNobody() => _addressee.ShouldBeNull();
+
+	[Then(@"^the reply starts addressed to (?!nobody$)(.+)$")]
+	public void AddressedToSomebody(string name) =>
+		_addressee.ShouldNotBeNull().Key.ShouldBe(Named(name).Key);
+
+	/// <summary>
+	/// "Jo B", or "the second Dave B" where the address book holds two.
+	/// </summary>
+	private Recipient Named(string name)
+	{
+		var nth = 0;
+
+		foreach (var (word, index) in new[] { ("the first ", 0), ("the second ", 1), ("the third ", 2) })
+		{
+			if (name.StartsWith(word, StringComparison.Ordinal))
+			{
+				name = name[word.Length..];
+				nth = index;
+				break;
+			}
+		}
+
+		var matches = world.Addressable.Where(r => string.Equals(r.Name, name, StringComparison.Ordinal)).ToList();
+		matches.Count.ShouldBeGreaterThan(nth, $"'{name}' is not in this scenario's address book that many times.");
+
+		return matches[nth];
+	}
+
 	private SendRequest Request(long replyTo) => new()
 	{
 		Subject = "September intergroup",

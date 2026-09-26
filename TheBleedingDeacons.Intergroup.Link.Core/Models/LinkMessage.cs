@@ -29,6 +29,17 @@ public sealed record LinkMessage
 	/// </summary>
 	public string Sender { get; init; } = string.Empty;
 
+	/// <summary>
+	/// Who sent it, as the opaque Unity member id the directory hands out,
+	/// or 0.
+	///
+	/// <para>What a reply is addressed back to. <see cref="Sender"/> cannot
+	/// be: an intergroup has more than one Dave B. 0 for a message composed
+	/// in WordPress admin, which has no member behind it, and for anything
+	/// held from before Fellowship began sending it.</para>
+	/// </summary>
+	public long SenderId { get; init; }
+
 	/// <summary>Unix seconds, as the server recorded it.</summary>
 	public long CreatedAt { get; init; }
 
@@ -100,6 +111,7 @@ public sealed record LinkMessage
 			Subject = Text(payload, "subject"),
 			Body = Text(payload, "body"),
 			Sender = Text(payload, "sender"),
+			SenderId = Number(payload, "sender_id"),
 			CreatedAt = Number(payload, "created_at"),
 			ReplyToId = Number(payload, "reply_to"),
 			ReadAt = readAt > 0 ? readAt : null,

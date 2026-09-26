@@ -40,6 +40,12 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	/// <summary>The message being forwarded, until it has been quoted; then 0.</summary>
 	private long _forwardId;
 
+	/// <summary>
+	/// The member a reply is addressed to, until they have been chosen;
+	/// then 0. See <see cref="Replying"/>.
+	/// </summary>
+	private long _replyToMemberId;
+
 	public ComposeViewModel(IMessageService messages, IFellowshipClient client, ISessionStore sessions, IMessageHistory history)
 	{
 		_messages = messages;
@@ -161,6 +167,14 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 			ReplyToId = parsed;
 		}
 
+		// Only noted here. Choosing them needs the directory, which
+		// LoadAsync fetches.
+		if (query.TryGetValue("to", out var to)
+			&& long.TryParse(to?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var memberId))
+		{
+			_replyToMemberId = memberId;
+		}
+
 		if (query.TryGetValue("subject", out var subject))
 		{
 			ReplyToSubject = subject?.ToString() ?? string.Empty;
@@ -206,7 +220,37 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 			_all.Add(Recipient.ForMember(member));
 		}
 
+		AddressReply();
+
 		ApplySearch();
+	}
+
+	/// <summary>
+	/// Choose whoever sent the message being answered, if the directory
+	/// holds them and they can be sent to.
+	/// </summary>
+	/// <remarks>
+	/// This runs once. LoadAsync runs every time the page appears, and a
+	/// sender the member has already removed should not come back. The
+	/// pointer is cleared only when the sender is actually chosen, so a
+	/// directory that came back empty gets another try the next time the
+	/// page appears.
+	/// </remarks>
+	private void AddressReply()
+	{
+		var addressee = Replying.Addressee(_all, _replyToMemberId);
+		if (addressee is null)
+		{
+			return;
+		}
+
+		_replyToMemberId = 0;
+
+		if (!IsChosen(addressee))
+		{
+			Chosen.Add(addressee);
+			Changed();
+		}
 	}
 
 	/// <summary>
