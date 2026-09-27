@@ -559,6 +559,17 @@ public sealed class MessageServiceTests
 			return Task.CompletedTask;
 		}
 
+		public Task DeleteAsync(long messageId, CancellationToken cancellationToken = default)
+		{
+			Held.RemoveAll(m => m.Id == messageId);
+			SentHeld.RemoveAll(m => m.Id == messageId);
+
+			return Task.CompletedTask;
+		}
+
+		public Task<IReadOnlyList<DeletedMessage>> DeletedAsync(CancellationToken cancellationToken = default) =>
+			Task.FromResult<IReadOnlyList<DeletedMessage>>([]);
+
 		public Task ClearAsync(CancellationToken cancellationToken = default)
 		{
 			Highest = Held.Count == 0 ? Highest : Math.Max(Highest, Held.Max(m => m.Id));

@@ -30,10 +30,17 @@ public static class Conversations
 	/// they sit on receives their own message, under the same id. The sent
 	/// copy carries the ticks and knows who it went to, so it is the one
 	/// kept.</para>
+	///
+	/// <para><b>A deleted message is walked through, not shown.</b> Only
+	/// its pointer is left, and it is followed like any other, so deleting
+	/// the middle of an exchange does not cut it in two. When the first
+	/// message is the one deleted, the earliest still here heads the
+	/// conversation instead.</para>
 	/// </summary>
 	public static IReadOnlyList<Conversation> Build(
 		IEnumerable<LinkMessage> received,
-		IEnumerable<SentMessage> sent)
+		IEnumerable<SentMessage> sent,
+		IEnumerable<DeletedMessage>? deleted = null)
 	{
 		ArgumentNullException.ThrowIfNull(received);
 		ArgumentNullException.ThrowIfNull(sent);
@@ -50,12 +57,19 @@ public static class Conversations
 			byId[message.Id] = ConversationEntry.From(message);
 		}
 
+		var gone = new Dictionary<long, long>();
+
+		foreach (var message in deleted ?? [])
+		{
+			gone[message.Id] = message.ReplyToId;
+		}
+
 		return [.. byId.Values
-			.GroupBy(entry => RootOf(entry, byId).Id)
+			.GroupBy(entry => RootOf(entry, byId, gone))
 			.Select(group =>
 			{
 				var ordered = group.OrderBy(e => e.CreatedAt).ThenBy(e => e.Id).ToList();
-				var root = byId[group.Key];
+				var root = byId.TryGetValue(group.Key, out var first) ? first : ordered[0];
 
 				return new Conversation
 				{
@@ -93,17 +107,35 @@ public static class Conversations
 			.FirstOrDefault();
 	}
 
-	private static ConversationEntry RootOf(ConversationEntry entry, Dictionary<long, ConversationEntry> byId)
+	/// <summary>
+	/// The id at the top of the chain of answers this message sits in —
+	/// which may be a deleted message's, when that is where the chain
+	/// began.
+	/// </summary>
+	private static long RootOf(
+		ConversationEntry entry,
+		Dictionary<long, ConversationEntry> byId,
+		Dictionary<long, long> gone)
 	{
-		var current = entry;
+		var id = entry.Id;
+		var answers = entry.ReplyToId;
 
-		while (current.ReplyToId > 0
-			&& current.ReplyToId < current.Id
-			&& byId.TryGetValue(current.ReplyToId, out var parent))
+		while (answers > 0 && answers < id)
 		{
-			current = parent;
+			if (byId.TryGetValue(answers, out var parent))
+			{
+				(id, answers) = (parent.Id, parent.ReplyToId);
+			}
+			else if (gone.TryGetValue(answers, out var above))
+			{
+				(id, answers) = (answers, above);
+			}
+			else
+			{
+				break;
+			}
 		}
 
-		return current;
+		return id;
 	}
 }

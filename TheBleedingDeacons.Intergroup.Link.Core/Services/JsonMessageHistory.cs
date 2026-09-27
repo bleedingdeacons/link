@@ -89,6 +89,14 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 			foreach (var message in incoming)
 			{
+				// Deleted here stays deleted. A committee this member
+				// sits on receives what they sent it, so the same id can
+				// arrive after the member has already deleted their copy.
+				if (held.Deleted.ContainsKey(message.Id))
+				{
+					continue;
+				}
+
 				// Replace rather than skip. The same message arrives by
 				// push and again by poll, and only the poll's copy carries
 				// the read flag — a store that ignored the second copy
@@ -267,6 +275,59 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		{
 			_gate.Release();
 		}
+	}
+
+	/// <inheritdoc />
+	public async Task DeleteAsync(long messageId, CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			// Both copies, when there are two: a message to a committee
+			// this member sits on is held as sent and as received, under
+			// the same id, and deleting one would leave the other showing.
+			var received = held.Messages.TryGetValue(messageId, out var inbox) ? inbox : null;
+			var sent = held.Sent.TryGetValue(messageId, out var outbox) ? outbox : null;
+
+			if (received is null && sent is null)
+			{
+				return;
+			}
+
+			if (received is not null)
+			{
+				// Where the next poll starts must not walk backwards when
+				// the newest message is the one deleted — or the poll
+				// would ask for it again and put it straight back. Only a
+				// received id moves the mark: a sent one is not the
+				// inbox's, and raising the mark past it would skip
+				// anything that arrived on the server just before it.
+				var highest = held.Messages.Keys.Max();
+
+				held = held with { ClearedUpTo = Math.Max(highest, held.ClearedUpTo) };
+				held.Messages.Remove(messageId);
+			}
+
+			held.Sent.Remove(messageId);
+			held.Deleted[messageId] = sent?.ReplyToId ?? received!.ReplyToId;
+
+			await WriteUnguardedAsync(held, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	/// <inheritdoc />
+	public async Task<IReadOnlyList<DeletedMessage>> DeletedAsync(CancellationToken cancellationToken = default)
+	{
+		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+		return [.. held.Deleted.Select(d => new DeletedMessage(d.Key, d.Value))];
 	}
 
 	/// <summary>
@@ -474,6 +535,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				Math.Max(0, stored.MemberId))
 			{
 				Sent = stored.Sent.Where(m => m.Id > 0).ToDictionary(m => m.Id),
+				Deleted = stored.Deleted.Where(d => d.Id > 0).ToDictionary(d => d.Id, d => d.ReplyToId),
 			};
 	}
 
@@ -485,6 +547,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			MemberId = held.MemberId,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
 			Sent = held.Sent.Values.OrderByDescending(m => m.Id).ToList(),
+			Deleted = held.Deleted.OrderByDescending(d => d.Key).Select(d => new DeletedMessage(d.Key, d.Value)).ToList(),
 		};
 
 		var json = JsonSerializer.SerializeToUtf8Bytes(stored, JsonOptions);
@@ -583,6 +646,14 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		/// </summary>
 		public Dictionary<long, SentMessage> Sent { get; init; } = [];
 
+		/// <summary>
+		/// Messages deleted one at a time, as the id each answered. Empty
+		/// on every Held built without saying otherwise, for the same
+		/// reason as <see cref="Sent"/>: a clear's mark already covers
+		/// them, and a reset or an adoption must not carry them over.
+		/// </summary>
+		public Dictionary<long, long> Deleted { get; init; } = [];
+
 		public static Held Nothing() => new([], 0);
 	}
 
@@ -613,5 +684,12 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		/// before receipts, which reads as none sent.
 		/// </summary>
 		public List<SentMessage> Sent { get; set; } = [];
+
+		/// <summary>
+		/// What is left of messages deleted one at a time. Absent from
+		/// every file written before that was possible, which reads as
+		/// none deleted.
+		/// </summary>
+		public List<DeletedMessage> Deleted { get; set; } = [];
 	}
 }
