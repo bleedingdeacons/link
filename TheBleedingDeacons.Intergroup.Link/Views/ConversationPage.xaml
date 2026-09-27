@@ -122,7 +122,16 @@
 							DataTemplate typed to ConversationItem is XC0045
 							under compiled bindings. See ComposePage.xaml.cs.
 						-->
-						<Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,4,0,0">
+						<!--
+							Delete is last and red, filled as Sign out is: in
+							the row with Reply and Forward, but not the same
+							kind of choice, since those send something on and
+							this throws something away. One word, because a
+							third of a phone's width has no room for "from this
+							phone" — the confirmation says that part, and that
+							nothing is unsent.
+						-->
+						<Grid ColumnDefinitions="*,*,*" ColumnSpacing="10" Margin="0,4,0,0">
 							<Button Grid.Column="0"
 							        Text="Reply"
 							        HeightRequest="44"
@@ -131,21 +140,13 @@
 							        Text="Forward"
 							        HeightRequest="44"
 							        Clicked="OnForwardClicked" />
+							<Button Grid.Column="2"
+							        Text="Delete"
+							        BackgroundColor="{StaticResource Warning}"
+							        TextColor="White"
+							        HeightRequest="44"
+							        Clicked="OnDeleteClicked" />
 						</Grid>
-
-						<!--
-							Its own row, outlined and red, rather than a third
-							filled button beside Reply and Forward: those send
-							something on, this throws something away, and the
-							two should not look like the same kind of choice.
-							Red as Sign out is, for the same reason. It asks
-							first, and says it is this phone's copy only.
-						-->
-						<Button Text="Delete from this phone"
-						        Style="{StaticResource Quiet}"
-						        TextColor="{StaticResource Warning}"
-						        HeightRequest="44"
-						        Clicked="OnDeleteClicked" />
 
 						<!-- Between messages, heavier than the divider inside one. -->
 						<BoxView HeightRequest="6"
