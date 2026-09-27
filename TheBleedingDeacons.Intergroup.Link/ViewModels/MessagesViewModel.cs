@@ -199,10 +199,11 @@ public sealed partial class MessagesViewModel : ObservableObject
 	{
 		var received = await _history.AllAsync().ConfigureAwait(true);
 		var sent = await _history.SentAsync().ConfigureAwait(true);
+		var deleted = await _history.DeletedAsync().ConfigureAwait(true);
 
 		Conversations.Clear();
 
-		foreach (var conversation in Models.Conversations.Build(received, sent))
+		foreach (var conversation in Models.Conversations.Build(received, sent, deleted))
 		{
 			Conversations.Add(conversation);
 		}

@@ -20,7 +20,9 @@ namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 ///
 /// <para><b>Reply and Forward are on every message</b>, not once for the
 /// screen. Which message a reply answers is the whole of the thread model,
-/// so the member says which by pressing the button under it.</para>
+/// so the member says which by pressing the button under it. Delete is
+/// on every message for the same reason: which one is the whole
+/// question.</para>
 ///
 /// <para><b>Looked up by id rather than handed the object.</b> Shell can
 /// carry an object through a navigation parameter, but the page is
@@ -83,8 +85,9 @@ public sealed partial class ConversationViewModel : ObservableObject, IQueryAttr
 	{
 		var received = await _history.AllAsync().ConfigureAwait(true);
 		var sent = await _history.SentAsync().ConfigureAwait(true);
+		var deleted = await _history.DeletedAsync().ConfigureAwait(true);
 
-		var conversation = Conversations.Containing(Conversations.Build(received, sent), _id);
+		var conversation = Conversations.Containing(Conversations.Build(received, sent, deleted), _id);
 
 		Items.Clear();
 
@@ -111,6 +114,37 @@ public sealed partial class ConversationViewModel : ObservableObject, IQueryAttr
 		{
 			await _messages.MarkReadAsync(entry.Id).ConfigureAwait(true);
 		}
+	}
+
+	/// <summary>
+	/// Delete this phone's copy of one message, then redraw what is left.
+	/// Answers false when nothing is left, so the page can leave.
+	/// </summary>
+	/// <remarks>
+	/// <para><b>This phone's copy only</b>, as Clear messages is. Nothing
+	/// is unsent and the server is not told; the confirmation in front of
+	/// this says so. See <see cref="IMessageHistory.DeleteAsync"/>.</para>
+	///
+	/// <para><b>The screen is held by another message first</b> when the
+	/// one it was opened on is the one going. The page finds its
+	/// conversation by that id, and without this it would report the
+	/// whole conversation missing while the rest of it is still here.</para>
+	/// </remarks>
+	public async Task<bool> DeleteAsync(ConversationItem item)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+
+		var id = item.Entry.Id;
+
+		if (_id == id)
+		{
+			_id = Items.Select(i => i.Entry.Id).FirstOrDefault(other => other != id);
+		}
+
+		await _history.DeleteAsync(id).ConfigureAwait(true);
+		await LoadAsync().ConfigureAwait(true);
+
+		return Found;
 	}
 
 	/// <summary>

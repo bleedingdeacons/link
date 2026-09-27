@@ -85,6 +85,23 @@ public interface IMessageHistory
 	Task<IReadOnlyList<long>> ApplyReceiptsAsync(IEnumerable<MessageReceipt> receipts, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Delete this phone's copy of one message, received or sent.
+	///
+	/// <para>Like <see cref="ClearAsync"/>, and for the same reasons: it
+	/// does not unsend anything and it does not tell the server. What
+	/// stays behind is a <see cref="DeletedMessage"/> — two ids — so the
+	/// conversation it sat in is not cut in two and a second copy
+	/// arriving later is not taken back in.</para>
+	/// </summary>
+	Task DeleteAsync(long messageId, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// What is left of the messages deleted one at a time, for
+	/// <see cref="Conversations.Build"/> to walk a conversation through.
+	/// </summary>
+	Task<IReadOnlyList<DeletedMessage>> DeletedAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Delete this phone's copies, and remember how far they reached so
 	/// the next poll does not fetch them straight back. The member's
 	/// choice; see the interface remarks.

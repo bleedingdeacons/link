@@ -118,7 +118,10 @@ public sealed class ConversationSteps(World world)
 			.Select(id => long.Parse(id, CultureInfo.InvariantCulture))];
 
 	private async Task<IReadOnlyList<Conversation>> ConversationsAsync() =>
-		Conversations.Build(await world.History.AllAsync(), await world.History.SentAsync());
+		Conversations.Build(
+			await world.History.AllAsync(),
+			await world.History.SentAsync(),
+			await world.History.DeletedAsync());
 
 	private async Task<Conversation> ConversationAsync(long root) =>
 		(await ConversationsAsync()).FirstOrDefault(c => c.Root.Id == root)
