@@ -46,6 +46,12 @@ public sealed record Recipient
 
 	public bool IsCommittee => CommitteeSlug.Length > 0;
 
+	/// <summary>The "All GSRs" choice: neither a member nor a committee. See <see cref="ForAllGsrs"/>.</summary>
+	public bool IsAllGsrs { get; init; }
+
+	/// <summary>One person, addressed by <see cref="MemberId"/>.</summary>
+	public bool IsMember => !IsCommittee && !IsAllGsrs;
+
 	public bool HasDetail => Detail.Length > 0;
 
 	/// <summary>
@@ -96,6 +102,61 @@ public sealed record Recipient
 			HasDevice = member.HasDevice,
 		};
 	}
+
+	/// <summary>
+	/// Everything the directory offers, in the order Compose lists it:
+	/// All GSRs, then committees, then members.
+	/// </summary>
+	/// <remarks>
+	/// <para><b>All GSRs first</b>: the widest of the choices, and the one
+	/// most often wanted by name. Offered only when the server offers it —
+	/// see <see cref="FellowshipDirectory.GsrCount"/>.</para>
+	///
+	/// <para><b>Then committees.</b> There are a handful of them against a
+	/// few hundred members, so alphabetical order across the lot would
+	/// bury them. A site that does not allow committee sends from the app
+	/// is sent none, so there is nothing to hide here: the list is simply
+	/// members.</para>
+	/// </remarks>
+	public static IReadOnlyList<Recipient> FromDirectory(FellowshipDirectory directory)
+	{
+		ArgumentNullException.ThrowIfNull(directory);
+
+		var all = new List<Recipient>();
+
+		if (directory.GsrCount > 0)
+		{
+			all.Add(ForAllGsrs(directory.GsrCount));
+		}
+
+		all.AddRange(directory.Committees.Select(ForCommittee));
+		all.AddRange(directory.Members.Select(ForMember));
+
+		return all;
+	}
+
+	/// <summary>
+	/// Every GSR, as one choice at the top of the list.
+	///
+	/// <para><b>Resolved by Fellowship when it sends, not by ticking every
+	/// GSR here.</b> The address book leaves out GSRs who have opted out of
+	/// being listed, and caps how many members one send may name; a
+	/// choice called "All GSRs" that quietly reached some of them would be
+	/// worse than not offering it. So what travels is a flag, and the
+	/// server works out who that is, as it does for a committee.</para>
+	///
+	/// <para>The second line says how many it reaches, because that number
+	/// is the thing a sender cannot otherwise see — and a broadcast to
+	/// forty people should look like one before it is sent.</para>
+	/// </summary>
+	/// <param name="count">How many GSRs, from <see cref="FellowshipDirectory.GsrCount"/>.</param>
+	public static Recipient ForAllGsrs(int count) => new()
+	{
+		Key = "g:all",
+		Name = "All GSRs",
+		Detail = count == 1 ? "1 GSR" : count.ToString(System.Globalization.CultureInfo.CurrentCulture) + " GSRs",
+		IsAllGsrs = true,
+	};
 
 	public static Recipient ForCommittee(DirectoryCommittee committee)
 	{

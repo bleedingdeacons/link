@@ -270,6 +270,11 @@ public sealed class FellowshipClient : IFellowshipClient
 			body["committees"] = request.Committees;
 		}
 
+		if (request.AllGsrs)
+		{
+			body["gsrs"] = true;
+		}
+
 		if (request.ReplyToId > 0)
 		{
 			body["reply_to"] = request.ReplyToId;
@@ -423,7 +428,14 @@ public sealed class FellowshipClient : IFellowshipClient
 			}
 		}
 
-		return new FellowshipDirectory { Members = members, Committees = committees };
+		return new FellowshipDirectory
+		{
+			Members = members,
+			Committees = committees,
+			// Null, absent or nonsense all read as not offered. See
+			// FellowshipDirectory.GsrCount.
+			GsrCount = (int)Math.Clamp(Number(json.Value, "gsrs"), 0, int.MaxValue),
+		};
 	}
 
 	public async Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default)

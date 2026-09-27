@@ -209,23 +209,10 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 
 		_all.Clear();
 
-		// Committees first. There are a handful of them against a few
-		// hundred members, so alphabetical order across the lot would bury
-		// them — and a committee is the choice somebody scrolling is most
-		// likely to be looking for deliberately.
-		//
-		// A site that does not allow committee sends from the app is sent
-		// none, so there is nothing here to hide: the list is simply
-		// members.
-		foreach (var committee in directory.Committees)
-		{
-			_all.Add(Recipient.ForCommittee(committee));
-		}
-
-		foreach (var member in directory.Members)
-		{
-			_all.Add(Recipient.ForMember(member));
-		}
+		// All GSRs, then committees, then members. The order and when All
+		// GSRs is offered are Recipient.FromDirectory's, where the specs
+		// can reach them.
+		_all.AddRange(Recipient.FromDirectory(directory));
 
 		AddressReply();
 
@@ -401,21 +388,15 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 
 		try
 		{
+			// Every kind of recipient, from one set of chips. Fellowship
+			// resolves the union and de-duplicates, so somebody who is named
+			// and also sits on a chosen committee, or is a GSR, gets one copy.
 			var result = await _messages.SendAsync(new SendRequest
 			{
 				Subject = Subject,
 				Body = Body,
-				// Both lists, from one set of chips. Fellowship refused a
-				// request carrying both until 2026-09-11; it now resolves
-				// the union and de-duplicates, so somebody who is named and
-				// also sits on a chosen committee gets one copy.
-				MemberIds = [.. Chosen.Where(r => !r.IsCommittee).Select(r => r.MemberId)],
-				Committees = [.. Chosen.Where(r => r.IsCommittee).Select(r => r.CommitteeSlug)],
 				ReplyToId = ReplyToId,
-				// Kept with the sent copy on this phone, so a conversation can
-				// say who it went to. Never sent to the server.
-				To = string.Join(", ", Chosen.Select(r => r.Name)),
-			}).ConfigureAwait(true);
+			}.AddressedTo(Chosen)).ConfigureAwait(true);
 
 			if (!result.Succeeded)
 			{

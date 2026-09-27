@@ -348,6 +348,12 @@ public sealed record SendRequest
 	/// </summary>
 	public IReadOnlyList<string> Committees { get; init; } = [];
 
+	/// <summary>
+	/// Every GSR, resolved by Fellowship when it sends — including GSRs the
+	/// directory does not list. May travel alongside the other two.
+	/// </summary>
+	public bool AllGsrs { get; init; }
+
 	/// <summary>The message being replied to, or 0.</summary>
 	public long ReplyToId { get; init; }
 
@@ -360,6 +366,31 @@ public sealed record SendRequest
 	/// body field by field and this is not one of them.</para>
 	/// </summary>
 	public string To { get; init; } = string.Empty;
+
+	/// <summary>
+	/// This request addressed to the recipients chosen in Compose: members
+	/// by id, committees by slug, All GSRs as a flag, and the names for
+	/// <see cref="To"/>.
+	///
+	/// <para>Here rather than in Compose so the one place that decides how
+	/// a chip becomes a field on the wire is the one the specs exercise.
+	/// Filtering members as "not a committee" was right until there was a
+	/// third kind, and would then have sent All GSRs as member id 0.</para>
+	/// </summary>
+	public SendRequest AddressedTo(IEnumerable<Recipient> chosen)
+	{
+		ArgumentNullException.ThrowIfNull(chosen);
+
+		var recipients = chosen.ToList();
+
+		return this with
+		{
+			MemberIds = [.. recipients.Where(r => r.IsMember).Select(r => r.MemberId)],
+			Committees = [.. recipients.Where(r => r.IsCommittee).Select(r => r.CommitteeSlug)],
+			AllGsrs = recipients.Exists(r => r.IsAllGsrs),
+			To = string.Join(", ", recipients.Select(r => r.Name)),
+		};
+	}
 }
 
 /// <summary>The outcome of a send.</summary>
