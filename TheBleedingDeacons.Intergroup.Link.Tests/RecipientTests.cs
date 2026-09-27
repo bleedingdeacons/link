@@ -133,4 +133,45 @@ public sealed class RecipientTests
 
 		Assert.True(committee.Matches("public"));
 	}
+
+	[Fact]
+	public void AMemberWithNoDeviceIsLeftOutWhenOnlyRegisteredMembersAreListed()
+	{
+		var member = Recipient.ForMember(new DirectoryMember { Id = 1, Name = "Jo B", HasDevice = false });
+
+		Assert.False(member.IsListed(onlyRegistered: true));
+	}
+
+	[Fact]
+	public void AMemberWithNoDeviceIsStillShownWhenEveryoneIsListed()
+	{
+		// Shown, and still not choosable: the setting decides what is on
+		// screen, never who can be sent to.
+		var member = Recipient.ForMember(new DirectoryMember { Id = 1, Name = "Jo B", HasDevice = false });
+
+		Assert.True(member.IsListed(onlyRegistered: false));
+		Assert.False(member.HasDevice);
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void AMemberWithADeviceIsAlwaysListed(bool onlyRegistered)
+	{
+		var member = Recipient.ForMember(new DirectoryMember { Id = 1, Name = "Dave P", HasDevice = true });
+
+		Assert.True(member.IsListed(onlyRegistered));
+	}
+
+	[Theory]
+	[InlineData(true)]
+	[InlineData(false)]
+	public void ACommitteeIsAlwaysListed(bool onlyRegistered)
+	{
+		// It reaches every member on it, registered or not, so the setting
+		// has nothing to say about it.
+		var committee = Recipient.ForCommittee(new DirectoryCommittee { Slug = "pi", Name = "Public Information" });
+
+		Assert.True(committee.IsListed(onlyRegistered));
+	}
 }
