@@ -438,6 +438,21 @@ public sealed class FellowshipClient : IFellowshipClient
 		};
 	}
 
+	public async Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken = default)
+	{
+		var json = await GetAsync(_configuration.Route("logging"), token, cancellationToken).ConfigureAwait(false);
+		if (json is null || json.Value.ValueKind != JsonValueKind.Object)
+		{
+			return null;
+		}
+
+		return new BetterStackConfiguration
+		{
+			Endpoint = Text(json.Value, "endpoint"),
+			SourceToken = Text(json.Value, "source_token"),
+		};
+	}
+
 	public async Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default)
 	{
 		var body = new Dictionary<string, string>(StringComparer.Ordinal)

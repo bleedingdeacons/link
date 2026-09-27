@@ -48,8 +48,11 @@ public static class MauiProgram
 		// ── Load appsettings.json from the embedded resource ──────────
 		// MAUI does not pick appsettings.json up the way ASP.NET Core does.
 		// The file is embedded (see the csproj) and has to be loaded by hand
-		// so Serilog's ReadFrom.Configuration and the BetterStack lookup
-		// below actually return something.
+		// so Serilog's ReadFrom.Configuration actually returns something.
+		//
+		// The Better Stack settings are not in it, and must not be: they
+		// come from Fellowship once the handset has signed in. See
+		// RemoteLogging.
 		//
 		// LinkServices reads the same resource with JsonDocument for the
 		// Fellowship section, and goes on doing so: it runs in the headless
@@ -144,6 +147,10 @@ public static class MauiProgram
 			return new BetterStackLoggerController(_baseLoggerFactory, httpClient);
 		});
 
+		// Where the controller's settings come from. See RemoteLogging.
+		builder.Services.AddSingleton<ILoggingSettingsStore, LoggingSettingsStore>();
+		builder.Services.AddSingleton<RemoteLogging>();
+
 		builder.Services.AddSingleton<SignInViewModel>();
 		builder.Services.AddSingleton<MessagesViewModel>();
 		// Transient, unlike the others: one instance per conversation
@@ -180,14 +187,26 @@ public static class MauiProgram
 		// ── Attach the Better Stack sink ──────────────────────────────
 		// SetupSerilog runs before the container exists, so it cannot build
 		// the durable HTTP sink itself. Once it does, the controller layers
-		// that sink onto the base pipeline. A configuration with no token —
-		// which is what a build ships with unless somebody put one in — is
-		// a supported state: the controller takes its "not configured"
-		// branch and the app logs locally only.
-		using (var scope = app.Services.CreateScope())
+		// that sink onto the base pipeline, from whatever Fellowship last
+		// handed this handset. Nothing stored — a fresh install, or a
+		// handset that has signed out — holds logs in a small buffer until
+		// Fellowship answers; AppShell asks it once the shell is up.
+		//
+		// Resolved here, not left to the first caller, for the push process
+		// too: it has no shell, and the sign-out message RemoteLogging
+		// listens for can come from its sync.
+		//
+		// Blocking on SecureStorage, as LinkServices does for the history
+		// key, and for the same reason. It must not stop the app starting.
+		try
 		{
-			var controller = scope.ServiceProvider.GetRequiredService<IBetterStackLoggerController>();
-			controller.Reconfigure(ReadBetterStackConfiguration(builder.Configuration));
+			app.Services.GetRequiredService<RemoteLogging>().ApplyStoredAsync().GetAwaiter().GetResult();
+		}
+#pragma warning disable CA1031 // Deliberately broad: logging must not stop a launch.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Log.Warning(ex, "Stored log settings could not be applied; logging locally only");
 		}
 
 		return app;
@@ -206,10 +225,9 @@ public static class MauiProgram
 	/// handset, a cable and somebody who knows to ask, and the failures
 	/// that matter here — a message that arrived and would not open, a push
 	/// that silently stopped — are exactly the ones a member does not
-	/// report because they cannot see them happening. The token is still a
-	/// credential shipped in an app, which is why it is empty unless
-	/// somebody deliberately puts one in, and why it buys nothing but
-	/// visibility if it leaks.</para>
+	/// report because they cannot see them happening. The token is not
+	/// built into the app: Fellowship hands it to a handset once it has
+	/// signed in. See <see cref="RemoteLogging"/>.</para>
 	///
 	/// <para><c>shared: true</c> on the file sink because the Firebase
 	/// service writes here too. It runs in this process today, so it is not
@@ -352,20 +370,6 @@ public static class MauiProgram
 
 		return cfg;
 	}
-
-	/// <summary>
-	/// Where the log shipper posts, and what it authenticates with. Empty
-	/// unless a build was given one, which is the shipped default.
-	/// </summary>
-	private static BetterStackConfiguration ReadBetterStackConfiguration(IConfiguration config) =>
-		// A scheme-less endpoint is given one by the model's setter rather
-		// than here, so every path that sets it is covered by the same rule.
-		// See BetterStackConfiguration.Endpoint for what goes wrong without.
-		new()
-		{
-			Endpoint = config["BetterStack:Endpoint"] ?? string.Empty,
-			SourceToken = config["BetterStack:SourceToken"] ?? string.Empty,
-		};
 
 	/// <summary>
 	/// A name for this handset in the live tail. Reads the same preference

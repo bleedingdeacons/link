@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Views;
 
@@ -49,5 +51,28 @@ public partial class AppShell : Shell
 		// pushed page off the stack, so a signed-out member cannot back
 		// into it.
 		Dispatcher.Dispatch(() => _ = GoToAsync(signedIn ? "//messages" : "//signin"));
+
+		// The same moments decide where logs go: asked for once signed in,
+		// forgotten once not. Not awaited, so nobody waits on a logging
+		// request to see their messages.
+		_ = RefreshLoggingAsync();
+	}
+
+	private static async Task RefreshLoggingAsync()
+	{
+		try
+		{
+			var logging = IPlatformApplication.Current?.Services.GetService<RemoteLogging>();
+			if (logging is not null)
+			{
+				await logging.RefreshAsync().ConfigureAwait(false);
+			}
+		}
+#pragma warning disable CA1031 // Fire and forget: there is nobody to throw to.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Log.Warning(ex, "Log settings could not be refreshed from the intergroup");
+		}
 	}
 }
