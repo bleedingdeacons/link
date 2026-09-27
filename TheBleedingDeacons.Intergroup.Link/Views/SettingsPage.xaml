@@ -66,6 +66,23 @@
 				        VerticalOptions="Center" />
 			</Grid>
 
+			<!--
+				Who Compose lists. On by default: most of a fellowship will
+				not have Link, and a picker full of names that cannot be
+				tapped reads as broken. Off shows them greyed out, which
+				tells the sender to reach them some other way. Committees
+				are listed either way.
+			-->
+			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+				<Label Grid.Column="0"
+				       FontSize="13"
+				       VerticalOptions="Center"
+				       Text="Only list members who have Link when writing a message" />
+				<Switch Grid.Column="1"
+				        IsToggled="{Binding OnlyRegistered}"
+				        VerticalOptions="Center" />
+			</Grid>
+
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
 			<Label Text="Messages on this phone" FontSize="13" Opacity="0.6" />

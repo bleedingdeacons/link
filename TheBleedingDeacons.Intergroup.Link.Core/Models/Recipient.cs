@@ -59,6 +59,21 @@ public sealed record Recipient
 	public bool HasNoDevice => !HasDevice;
 
 	/// <summary>
+	/// Whether this recipient appears in the compose list at all.
+	///
+	/// <para>With <paramref name="onlyRegistered"/> off, everybody is listed
+	/// and a member with no device is shown but cannot be chosen, which
+	/// tells the sender to reach them some other way. With it on, which is
+	/// the default (see <c>IRecipientListing</c>), they are left out, so a
+	/// fellowship where most members have never installed Link does not
+	/// scroll past a page of names that cannot be tapped.</para>
+	///
+	/// <para>A committee is always listed. It reaches every member on it,
+	/// registered or not, so the setting has nothing to say about it.</para>
+	/// </summary>
+	public bool IsListed(bool onlyRegistered) => !onlyRegistered || HasDevice;
+
+	/// <summary>
 	/// Whether <paramref name="term"/> matches. Name, and whatever the
 	/// second line says: somebody who wants the Secretary, or the GSR from
 	/// Tuesday Bristol, is describing a person the only way they can.

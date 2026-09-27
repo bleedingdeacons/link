@@ -36,6 +36,7 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	private readonly IFellowshipClient _client;
 	private readonly ISessionStore _sessions;
 	private readonly IMessageHistory _history;
+	private readonly IRecipientListing _listing;
 
 	/// <summary>The message being forwarded, until it has been quoted; then 0.</summary>
 	private long _forwardId;
@@ -46,12 +47,18 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	/// </summary>
 	private long _replyToMemberId;
 
-	public ComposeViewModel(IMessageService messages, IFellowshipClient client, ISessionStore sessions, IMessageHistory history)
+	public ComposeViewModel(
+		IMessageService messages,
+		IFellowshipClient client,
+		ISessionStore sessions,
+		IMessageHistory history,
+		IRecipientListing listing)
 	{
 		_messages = messages;
 		_client = client;
 		_sessions = sessions;
 		_history = history;
+		_listing = listing;
 	}
 
 	/// <summary>
@@ -298,15 +305,23 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 	/// <para>Rebuilt rather than filtered in place, and it drops whatever
 	/// is already chosen: a name in the list and the same name in a chip
 	/// above it invites a second tap that does nothing.</para>
+	///
+	/// <para>Members with no registered device are dropped here too, when
+	/// the setting asks for it, and only here: <see cref="_all"/> keeps
+	/// the whole address book. Nothing lost by that, because
+	/// <see cref="Replying"/> will not address a reply to somebody with no
+	/// device either way, so hiding them changes what is shown and nothing
+	/// about who can be sent to.</para>
 	/// </summary>
 	private void ApplySearch()
 	{
 		var term = Search.Trim();
+		var onlyRegistered = _listing.OnlyRegistered;
 
 		Candidates.Clear();
 		foreach (var candidate in _all)
 		{
-			if (candidate.Matches(term) && !IsChosen(candidate))
+			if (candidate.IsListed(onlyRegistered) && candidate.Matches(term) && !IsChosen(candidate))
 			{
 				Candidates.Add(candidate);
 			}

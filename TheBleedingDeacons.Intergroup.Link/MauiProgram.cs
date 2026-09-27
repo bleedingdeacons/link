@@ -112,6 +112,7 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton<IUiDispatcher, MainThreadDispatcher>();
 		builder.Services.AddSingleton<IArrivalSound, ArrivalSound>();
+		builder.Services.AddSingleton<IRecipientListing, RecipientListing>();
 		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
 

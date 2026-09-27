@@ -20,6 +20,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly IPushRegistrar _registrar;
 	private readonly INotificationPermission _notifications;
 	private readonly IArrivalSound _sound;
+	private readonly IRecipientListing _listing;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -27,7 +28,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		IMessageHistory history,
 		IPushRegistrar registrar,
 		INotificationPermission notifications,
-		IArrivalSound sound)
+		IArrivalSound sound,
+		IRecipientListing listing)
 	{
 		_auth = auth;
 		_sessions = sessions;
@@ -36,6 +38,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_notifications = notifications;
 		_sound = sound;
 		_soundOn = sound.Enabled;
+		_listing = listing;
+		_onlyRegistered = listing.OnlyRegistered;
 
 		// The recovery is hidden until there is something to recover
 		// from. It asks a member to sign in again, which is a great deal
@@ -112,6 +116,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private bool _soundOn;
 
 	partial void OnSoundOnChanged(bool value) => _sound.Enabled = value;
+
+	/// <summary>
+	/// Whether Compose lists only members with Link registered. Read once
+	/// and written straight through, as <see cref="SoundOn"/> is. See
+	/// <see cref="IRecipientListing"/>.
+	/// </summary>
+	[ObservableProperty]
+	private bool _onlyRegistered;
+
+	partial void OnOnlyRegisteredChanged(bool value) => _listing.OnlyRegistered = value;
 
 	[ObservableProperty]
 	private string _memberName = string.Empty;
