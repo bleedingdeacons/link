@@ -119,13 +119,15 @@ public sealed class ComposeSteps(World world)
 	[Then(@"^the send carried no address of any kind$")]
 	public void NoAddresses()
 	{
-		var wire = JsonSerializer.Serialize(world.Fellowship.Sent.ShouldHaveSingleItem());
+		// Without To, which holds the names for the copy kept on this phone
+		// and is never put on the wire — see SendRequest.To.
+		var wire = JsonSerializer.Serialize(world.Fellowship.Sent.ShouldHaveSingleItem() with { To = string.Empty });
 
 		wire.ShouldNotContain("@");
 
 		// Not even the names, which the app has and the server does not
 		// need: it resolves an id to a member itself.
-		foreach (var member in world.Chosen.Where(r => !r.IsCommittee))
+		foreach (var member in world.Chosen.Where(r => r.IsMember))
 		{
 			wire.ShouldNotContain(member.Name);
 		}
@@ -238,12 +240,62 @@ public sealed class ComposeSteps(World world)
 		return matches[nth];
 	}
 
-	private SendRequest Request(long replyTo) => new()
+	/// <summary>Addressed as Compose addresses it, by the same method.</summary>
+	private SendRequest Request(long replyTo) => new SendRequest
 	{
 		Subject = "September intergroup",
 		Body = "Moved to the 14th, same room.",
-		MemberIds = [.. world.Chosen.Where(r => !r.IsCommittee).Select(r => r.MemberId)],
-		Committees = [.. world.Chosen.Where(r => r.IsCommittee).Select(r => r.CommitteeSlug)],
 		ReplyToId = replyTo,
-	};
+	}.AddressedTo(world.Chosen);
+
+	// ── All GSRs ──────────────────────────────────────────────────────
+
+	/// <summary>
+	/// A directory as Fellowship would send it — names joined by "and", "the
+	/// X committee" for a committee — and how many GSRs it offers to reach.
+	/// </summary>
+	[Given(@"^Fellowship's directory holds (.+) and counts (no|\d+) GSRs?$")]
+	public void Directory(string names, string count)
+	{
+		var members = new List<DirectoryMember>();
+		var committees = new List<DirectoryCommittee>();
+
+		foreach (var name in names.Split(" and ", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+		{
+			if (name.StartsWith("the ", StringComparison.Ordinal) && name.EndsWith(" committee", StringComparison.Ordinal))
+			{
+				var committee = name["the ".Length..^" committee".Length];
+				committees.Add(new DirectoryCommittee { Slug = committee.ToLowerInvariant(), Name = committee });
+				continue;
+			}
+
+			members.Add(new DirectoryMember { Id = ++_memberId, Name = name });
+		}
+
+		world.Fellowship.Directory = new FellowshipDirectory
+		{
+			Members = members,
+			Committees = committees,
+			GsrCount = string.Equals(count, "no", StringComparison.Ordinal)
+				? 0
+				: int.Parse(count, CultureInfo.InvariantCulture),
+		};
+	}
+
+	/// <summary>What Compose does with the directory when it opens.</summary>
+	[When(@"^the address book is read$")]
+	public async Task ReadAddressBook()
+	{
+		world.Addressable.Clear();
+		world.Addressable.AddRange(Recipient.FromDirectory(await world.Fellowship.FetchDirectoryAsync("fdt_x", default)));
+	}
+
+	[Then(@"^the address book reads (.+)$")]
+	public void AddressBookReads(string names) =>
+		world.Addressable.Select(r => r.Name).ShouldBe(names.Split(", "));
+
+	[Then(@"^the send (asked|did not ask) for all GSRs$")]
+	public void AskedForAllGsrs(string verdict) =>
+		world.Fellowship.Sent.ShouldHaveSingleItem().AllGsrs
+			.ShouldBe(string.Equals(verdict, "asked", StringComparison.Ordinal));
 }

@@ -147,5 +147,21 @@ public sealed record FellowshipDirectory
 
 	public IReadOnlyList<DirectoryCommittee> Committees { get; init; } = [];
 
+	/// <summary>
+	/// How many GSRs a send to "All GSRs" would reach, or 0 when that is
+	/// not on offer.
+	///
+	/// <para><b>Zero is also what an older Fellowship means</b>, by
+	/// sending nothing, and that is the reason the choice waits on it. A
+	/// server that does not know the audience ignores it on a send, and
+	/// beside named members that would quietly reach them alone — so the
+	/// app offers "All GSRs" only when the server has said it may.</para>
+	///
+	/// <para>Counted on the server, not from <see cref="Members"/>: a GSR
+	/// who has opted out of the directory is not listed here and is still
+	/// reached.</para>
+	/// </summary>
+	public int GsrCount { get; init; }
+
 	public static FellowshipDirectory Empty { get; } = new();
 }

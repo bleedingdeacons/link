@@ -176,3 +176,57 @@ Feature: Addressing a message to somebody
       Then the send failed
       And the reason given is "This device is not signed in."
       And nothing was sent to the server
+
+  Rule: All GSRs is one choice, at the top, and the server works out who
+
+    Fellowship resolves it when it sends, as it does a committee. Ticking
+    every GSR in the list would miss the GSRs who have opted out of being
+    listed, and run into the cap on how many members one send may name.
+    So what goes on the wire is a flag, not a list of ids.
+
+    It is offered only when Fellowship says how many GSRs it would reach.
+    A Fellowship older than the choice ignores the flag, and beside named
+    members that would quietly send to them alone.
+
+    Scenario: It heads the list when Fellowship offers it
+      Given Fellowship's directory holds Dave B and the Literature committee and counts 12 GSRs
+      When the address book is read
+      Then the address book reads All GSRs, Literature, Dave B
+      And the All GSRs row's second line reads "12 GSRs"
+
+    Scenario: One GSR is not "1 GSRs"
+      Given Fellowship's directory holds Dave B and counts 1 GSR
+      When the address book is read
+      Then the All GSRs row's second line reads "1 GSR"
+
+    Scenario: It is not offered when Fellowship does not offer it
+      Given Fellowship's directory holds Dave B and the Literature committee and counts no GSRs
+      When the address book is read
+      Then the address book reads Literature, Dave B
+
+    Scenario: It is sent as a flag, not as a list of members
+      Given Fellowship's directory holds Dave B and counts 12 GSRs
+      When the address book is read
+      And a message is addressed to All GSRs
+      And it is sent
+      Then the send asked for all GSRs
+      And the send named 0 members by id
+      And the send carried no address of any kind
+
+    Scenario: It travels with named members and committees
+      Given Fellowship's directory holds Dave B and the Literature committee and counts 12 GSRs
+      When the address book is read
+      And a message is addressed to All GSRs
+      And a message is addressed to Dave B
+      And a message is addressed to Literature
+      And it is sent
+      Then the send asked for all GSRs
+      And the send named 1 member by id
+      And the send named the committee "literature"
+
+    Scenario: A message not addressed to it does not ask for it
+      Given Fellowship's directory holds Dave B and counts 12 GSRs
+      When the address book is read
+      And a message is addressed to Dave B
+      And it is sent
+      Then the send did not ask for all GSRs

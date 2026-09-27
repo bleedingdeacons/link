@@ -367,6 +367,32 @@ public sealed class FellowshipClientTests
 		Assert.DoesNotContain("@", handler.LastBody, StringComparison.Ordinal);
 	}
 
+	[Theory]
+	[InlineData(true, "\"gsrs\":true")]
+	[InlineData(false, "gsrs")]
+	public async Task AllGsrsTravelsAsAFlagOnlyWhenAskedFor(bool allGsrs, string fragment)
+	{
+		var handler = new StubHandler(HttpStatusCode.Created, """{"id":55,"recipients":12}""");
+
+		await Client(handler).SendAsync("fdt_x", new SendRequest { Subject = "Assembly", Body = "Saturday.", AllGsrs = allGsrs });
+
+		Assert.Equal(allGsrs, handler.LastBody.Contains(fragment, StringComparison.Ordinal));
+	}
+
+	[Theory]
+	[InlineData("""{"members":[],"committees":[],"gsrs":12}""", 12)]
+	[InlineData("""{"members":[],"committees":[],"gsrs":null}""", 0)]
+	[InlineData("""{"members":[],"committees":[]}""", 0)]
+	[InlineData("""{"members":[],"committees":[],"gsrs":-3}""", 0)]
+	public async Task TheDirectorySaysHowManyGsrsAllGsrsWouldReach(string json, int expected)
+	{
+		// Absent is what a Fellowship older than the choice sends, and it
+		// must read as "not offered" — see FellowshipDirectory.GsrCount.
+		var directory = await Client(new StubHandler(HttpStatusCode.OK, json)).FetchDirectoryAsync("fdt_x");
+
+		Assert.Equal(expected, directory.GsrCount);
+	}
+
 	[Fact]
 	public async Task ARefusedSendCarriesTheServersReason()
 	{
