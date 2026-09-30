@@ -568,7 +568,7 @@ public sealed class DeviceAuthService
 		_ => provider,
 	};
 
-	private static string PlatformName() =>
+	internal static string PlatformName() =>
 		DeviceInfo.Current.Platform == DevicePlatform.iOS ? "ios" : "android";
 
 	/// <summary>
@@ -579,7 +579,7 @@ public sealed class DeviceAuthService
 	/// lost one out of a list of two, which is the only thing it is
 	/// for.</para>
 	/// </summary>
-	private static string DeviceLabel()
+	internal static string DeviceLabel()
 	{
 		var name = DeviceInfo.Current.Name;
 

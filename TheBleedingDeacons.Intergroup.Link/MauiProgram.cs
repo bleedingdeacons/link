@@ -168,8 +168,9 @@ public static class MauiProgram
 					new FreedomOptions { BaseUrl = site, Application = "link" },
 					new SecureStorageFreedomStore("link"),
 					new SecureStorageCredentialStore("link"),
+					device: new LinkDeviceIdentity(),
 					httpClient: LinkServices.Http,
-					logger: sp.GetService<ILogger<FreedomClient>>())))
+					logger: sp.GetService<ILogger<FreedomClient>>())), new HandoverRecord())
 				: NoLoggingSource.Instance);
 		builder.Services.AddSingleton<RemoteLogging>();
 

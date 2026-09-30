@@ -21,6 +21,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly INotificationPermission _notifications;
 	private readonly IArrivalSound _sound;
 	private readonly IRecipientListing _listing;
+	private readonly ILoggingSource _config;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -29,7 +30,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		IPushRegistrar registrar,
 		INotificationPermission notifications,
 		IArrivalSound sound,
-		IRecipientListing listing)
+		IRecipientListing listing,
+		ILoggingSource config)
 	{
 		_auth = auth;
 		_sessions = sessions;
@@ -40,6 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_soundOn = sound.Enabled;
 		_listing = listing;
 		_onlyRegistered = listing.OnlyRegistered;
+		_config = config;
 
 		// The recovery is hidden until there is something to recover
 		// from. It asks a member to sign in again, which is a great deal
@@ -189,6 +192,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 	public string Build => BuildInfo.Summary;
 #pragma warning restore S2325
 
+	/// <summary>
+	/// When this handset last heard from Freedom, under the build and for
+	/// the same reader. See <see cref="LastRetrieved"/>.
+	///
+	/// <para>Re-read on every visit, not once: a start while Settings was
+	/// away may have retrieved it since.</para>
+	/// </summary>
+	[ObservableProperty]
+	private string _configRetrieved = string.Empty;
+
 	[RelayCommand]
 	public async Task LoadAsync()
 	{
@@ -197,6 +210,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var held = await _history.AllAsync().ConfigureAwait(true);
 		Held = held.Count;
+
+		var retrieved = await _config.LastRetrievedAsync().ConfigureAwait(true);
+		ConfigRetrieved = LastRetrieved.Describe(retrieved?.ToLocalTime());
 
 		await RefreshPushAsync().ConfigureAwait(true);
 	}

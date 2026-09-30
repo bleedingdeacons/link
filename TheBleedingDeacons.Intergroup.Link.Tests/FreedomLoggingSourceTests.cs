@@ -26,7 +26,9 @@ public sealed class FreedomLoggingSourceTests
 
 	private readonly FakeFreedom _freedom = new();
 
-	private FreedomLoggingSource Source() => new(_freedom);
+	private readonly FakeHandover _handover = new() { IsCurrent = true };
+
+	private FreedomLoggingSource Source() => new(_freedom, _handover);
 
 	[Fact]
 	public async Task ASignedInHandsetReadsBothValues()
@@ -60,6 +62,59 @@ public sealed class FreedomLoggingSourceTests
 
 		Assert.Equal("fdt_test", _freedom.HandedOver);
 		Assert.True(config!.IsValid());
+	}
+
+	[Fact]
+	public async Task AHandoverIsRecordedAsCurrent()
+	{
+		_handover.IsCurrent = false;
+		_freedom.Syncs.Enqueue(SyncStatus.NotEnrolled);
+
+		await Source().FetchAsync(Session);
+
+		Assert.True(_handover.IsCurrent);
+	}
+
+	/// <summary>
+	/// A handset signed in on an older build hands over once more, so the
+	/// site's Devices tab gets this build's name, model and version.
+	/// </summary>
+	[Fact]
+	public async Task AnUpdatedHandsetHandsOverOnceMore()
+	{
+		_handover.IsCurrent = false;
+		_freedom.Values[FreedomLoggingSource.EndpointKey] = "s1.betterstackdata.com";
+		_freedom.Values[FreedomLoggingSource.SourceTokenKey] = "src-token";
+
+		var config = await Source().FetchAsync(Session);
+
+		Assert.Equal("fdt_test", _freedom.HandedOver);
+		Assert.True(_handover.IsCurrent);
+		Assert.True(config!.IsValid());
+	}
+
+	[Fact]
+	public async Task ARefusedRefreshStillAnswersWithTheSync()
+	{
+		_handover.IsCurrent = false;
+		_freedom.Enrolment = EnrolmentStatus.Refused;
+		_freedom.Values[FreedomLoggingSource.EndpointKey] = "s1.betterstackdata.com";
+		_freedom.Values[FreedomLoggingSource.SourceTokenKey] = "src-token";
+
+		var config = await Source().FetchAsync(Session);
+
+		Assert.True(config!.IsValid());
+		Assert.False(_handover.IsCurrent);
+	}
+
+	[Fact]
+	public async Task NoAnswerDoesNotHandOverForTheRefresh()
+	{
+		_handover.IsCurrent = false;
+		_freedom.Syncs.Enqueue(SyncStatus.Offline);
+
+		Assert.Null(await Source().FetchAsync(Session));
+		Assert.Null(_freedom.HandedOver);
 	}
 
 	[Fact]
@@ -123,10 +178,26 @@ public sealed class FreedomLoggingSourceTests
 	}
 
 	[Fact]
+	public async Task LastRetrievedIsFreedomsVerifiedTime()
+	{
+		_freedom.VerifiedAt = new DateTimeOffset(2026, 9, 30, 19, 57, 0, TimeSpan.Zero);
+
+		Assert.Equal(_freedom.VerifiedAt, await Source().LastRetrievedAsync());
+	}
+
+	[Fact]
 	public async Task RejectsNulls()
 	{
-		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(null!));
+		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(null!, _handover));
+		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(_freedom, null!));
 		await Assert.ThrowsAsync<ArgumentNullException>(() => Source().FetchAsync(null!));
+	}
+
+	private sealed class FakeHandover : IHandoverRecord
+	{
+		public bool IsCurrent { get; set; }
+
+		public void MarkCurrent() => IsCurrent = true;
 	}
 
 	private sealed class FakeFreedom : IFreedomSession
@@ -140,6 +211,8 @@ public sealed class FreedomLoggingSourceTests
 		public string? HandedOver { get; private set; }
 
 		public int SignOuts { get; private set; }
+
+		public DateTimeOffset? VerifiedAt { get; set; }
 
 		public Task<SyncResult> SyncAsync(CancellationToken cancellationToken = default) =>
 			Task.FromResult(SyncResult.Nothing(Syncs.Count > 0 ? Syncs.Dequeue() : SyncStatus.UpToDate, DateTimeOffset.UtcNow, "fake"));
@@ -160,5 +233,8 @@ public sealed class FreedomLoggingSourceTests
 			SignOuts++;
 			return Task.CompletedTask;
 		}
+
+		public Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
+			Task.FromResult(VerifiedAt);
 	}
 }

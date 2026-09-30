@@ -33,9 +33,13 @@ public sealed class FreedomLoggingSource : ILoggingSource
 	public const string SourceTokenKey = "betterstack.source_token";
 
 	private readonly IFreedomSession _freedom;
+	private readonly IHandoverRecord _handover;
 
-	public FreedomLoggingSource(IFreedomSession freedom) =>
+	public FreedomLoggingSource(IFreedomSession freedom, IHandoverRecord handover)
+	{
 		_freedom = freedom ?? throw new ArgumentNullException(nameof(freedom));
+		_handover = handover ?? throw new ArgumentNullException(nameof(handover));
+	}
 
 	public async Task<BetterStackConfiguration?> FetchAsync(DeviceSession session, CancellationToken cancellationToken = default)
 	{
@@ -56,12 +60,30 @@ public sealed class FreedomLoggingSource : ILoggingSource
 				return null;
 			}
 
+			_handover.MarkCurrent();
 			sync = enrolled.Sync ?? await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
+		}
+		else if (IsAnswer(sync.Status) && !_handover.IsCurrent)
+		{
+			// Signed in already, but not since Link was updated: hand over
+			// once more so Freedom has this build's name, model and version.
+			// See IHandoverRecord. It re-attaches the same device; if it is
+			// refused, the sync already in hand still counts.
+			var refreshed = await _freedom.EnrolAsync(FreedomProof.ExistingSession(session.Token), cancellationToken).ConfigureAwait(false);
+			if (refreshed.Succeeded)
+			{
+				_handover.MarkCurrent();
+				sync = refreshed.Sync ?? sync;
+			}
+			else
+			{
+				Log.Information("Freedom did not refresh this handset's details ({Status}): {Message}", refreshed.Status, refreshed.Message);
+			}
 		}
 
 		// A key fault is a secret this handset could not open. Freedom kept
 		// the value it had, which is still the best answer there is.
-		if (sync.Status is not (SyncStatus.UpToDate or SyncStatus.Updated or SyncStatus.KeyFault))
+		if (!IsAnswer(sync.Status))
 		{
 			Log.Debug("Freedom gave no answer ({Status}); keeping where logs go", sync.Status);
 			return null;
@@ -74,6 +96,12 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		};
 	}
 
+	private static bool IsAnswer(SyncStatus status) =>
+		status is SyncStatus.UpToDate or SyncStatus.Updated or SyncStatus.KeyFault;
+
 	public Task ForgetAsync(CancellationToken cancellationToken = default) =>
 		_freedom.SignOutAsync(cancellationToken);
+
+	public Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
+		_freedom.LastRetrievedAsync(cancellationToken);
 }
