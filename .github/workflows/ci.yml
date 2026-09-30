@@ -320,8 +320,18 @@ jobs:
 
       # maui-ios, not maui: the full workload would pull in the Android SDK
       # and MacCatalyst for a job that builds neither.
+      # Pinned to a workload set, not left to take the newest. On 2026-09-30
+      # the newest set for this SDK band, 10.0.401.1, moved the iOS SDK to
+      # 27.0, which refuses to build with anything older than Xcode 27 --
+      # and the image's newest Xcode is 26.6. Every iOS build, main's
+      # included, failed on "requires Xcode 27.0", and with the iOS head a
+      # gate on the version job, nothing released. 10.0.401 carries iOS
+      # 26.5.10318, which builds with 26.6.
+      #
+      # Move the pin when the image has Xcode 27:
+      #   dotnet workload search version <set>   # lists each set's iOS SDK
       - name: Install MAUI iOS workload
-        run: dotnet workload install maui-ios
+        run: dotnet workload install maui-ios --version 10.0.401
 
       # appsettings.json is git-ignored, so a checkout never has one, and
       # until now neither did any artifact CI produced. That was correct for
