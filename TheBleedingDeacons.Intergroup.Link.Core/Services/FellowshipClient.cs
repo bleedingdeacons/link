@@ -6,7 +6,6 @@ using System.Text.Json;
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
-using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
@@ -436,21 +435,6 @@ public sealed class FellowshipClient : IFellowshipClient
 			// Null, absent or nonsense all read as not offered. See
 			// FellowshipDirectory.GsrCount.
 			GsrCount = (int)Math.Clamp(Number(json.Value, "gsrs"), 0, int.MaxValue),
-		};
-	}
-
-	public async Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken = default)
-	{
-		var json = await GetAsync(_configuration.Route("logging"), token, cancellationToken).ConfigureAwait(false);
-		if (json is null || json.Value.ValueKind != JsonValueKind.Object)
-		{
-			return null;
-		}
-
-		return new BetterStackConfiguration
-		{
-			Endpoint = Text(json.Value, "endpoint"),
-			SourceToken = Text(json.Value, "source_token"),
 		};
 	}
 

@@ -320,6 +320,9 @@
 		     shared with Register (bleedingdeacons/inventory). It brings the
 		     Serilog sinks it uses. From GitHub Packages; see nuget.config. -->
 		<PackageReference Include="Inventory.Maui" Version="0.1.1" />
+		<!-- Freedom's SecureStorage stores, on every head. See
+		     FreedomLoggingSource. -->
+		<PackageReference Include="Freedom.Client.Maui" Version="0.2.0" />
 		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">

@@ -416,26 +416,37 @@ not report, because they cannot see them happening.
 
 **The token is not in the app.** It used to be handled the way Hand
 handles it, in a git-ignored `appsettings.json`. That kept it out of git
-but put it in every APK and IPA built with it. Now Fellowship hands the
-endpoint and source token to a handset once it has signed in
-(`GET /logging`, set on Fellowship's settings screen), and
+but put it in every APK and IPA built with it. Now the site hands the
+endpoint and source token to a handset once it has signed in, and
 `appsettings.json` has no `BetterStack` section at all. See
-`RemoteLogging`. The logger is in one of three states:
+`RemoteLogging`.
+
+**From Freedom, since 2026-09-30.** The values are `betterstack.endpoint`
+and `betterstack.source_token` (ticked Secret) in the site's Freedom
+plugin, under an application called `link` with "Accept a Link session"
+ticked — the same two names Register reads from its own application.
+Link signs in to Freedom by handing over its Fellowship session, so there
+is still only one Google sign-in; the handset becomes a Freedom tablet
+keyed on its Fellowship enrolment, and goes when that enrolment goes. See
+`FreedomLoggingSource`. Until then Fellowship served the same two values
+from `GET /logging`, set on its settings screen; Link no longer asks it.
+
+The logger is in one of three states:
 
 - **Not told yet.** A fresh install, or a handset that has signed out.
   Logs are held in a small on-disk buffer (two files of 1 MB each). If a
   sign-in fails, the log of it ships once one succeeds.
-- **Shipping.** What Fellowship said is stored in SecureStorage, so the
+- **Shipping.** What the site said is stored in SecureStorage, so the
   next launch, or a push that wakes the handset, ships at once without
   asking first. Every launch and every sign-in asks again, and a changed
   answer rebuilds the sink.
-- **Told not to ship.** Fellowship has no token set. The sink is
-  removed and the buffer deleted.
+- **Told not to ship.** The `link` application has no Better Stack
+  values. The sink is removed and the buffer deleted.
 
-No answer (offline, a server error, or a Fellowship too old to have the
-route) keeps whatever the handset already has. Signing out, or being
-refused by the server, forgets the stored settings and goes back to
-holding.
+No answer (offline, a server error, or the site refusing the session)
+keeps whatever the handset already has. Signing out, or being refused by
+the server, forgets the stored settings, signs out of Freedom, and goes
+back to holding.
 
 The handset still holds a copy while it is signed in. That keeps the
 token out of the binary; it does not make it a secret. A Better Stack

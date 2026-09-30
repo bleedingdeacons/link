@@ -1,6 +1,5 @@
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
-using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.Specs.Support;
 
@@ -220,9 +219,6 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 
 	public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken) =>
 		Task.FromResult(Directory);
-
-	public Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken) =>
-		Task.FromResult<BetterStackConfiguration?>(null);
 
 	public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken) =>
 		Task.FromResult(true);

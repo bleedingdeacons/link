@@ -9,6 +9,8 @@ using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 using TheBleedingDeacons.Intergroup.Link.Support;
 using TheBleedingDeacons.Intergroup.Link.ViewModels;
 using TheBleedingDeacons.Intergroup.Link.Views;
+using TheBleedingDeacons.Freedom.Client;
+using TheBleedingDeacons.Freedom.Client.Maui;
 using TheBleedingDeacons.Inventory;
 using TheBleedingDeacons.Inventory.Maui;
 
@@ -85,7 +87,7 @@ public static class MauiProgram
 		// rolling file, the IDE and logcat in Debug, the console on desktop,
 		// every enricher, the crash handlers for unhandled AppDomain,
 		// unobserved-task and Android exceptions, ILogger<T> routed through
-		// Serilog, and a log shipper that holds on disk until Fellowship says
+		// Serilog, and a log shipper that holds on disk until the site says
 		// where to ship. See RemoteLogging.
 		//
 		// It cannot throw: a logger that will not build leaves Serilog's
@@ -152,8 +154,23 @@ public static class MauiProgram
 
 		// Where the log shipper's settings come from. See RemoteLogging.
 		// SecureStorage under the key Link has always used, so a handset
-		// upgrading keeps what Fellowship told it.
+		// upgrading keeps what it was told until the site answers again.
 		builder.Services.AddSingleton<ILoggingSettingsStore>(new SecureStorageLoggingSettingsStore("link_logging"));
+
+		// The answer comes from Freedom, on the same site as Fellowship, from
+		// its `link` application — signed in to with this handset's
+		// Fellowship session, so there is no second Google sign-in. Through
+		// LinkServices' HttpClient, the platform's own stack, for the same
+		// firewall. A build with no site to talk to never has an answer.
+		builder.Services.AddSingleton<ILoggingSource>(sp =>
+			Uri.TryCreate(LinkServices.Configuration.BaseUrl, UriKind.Absolute, out var site) && LinkServices.Configuration.IsConfigured
+				? new FreedomLoggingSource(new FreedomClientSession(new FreedomClient(
+					new FreedomOptions { BaseUrl = site, Application = "link" },
+					new SecureStorageFreedomStore("link"),
+					new SecureStorageCredentialStore("link"),
+					httpClient: LinkServices.Http,
+					logger: sp.GetService<ILogger<FreedomClient>>())))
+				: NoLoggingSource.Instance);
 		builder.Services.AddSingleton<RemoteLogging>();
 
 		builder.Services.AddSingleton<SignInViewModel>();
@@ -191,9 +208,9 @@ public static class MauiProgram
 
 		// ── Tell the log shipper where to ship ────────────────────────
 		// UseInventory started it holding, because nothing could be read
-		// before the container existed. Now it can: whatever Fellowship last
+		// before the container existed. Now it can: whatever the site last
 		// handed this handset. Nothing stored — a fresh install, or a
-		// handset that has signed out — goes on holding until Fellowship
+		// handset that has signed out — goes on holding until the site
 		// answers; AppShell asks it once the shell is up.
 		//
 		// Resolved here, not left to the first caller, for the push process

@@ -98,6 +98,22 @@ public static class LinkServices
 		}
 	}
 
+	/// <summary>
+	/// The one HttpClient this process talks to the intergroup's site
+	/// through: Fellowship, and Freedom on the same site.
+	/// </summary>
+	public static HttpClient Http
+	{
+		get
+		{
+			lock (Gate)
+			{
+				_ = Client;
+				return _http!;
+			}
+		}
+	}
+
 	public static IFellowshipClient Client
 	{
 		get

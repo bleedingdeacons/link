@@ -7,13 +7,18 @@ using TheBleedingDeacons.Inventory;
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
 /// <summary>
-/// Where the Better Stack settings come from: Fellowship, not the build.
+/// Where the Better Stack settings come from: the intergroup, not the build.
 ///
 /// <para><b>Why not the build.</b> A token in <c>appsettings.json</c> is
 /// in every copy of the APK and IPA, readable by anybody who unzips one,
-/// and replacing it takes a release. Fellowship hands it only to a
-/// handset that has signed in, refuses a revoked one, and can change or
-/// withdraw it from its settings screen.</para>
+/// and replacing it takes a release. The site hands it only to a handset
+/// that has signed in, refuses a revoked one, and can change or withdraw
+/// it at will.</para>
+///
+/// <para><b>Which part of the site.</b> Freedom, from 2026-09-30, through
+/// <see cref="ILoggingSource"/> — see <see cref="FreedomLoggingSource"/>.
+/// Fellowship's <c>/logging</c> route served the same two values until
+/// then.</para>
 ///
 /// <para><b>Three states, not two.</b> The logger controller is told
 /// one of these:</para>
@@ -40,17 +45,17 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed class RemoteLogging
 {
-	private readonly IFellowshipClient _client;
+	private readonly ILoggingSource _source;
 	private readonly ISessionStore _sessions;
 	private readonly ShippingSettings _settings;
 
 	public RemoteLogging(
-		IFellowshipClient client,
+		ILoggingSource source,
 		ISessionStore sessions,
 		ILoggingSettingsStore store,
 		ILogShipper shipper)
 	{
-		_client = client ?? throw new ArgumentNullException(nameof(client));
+		_source = source ?? throw new ArgumentNullException(nameof(source));
 		_sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
 		_settings = new ShippingSettings(
 			store ?? throw new ArgumentNullException(nameof(store)),
@@ -71,11 +76,11 @@ public sealed class RemoteLogging
 	public Task ApplyStoredAsync() => _settings.ApplyStoredAsync();
 
 	/// <summary>
-	/// Ask Fellowship, and rebuild the logger if the answer changed.
+	/// Ask the intergroup, and rebuild the logger if the answer changed.
 	///
 	/// <para>Called at launch and whenever the sign-in state changes. With
 	/// no session it forgets. With no answer (offline, a server having a
-	/// moment, a Fellowship older than the route) it keeps what it has:
+	/// moment, a site that refuses the session) it keeps what it has:
 	/// losing signal is not a reason to stop shipping, or to drop what is
 	/// being held.</para>
 	/// </summary>
@@ -88,7 +93,7 @@ public sealed class RemoteLogging
 			return;
 		}
 
-		var fetched = await _client.FetchLoggingAsync(session.Token, cancellationToken).ConfigureAwait(false);
+		var fetched = await _source.FetchAsync(session, cancellationToken).ConfigureAwait(false);
 		if (fetched is null)
 		{
 			Log.Debug("The intergroup did not say where to ship logs; keeping what this handset has");
@@ -99,12 +104,17 @@ public sealed class RemoteLogging
 	}
 
 	/// <summary>
-	/// Drop the stored settings and go back to holding.
+	/// Drop the stored settings and go back to holding, and let the
+	/// source forget the session too.
 	///
-	/// <para>A no-op when nothing is stored, so a signed-out launch does
-	/// not rebuild a logger that is already holding.</para>
+	/// <para>Rebuilds nothing when nothing is stored, so a signed-out
+	/// launch does not rebuild a logger that is already holding.</para>
 	/// </summary>
-	public Task ForgetAsync() => _settings.ForgetAsync();
+	public async Task ForgetAsync()
+	{
+		await _settings.ForgetAsync().ConfigureAwait(false);
+		await _source.ForgetAsync().ConfigureAwait(false);
+	}
 
 	private async Task ForgetQuietlyAsync()
 	{

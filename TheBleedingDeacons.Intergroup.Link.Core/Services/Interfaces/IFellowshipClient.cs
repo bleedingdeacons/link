@@ -1,5 +1,4 @@
 using TheBleedingDeacons.Intergroup.Link.Models;
-using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -81,19 +80,6 @@ public interface IFellowshipClient
 	Task<SendResult> SendAsync(string token, SendRequest request, CancellationToken cancellationToken = default);
 
 	Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default);
-
-	/// <summary>
-	/// Where this handset should ship its logs, as the intergroup has
-	/// configured it.
-	///
-	/// <para>Null when there was no answer: offline, refused, or a
-	/// Fellowship older than the route. A configuration that is not
-	/// valid (both fields empty, usually) is an answer: the intergroup
-	/// has said not to ship. The caller must keep those two apart,
-	/// because only the second should make it drop what it holds. See
-	/// <see cref="RemoteLogging"/>.</para>
-	/// </summary>
-	Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken = default);
 
 	/// <summary>Tell the server this handset's current FCM registration token.</summary>
 	Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default);
