@@ -223,6 +223,18 @@
 			       Opacity="0.5"
 			       HorizontalOptions="Center" />
 
+			<!--
+				Where this phone's logs go, under the build and just as quiet:
+				the first thing to check when a handset's logs have not
+				arrived. The token itself is never shown, only whether there
+				is one.
+			-->
+			<Label Text="{Binding Logging}"
+			       FontSize="11"
+			       Opacity="0.5"
+			       HorizontalOptions="Center"
+			       HorizontalTextAlignment="Center" />
+
 		</VerticalStackLayout>
 	</ScrollView>
 
