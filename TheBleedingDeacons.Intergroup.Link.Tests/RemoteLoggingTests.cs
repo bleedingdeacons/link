@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text;
 using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
@@ -13,7 +12,9 @@ namespace TheBleedingDeacons.Intergroup.Link.Tests;
 
 /// <summary>
 /// Where the Better Stack settings come from now that the app does not
-/// carry them: Fellowship, once the handset has signed in.
+/// carry them: the intergroup's site, once the handset has signed in. The
+/// source itself — Freedom — has tests of its own; these are about when to
+/// ask and what to do with the answer.
 ///
 /// <para>The distinction these keep is between "no answer" and "the
 /// answer is do not ship". The first keeps whatever the handset has; the
@@ -29,7 +30,7 @@ public sealed class RemoteLoggingTests
 		SourceToken = "src-token",
 	};
 
-	private readonly FakeClient _client = new();
+	private readonly FakeSource _source = new();
 	private readonly FakeSessions _sessions = new();
 	private readonly FakeStore _store = new();
 	private readonly FakeController _controller = new();
@@ -61,13 +62,13 @@ public sealed class RemoteLoggingTests
 	[Fact]
 	public async Task ANewAnswerIsStoredAndApplied()
 	{
-		_client.Answer = Shipping;
+		_source.Answer = Shipping;
 
 		await Build().RefreshAsync();
 
 		Assert.Same(Shipping, _store.Stored);
 		Assert.Same(Shipping, Assert.Single(_controller.Applied));
-		Assert.Equal("fdt_test", _client.AskedWith);
+		Assert.Equal("fdt_test", _source.AskedWith);
 	}
 
 	[Fact]
@@ -76,7 +77,7 @@ public sealed class RemoteLoggingTests
 		// Every launch asks, and a rebuild restarts the shipper. Nothing
 		// has changed, so nothing should.
 		_store.Stored = Shipping;
-		_client.Answer = new BetterStackConfiguration { Endpoint = Shipping.Endpoint, SourceToken = Shipping.SourceToken };
+		_source.Answer = new BetterStackConfiguration { Endpoint = Shipping.Endpoint, SourceToken = Shipping.SourceToken };
 
 		await Build().RefreshAsync();
 
@@ -87,7 +88,7 @@ public sealed class RemoteLoggingTests
 	public async Task ANewTokenReplacesTheOld()
 	{
 		_store.Stored = Shipping;
-		_client.Answer = new BetterStackConfiguration { Endpoint = Shipping.Endpoint, SourceToken = "rotated" };
+		_source.Answer = new BetterStackConfiguration { Endpoint = Shipping.Endpoint, SourceToken = "rotated" };
 
 		await Build().RefreshAsync();
 
@@ -98,10 +99,10 @@ public sealed class RemoteLoggingTests
 	[Fact]
 	public async Task NoAnswerKeepsWhatTheHandsetHas()
 	{
-		// Offline, a 500, or a Fellowship older than the route. None of
-		// them is the intergroup saying stop.
+		// Offline, a 500, or a site that refused the session. None of them
+		// is the intergroup saying stop.
 		_store.Stored = Shipping;
-		_client.Answer = null;
+		_source.Answer = null;
 
 		await Build().RefreshAsync();
 
@@ -116,7 +117,7 @@ public sealed class RemoteLoggingTests
 		// not to ship and does not hold logs waiting for an answer it
 		// already has.
 		_store.Stored = Shipping;
-		_client.Answer = new BetterStackConfiguration();
+		_source.Answer = new BetterStackConfiguration();
 
 		await Build().RefreshAsync();
 
@@ -139,7 +140,8 @@ public sealed class RemoteLoggingTests
 
 		Assert.Null(_store.Stored);
 		Assert.Null(Assert.Single(_controller.Applied));
-		Assert.Null(_client.AskedWith);
+		Assert.Null(_source.AskedWith);
+		Assert.Equal(1, _source.Forgets);
 	}
 
 	[Fact]
@@ -158,7 +160,7 @@ public sealed class RemoteLoggingTests
 		// The sync loop finds out, not the shell, and it announces it
 		// rather than calling anything here.
 		_store.Stored = Shipping;
-		var logging = new RemoteLogging(_client, _sessions, _store, _controller);
+		var logging = new RemoteLogging(_source, _sessions, _store, _controller);
 
 		try
 		{
@@ -166,63 +168,12 @@ public sealed class RemoteLoggingTests
 
 			Assert.Null(_store.Stored);
 			Assert.Null(Assert.Single(_controller.Applied));
+			Assert.Equal(1, _source.Forgets);
 		}
 		finally
 		{
 			WeakReferenceMessenger.Default.UnregisterAll(logging);
 		}
-	}
-
-	// ── The client ────────────────────────────────────────────────
-
-	[Fact]
-	public async Task TheClientReadsBothFields()
-	{
-		var handler = new StubHandler(HttpStatusCode.OK, """
-			{"endpoint":"s1.betterstackdata.com","source_token":"src-token"}
-			""");
-
-		var config = await Client(handler).FetchLoggingAsync("fdt_secret");
-
-		Assert.NotNull(config);
-		Assert.Equal("https://s1.betterstackdata.com", config.Endpoint);
-		Assert.Equal("src-token", config.SourceToken);
-		Assert.True(config.IsValid());
-		Assert.Equal("/wp-json/fellowship/v1/logging", handler.LastUri?.AbsolutePath);
-		Assert.Equal("fdt_secret", handler.LastAuthParameter);
-	}
-
-	[Fact]
-	public async Task AnEmptyAnswerIsAnAnswer()
-	{
-		var handler = new StubHandler(HttpStatusCode.OK, """{"endpoint":"","source_token":""}""");
-
-		var config = await Client(handler).FetchLoggingAsync("fdt_x");
-
-		Assert.NotNull(config);
-		Assert.False(config.IsValid());
-	}
-
-	[Theory]
-	[InlineData(HttpStatusCode.NotFound)]
-	[InlineData(HttpStatusCode.Unauthorized)]
-	[InlineData(HttpStatusCode.InternalServerError)]
-	public async Task ARefusalIsNoAnswer(HttpStatusCode status)
-	{
-		// 404 is a Fellowship older than the route.
-		var handler = new StubHandler(status, """{"message":"no"}""");
-
-		Assert.Null(await Client(handler).FetchLoggingAsync("fdt_x"));
-	}
-
-	[Fact]
-	public async Task NoNetworkIsNoAnswer()
-	{
-		var client = new FellowshipClient(
-			new HttpClient(new ThrowingHandler(new HttpRequestException("no route to host"))),
-			new FellowshipConfiguration { BaseUrl = "https://aa-bristol.org" });
-
-		Assert.Null(await client.FetchLoggingAsync("fdt_x"));
 	}
 
 	// ── Holding ───────────────────────────────────────────────────
@@ -244,7 +195,7 @@ public sealed class RemoteLoggingTests
 
 	private RemoteLogging Build()
 	{
-		var logging = new RemoteLogging(_client, _sessions, _store, _controller);
+		var logging = new RemoteLogging(_source, _sessions, _store, _controller);
 
 		// Other tests send AuthenticationLost through the same process-wide
 		// messenger. Only the test about that message should hear it.
@@ -252,9 +203,6 @@ public sealed class RemoteLoggingTests
 
 		return logging;
 	}
-
-	private static FellowshipClient Client(HttpMessageHandler handler) =>
-		new(new HttpClient(handler), new FellowshipConfiguration { BaseUrl = "https://aa-bristol.org" });
 
 	private sealed class FakeController : ILogShipper
 	{
@@ -307,72 +255,24 @@ public sealed class RemoteLoggingTests
 		}
 	}
 
-	/// <summary>
-	/// Answers the logging route and nothing else. Everything else on the
-	/// interface belongs to other tests.
-	/// </summary>
-	private sealed class FakeClient : IFellowshipClient
+	private sealed class FakeSource : ILoggingSource
 	{
 		public BetterStackConfiguration? Answer { get; set; }
 
 		public string? AskedWith { get; private set; }
 
-		public Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken = default)
+		public int Forgets { get; private set; }
+
+		public Task<BetterStackConfiguration?> FetchAsync(DeviceSession session, CancellationToken cancellationToken = default)
 		{
-			AskedWith = token;
+			AskedWith = session.Token;
 			return Task.FromResult(Answer);
 		}
 
-		public Task<SignInStart?> StartSignInAsync(string provider, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<InboxPage> FetchInboxAsync(string token, long sinceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> MarkReceivedAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<SendResult> SendAsync(string token, SendRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<RotateKeyResult> RotateKeyAsync(string token, RotateKeyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> ReportKeyFaultAsync(string token, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> SignOutAsync(string token, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-	}
-
-	private sealed class StubHandler(HttpStatusCode status, string body) : HttpMessageHandler
-	{
-		public Uri? LastUri { get; private set; }
-
-		public string? LastAuthParameter { get; private set; }
-
-		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+		public Task ForgetAsync(CancellationToken cancellationToken = default)
 		{
-			LastUri = request.RequestUri;
-			LastAuthParameter = request.Headers.Authorization?.Parameter;
-
-			return Task.FromResult(new HttpResponseMessage(status)
-			{
-				Content = new StringContent(body, Encoding.UTF8, "application/json"),
-			});
+			Forgets++;
+			return Task.CompletedTask;
 		}
-	}
-
-	private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
-	{
-		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-			Task.FromException<HttpResponseMessage>(exception);
 	}
 }

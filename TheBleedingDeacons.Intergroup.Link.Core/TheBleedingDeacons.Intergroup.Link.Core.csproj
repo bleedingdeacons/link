@@ -60,6 +60,10 @@
 		     ShippingSettings, shared with Register. The app references
 		     Inventory.Maui at the same version. -->
 		<PackageReference Include="Inventory" Version="0.1.1" />
+		<!-- Where the Better Stack settings come from: the site's Freedom
+		     plugin, signed in to with the handset's Fellowship session. The
+		     app references Freedom.Client.Maui at the same version. -->
+		<PackageReference Include="Freedom.Client" Version="0.2.0" />
 		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
