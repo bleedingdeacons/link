@@ -558,8 +558,17 @@ first time.
 
 `link-apk` on every run, kept for 30 days.
 
-**`link-ipa-unsigned` on every run too**, built in parallel with the APK.
-The iOS job runs on **GitHub's own `macos-26` by default** — free on this
+**`link-ipa-unsigned` only when asked for**, from 2026-09-30: dispatch the
+workflow with `ios` ticked, or put the `ios` label on a pull request.
+
+```bash
+gh workflow run ci.yml -R bleedingdeacons/link --ref <branch> -f ios=true
+gh pr edit <n> -R bleedingdeacons/link --add-label ios
+```
+
+When it runs, it builds in parallel with the APK, and the release job waits
+for it and is stopped if it fails; when it is not asked for, releases go out
+without it. The iOS job runs on **GitHub's own `macos-26` by default** — free on this
 public repository, and around eleven minutes once a runner picks it up.
 Setting the **`IOS_RUNNER`** repository variable to a
 [Namespace](https://namespace.so) macOS label
@@ -576,12 +585,13 @@ Android stays on the free `ubuntu-latest`: Namespace was tried there too,
 but that workspace's Linux profile is ARM64 and .NET's Android SDK ships an
 x64-only `aapt2`, so the build fails with `XA0111`.
 
-From 2026-09-11 until that move the iOS head was opt-in, behind an `ios`
-PR label or dispatch input: on a GitHub-hosted macOS runner it took around
-eleven minutes after an unbounded queue, and every merge waited behind it.
-The cost was iOS breakage surfacing in batches rather than on the commit
-that caused it. Building it every run removes that, and the release job
-again requires the iOS head to *succeed*, not merely not fail.
+This is the second time the iOS head has been opt-in. It was from
+2026-09-11 to 2026-09-24 too, and went back to every run because iOS
+breakage then surfaced in batches rather than on the commit that caused
+it. The trade is being made again knowingly: a build that nobody asked for
+costs a macOS runner on every push and PR, and an iOS break now waits to be
+found until somebody asks — so ask before an iOS release, and after
+anything that touches the iOS head or the workloads.
 
 **Every run that builds it also publishes it to the `ios-test` release**,
 replacing the `.ipa` that was there. So the newest unsigned build is always
