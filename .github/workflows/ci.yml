@@ -104,6 +104,17 @@ concurrency:
 
 permissions:
   contents: read
+  # Inventory — the logging Link shares with Register — comes from GitHub
+  # Packages, which wants a token even for a public package.
+  packages: read
+
+# The token nuget.config expands at restore. PACKAGES_READ_TOKEN, a classic
+# PAT with read:packages, if the repository has one; otherwise the workflow's
+# own token, which can read a package only once that package has granted
+# this repository access (package settings, "Manage Actions access").
+# Register's CI does the same.
+env:
+  GITHUB_PACKAGES_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
 jobs:
   build:
@@ -663,9 +674,12 @@ jobs:
     runs-on: ubuntu-latest
 
     # The workflow default is contents: read; pushing the version commit needs
-    # write, asked for here so nothing else in this file gets it.
+    # write, asked for here so nothing else in this file gets it. packages:
+    # read because a job's permissions replace the workflow's rather than add
+    # to them, and this job restores Inventory.
     permissions:
       contents: write
+      packages: read
 
     # Serialise. Two merges landing close together must not race to compute the
     # same next version. Deliberately not cancel-in-progress: a cancelled run

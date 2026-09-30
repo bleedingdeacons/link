@@ -129,9 +129,9 @@ public sealed class LinkFirebaseMessagingService : FirebaseMessagingService
 			// What has changed is that it is no longer swallowed *without
 			// trace*. The original comment said there was nowhere to report
 			// to that was not itself a thing that can throw, and that was
-			// true when it was written; the sink built in
-			// MauiProgram.SetupSerilog cannot throw back at us, so writing
-			// here does not reintroduce the hazard it was guarding against.
+			// true when it was written; the pipeline UseInventory builds
+			// cannot throw back at us, so writing here does not reintroduce
+			// the hazard it was guarding against.
 			Log.Error(ex, "A pushed message could not be delivered; the poll will collect it");
 		}
 	}

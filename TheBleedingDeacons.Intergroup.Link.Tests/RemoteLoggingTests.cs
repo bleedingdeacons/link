@@ -4,7 +4,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
-using TheBleedingDeacons.Intergroup.Link.Support.BetterStackDurable;
+using TheBleedingDeacons.Inventory;
+using TheBleedingDeacons.Inventory.BetterStack;
 
 using Xunit;
 
@@ -255,8 +256,10 @@ public sealed class RemoteLoggingTests
 	private static FellowshipClient Client(HttpMessageHandler handler) =>
 		new(new HttpClient(handler), new FellowshipConfiguration { BaseUrl = "https://aa-bristol.org" });
 
-	private sealed class FakeController : IBetterStackLoggerController
+	private sealed class FakeController : ILogShipper
 	{
+		public ShippingState State => ShippingState.NotStarted;
+
 		public List<BetterStackConfiguration?> Applied { get; } = [];
 
 		public void Reconfigure(BetterStackConfiguration? config) => Applied.Add(config);

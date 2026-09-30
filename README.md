@@ -396,6 +396,16 @@ crash handlers for unhandled AppDomain, unobserved-task and Android
 exceptions, and a durable Better Stack sink that flushes the moment
 something is logged at Error or worse rather than waiting for its timer.
 
+All of it is [Inventory](https://github.com/bleedingdeacons/inventory)
+since 2026-09-30, the library Link and Register now share; its README is
+the full account. `MauiProgram` calls `builder.UseInventory(...)`, and
+`RemoteLogging` is what is left that is Link's own: asking Fellowship,
+and forgetting at sign-out. Moving brought one fix Link did not have:
+every `ILogger<T>` was bound to the pipeline of the moment it was made,
+so after the first rebuild — a new answer from Fellowship, or any flush
+on an error — it wrote into a disposed one. Inventory routes them
+through a logger that always writes to the live pipeline.
+
 The old argument was that Link's failures are late messages rather than a
 helpline alert that did not ring, so the file could be pulled with adb
 when somebody was diagnosing. The second half is what did not hold up:
@@ -442,7 +452,7 @@ adb -s <serial> exec-out run-as com.thebleedingdeacons.intergroup.link cat files
 logs are not reachable this way.
 
 The one thing the logger must never do is become a source of failure
-itself, so `SetupSerilog` cannot throw: a sink that will not build leaves
+itself, so `UseInventory` cannot throw: a sink that will not build leaves
 Serilog's silent default, and every `Log.*` call downstream becomes a
 no-op rather than a null reference — which is exactly the behaviour Link
 had before any of this existed.
