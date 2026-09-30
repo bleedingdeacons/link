@@ -88,10 +88,18 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # A dispatch builds both heads, like every other run. It used to take an
-  # `ios` input, and PRs listened for an `ios` label, while the iOS head was
-  # opt-in (2026-09-11 to the move to Namespace); both went with the gate.
+    # `labeled` as well as the defaults, so putting the `ios` label on a PR
+    # starts a run that builds the iOS head. Any other label starts a run
+    # too; the concurrency group below cancels the one it supersedes.
+    types: [ opened, synchronize, reopened, labeled ]
+  # The iOS head is built only when asked for, from 2026-09-30: tick `ios`
+  # on a dispatch, or label a PR `ios`. See the ios job.
   workflow_dispatch:
+    inputs:
+      ios:
+        description: 'Also build and archive the iOS head'
+        type: boolean
+        default: false
 
 # Pull request runs share one group per ref, so pushing again cancels the
 # superseded run and saves runner minutes. Runs on main get a group of their
@@ -251,13 +259,22 @@ jobs:
   ios:
     name: Build & archive (net10.0-ios)
 
-    # Runs on every push, PR and dispatch, in parallel with the Android
-    # job. From 2026-09-11 until the move to Namespace it was off unless
-    # asked for (an `ios` label or dispatch input), because on a
-    # GitHub-hosted macOS runner it took around eleven minutes after an
-    # unbounded queue, and every merge waited behind it. The cost of that
-    # was that iOS breakage surfaced in batches; building it every time is
-    # what puts `ios` back in `version.needs` as a real gate.
+    # Built only when asked for, from 2026-09-30, by request: a dispatch with
+    # `ios` ticked, or an `ios` label on a pull request.
+    #
+    #   gh workflow run ci.yml -R bleedingdeacons/link --ref <branch> -f ios=true
+    #   gh pr edit <n> -R bleedingdeacons/link --add-label ios
+    #
+    # This is the second time. It was opt-in from 2026-09-11 to 2026-09-24
+    # too, and went back to every run because iOS breakage then surfaced in
+    # batches rather than on the commit that caused it — which is exactly
+    # what happened next: a workload update made every iOS build fail on
+    # 2026-09-30, and it surfaced only because this job ran. That is the
+    # trade being made again, knowingly. The version job no longer waits
+    # for iOS, but a requested iOS build that fails still stops a release.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.ios)
+      || contains(github.event.pull_request.labels.*.name, 'ios')
     #
     # macOS is not a preference here: the iOS toolchain will not run
     # anywhere else. Which macOS is a repository variable, because the two
@@ -645,23 +662,20 @@ jobs:
     # all, so a version was cut whether or not the build, the tests or Semgrep
     # had passed. `needs:` makes a version something only green code gets.
     #
-    # `ios` is in here on purpose, and it is the one entry worth arguing
-    # about: a broken iOS head now stops an Android release. That is the
-    # right way round while the two heads share every line of code above the
-    # platform folders — a compile error in Link.Core would break both, and
-    # releasing Android from a tree that does not build is how the iOS head
-    # would quietly rot back to the state this change took it out of. Drop it
-    # from this list the day the iOS head has its own version.
+    # `ios` stays in `needs` so a requested iOS build is waited for, but it
+    # is only required not to *fail* (see the `if` below): a push to main
+    # does not build iOS, and a skipped head must not stop an Android
+    # release. A compile error in Link.Core still stops one through the
+    # Android build and the tests.
     needs: [build, ios, test, semgrep]
 
     # main only, and only for a real push - not for pull_request runs of this
     # same workflow, and not for workflow_dispatch.
     #
-    # Every gate is named explicitly rather than left to `needs:` alone.
-    # That dates from when `ios` was opt-in and a skipped dependency would
-    # have silently ended releasing; it is kept because it states the rule
-    # at the point it is enforced. iOS is built on every run again, so it
-    # must succeed like the rest — no longer merely not fail.
+    # Every gate is named explicitly rather than left to `needs:` alone,
+    # because a skipped dependency would otherwise silently end releasing.
+    # iOS is built only on request (2026-09-30), so it must not fail —
+    # skipped is fine.
     if: >-
       ${{ !cancelled()
       && github.ref == 'refs/heads/main'
@@ -669,7 +683,7 @@ jobs:
       && needs.build.result == 'success'
       && needs.test.result == 'success'
       && needs.semgrep.result == 'success'
-      && needs.ios.result == 'success' }}
+      && needs.ios.result != 'failure' }}
 
     runs-on: ubuntu-latest
 
