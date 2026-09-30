@@ -118,8 +118,8 @@
 
 		<ApplicationTitle>Link</ApplicationTitle>
 		<ApplicationId>com.thebleedingdeacons.intergroup.link</ApplicationId>
-		<ApplicationDisplayVersion>1.28.1</ApplicationDisplayVersion>
-		<ApplicationVersion>57</ApplicationVersion>
+		<ApplicationDisplayVersion>1.29.0</ApplicationDisplayVersion>
+		<ApplicationVersion>58</ApplicationVersion>
 
 		<!--
 			Derive the assembly versions from the display version rather than
