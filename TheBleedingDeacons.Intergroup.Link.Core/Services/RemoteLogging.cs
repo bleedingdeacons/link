@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
+using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
@@ -31,24 +32,29 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// network. It is forgotten when the session ends, whether the member
 /// signed out or the server refused the handset. A revoked handset
 /// keeps nothing it was only given because it was signed in.</para>
+///
+/// <para>The storing, comparing and rebuilding are Inventory's
+/// <see cref="ShippingSettings"/>, shared with Register. What is Link's
+/// is where the answer comes from — Fellowship, and only for a handset
+/// that is signed in — and when it is forgotten.</para>
 /// </summary>
 public sealed class RemoteLogging
 {
 	private readonly IFellowshipClient _client;
 	private readonly ISessionStore _sessions;
-	private readonly ILoggingSettingsStore _store;
-	private readonly IBetterStackLoggerController _controller;
+	private readonly ShippingSettings _settings;
 
 	public RemoteLogging(
 		IFellowshipClient client,
 		ISessionStore sessions,
 		ILoggingSettingsStore store,
-		IBetterStackLoggerController controller)
+		ILogShipper shipper)
 	{
 		_client = client ?? throw new ArgumentNullException(nameof(client));
 		_sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-		_store = store ?? throw new ArgumentNullException(nameof(store));
-		_controller = controller ?? throw new ArgumentNullException(nameof(controller));
+		_settings = new ShippingSettings(
+			store ?? throw new ArgumentNullException(nameof(store)),
+			shipper ?? throw new ArgumentNullException(nameof(shipper)));
 
 		// The sync loop finds out about a refusal, and it has no reason to
 		// know logging exists. This hears about it the same way the message
@@ -62,10 +68,7 @@ public sealed class RemoteLogging
 	/// Build the logger from what was last stored. Runs once at process
 	/// start, before the network has been tried.
 	/// </summary>
-	public async Task ApplyStoredAsync()
-	{
-		_controller.Reconfigure(await _store.LoadAsync().ConfigureAwait(false));
-	}
+	public Task ApplyStoredAsync() => _settings.ApplyStoredAsync();
 
 	/// <summary>
 	/// Ask Fellowship, and rebuild the logger if the answer changed.
@@ -92,20 +95,7 @@ public sealed class RemoteLogging
 			return;
 		}
 
-		var stored = await _store.LoadAsync().ConfigureAwait(false);
-		if (stored is not null && Same(stored, fetched))
-		{
-			return;
-		}
-
-		await _store.SaveAsync(fetched).ConfigureAwait(false);
-		_controller.Reconfigure(fetched);
-
-		Log.Information(
-			fetched.IsValid()
-				? "The intergroup gave this handset a log endpoint; shipping to {Endpoint}"
-				: "The intergroup has no log endpoint set; logs stay on this handset",
-			fetched.ToLogSafe().Endpoint);
+		await _settings.ApplyAsync(fetched).ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -114,16 +104,7 @@ public sealed class RemoteLogging
 	/// <para>A no-op when nothing is stored, so a signed-out launch does
 	/// not rebuild a logger that is already holding.</para>
 	/// </summary>
-	public async Task ForgetAsync()
-	{
-		if (await _store.LoadAsync().ConfigureAwait(false) is null)
-		{
-			return;
-		}
-
-		await _store.ClearAsync().ConfigureAwait(false);
-		_controller.Reconfigure(null);
-	}
+	public Task ForgetAsync() => _settings.ForgetAsync();
 
 	private async Task ForgetQuietlyAsync()
 	{
@@ -138,8 +119,4 @@ public sealed class RemoteLogging
 			Log.Warning(ex, "Log settings could not be forgotten after the handset lost its authorisation");
 		}
 	}
-
-	private static bool Same(BetterStackConfiguration a, BetterStackConfiguration b) =>
-		string.Equals(a.Endpoint, b.Endpoint, StringComparison.Ordinal)
-		&& string.Equals(a.SourceToken, b.SourceToken, StringComparison.Ordinal);
 }

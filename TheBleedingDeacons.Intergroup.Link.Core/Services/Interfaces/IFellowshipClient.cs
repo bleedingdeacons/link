@@ -1,4 +1,5 @@
 using TheBleedingDeacons.Intergroup.Link.Models;
+using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 

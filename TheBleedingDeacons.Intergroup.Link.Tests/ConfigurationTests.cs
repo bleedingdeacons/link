@@ -1,4 +1,5 @@
 using TheBleedingDeacons.Intergroup.Link.Models;
+using TheBleedingDeacons.Inventory;
 
 using Xunit;
 
