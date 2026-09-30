@@ -27,11 +27,16 @@ public interface IBetterStackLoggerController
 {
 	/// <summary>
 	/// Rebuild <c>Log.Logger</c> using the supplied Better Stack configuration.
-	/// Pass a config whose <c>IsValid()</c> returns <c>false</c> to remove the
-	/// Better Stack sink entirely and fall back to local sinks only.
 	/// Safe to call from any thread.
 	/// </summary>
-	void Reconfigure(BetterStackConfiguration config);
+	/// <param name="config">
+	/// A valid configuration ships. One whose <c>IsValid()</c> is false
+	/// removes the Better Stack sink and deletes anything held for it:
+	/// the intergroup has said not to ship. Null means this handset has
+	/// not been told yet, and logs are held in a small on-disk buffer
+	/// until it is. See <see cref="RemoteLogging"/>.
+	/// </param>
+	void Reconfigure(BetterStackConfiguration? config);
 
 	/// <summary>
 	/// Ship whatever is sitting in the durable buffer, now, without

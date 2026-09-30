@@ -79,10 +79,10 @@ public sealed class BetterStackLoggerController : IBetterStackLoggerController
 		lock (_gate)
 		{
 			config = _lastConfig;
-			if (config is null)
+			if (config is null || !config.IsValid())
 			{
-				// Nothing has been configured yet, so there is no durable sink
-				// holding anything back.
+				// Holding, or not shipping at all. Either way there is nowhere
+				// a flush could send anything.
 				return;
 			}
 
@@ -102,7 +102,7 @@ public sealed class BetterStackLoggerController : IBetterStackLoggerController
 		Reconfigure(config);
 	}
 
-	public void Reconfigure(BetterStackConfiguration config)
+	public void Reconfigure(BetterStackConfiguration? config)
 	{
 		lock (_gate)
 		{
@@ -113,19 +113,34 @@ public sealed class BetterStackLoggerController : IBetterStackLoggerController
 			{
 				var builder = _baseLoggerFactory();
 
-				if (config.IsValid())
+				if (config is null)
 				{
-					var bufferDir = Path.Combine(FileSystem.AppDataDirectory, "logs", "betterstack-buffer");
-					Directory.CreateDirectory(bufferDir);
-					var bufferBaseFileName = Path.Combine(bufferDir, "buffer");
-
+					// Not told yet. Written to the same buffer the real sink
+					// reads, so what is held now ships when the intergroup
+					// answers. Kept small and checked rarely: a handset that is
+					// never signed in must not fill its storage with logs, or
+					// wake every five seconds to send nothing.
+					builder = builder.WriteTo.DurableHttpUsingFileSizeRolledBuffers(
+						requestUri: "https://holding.invalid/",
+						bufferBaseFileName: BufferBaseFileName(),
+						bufferFileSizeLimitBytes: 1L * 1024 * 1024,
+						retainedBufferFileCountLimit: 2,
+						logEventsInBatchLimit: 500,
+						batchSizeLimitBytes: 5L * 1024 * 1024,
+						period: TimeSpan.FromMinutes(5),
+						textFormatter: new BetterStackTextFormatter(),
+						batchFormatter: new BetterStackNdjsonBatchFormatter(),
+						httpClient: new HoldingHttpClient());
+				}
+				else if (config.IsValid())
+				{
 					var betterStackHttpClient = new BetterStackHttpClient(
 						config.SourceToken,
 						_httpClient);
 
 					builder = builder.WriteTo.DurableHttpUsingFileSizeRolledBuffers(
 						requestUri: config.Endpoint,
-						bufferBaseFileName: bufferBaseFileName,
+						bufferBaseFileName: BufferBaseFileName(),
 						bufferFileSizeLimitBytes: 8L * 1024 * 1024,
 						retainedBufferFileCountLimit: 16,
 						logEventsInBatchLimit: 500,
@@ -166,7 +181,11 @@ public sealed class BetterStackLoggerController : IBetterStackLoggerController
 			Serilog.Debugging.SelfLog.Enable(msg =>
 				System.Diagnostics.Debug.WriteLine($"[Serilog] {msg}"));
 
-			if (config.IsValid())
+			if (config is null)
+			{
+				Log.Information("Better Stack sink holding until the intergroup says where to ship");
+			}
+			else if (config.IsValid())
 			{
 				Log.Information(
 					"Better Stack sink (re)attached to {Endpoint}",
@@ -188,6 +207,42 @@ public sealed class BetterStackLoggerController : IBetterStackLoggerController
 				// Disposal failures don't affect the new logger; just record them.
 				Log.Debug(ex, "Error disposing previous Serilog pipeline");
 			}
+
+			// Told not to ship, so nothing held is ever going anywhere. Only
+			// after the old pipeline is gone: until then its sink had the
+			// files open.
+			if (config is not null && !config.IsValid())
+			{
+				DeleteBuffer();
+			}
+		}
+	}
+
+	private static string BufferDirectory() =>
+		Path.Combine(FileSystem.AppDataDirectory, "logs", "betterstack-buffer");
+
+	private static string BufferBaseFileName()
+	{
+		var bufferDir = BufferDirectory();
+		Directory.CreateDirectory(bufferDir);
+
+		return Path.Combine(bufferDir, "buffer");
+	}
+
+	private static void DeleteBuffer()
+	{
+		try
+		{
+			var bufferDir = BufferDirectory();
+			if (Directory.Exists(bufferDir))
+			{
+				Directory.Delete(bufferDir, recursive: true);
+			}
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			// Left for the next time the intergroup says not to ship.
+			Log.Debug(ex, "The Better Stack buffer could not be deleted");
 		}
 	}
 }

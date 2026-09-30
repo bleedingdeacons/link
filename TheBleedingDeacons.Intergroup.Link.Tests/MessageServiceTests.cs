@@ -478,6 +478,9 @@ public sealed class MessageServiceTests
 		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default) =>
 			Task.FromResult(FellowshipDirectory.Empty);
 
+		public Task<BetterStackConfiguration?> FetchLoggingAsync(string token, CancellationToken cancellationToken = default) =>
+			Task.FromResult<BetterStackConfiguration?>(null);
+
 		public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default) =>
 			Task.FromResult(true);
 
