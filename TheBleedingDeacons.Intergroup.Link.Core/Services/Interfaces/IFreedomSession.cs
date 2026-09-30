@@ -21,4 +21,7 @@ public interface IFreedomSession
 	string? Get(string key);
 
 	Task SignOutAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>When the server last confirmed what this handset holds, from the store.</summary>
+	Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default);
 }

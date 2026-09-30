@@ -20,4 +20,9 @@ public sealed class FreedomClientSession(FreedomClient client) : IFreedomSession
 	public string? Get(string key) => _client.Get(key);
 
 	public Task SignOutAsync(CancellationToken cancellationToken = default) => _client.SignOutAsync(cancellationToken);
+
+	// From the store rather than the client's last snapshot: Settings can be
+	// opened before this process's first sync has finished.
+	public async Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
+		(await _client.LoadAsync(cancellationToken).ConfigureAwait(false)).VerifiedAt;
 }

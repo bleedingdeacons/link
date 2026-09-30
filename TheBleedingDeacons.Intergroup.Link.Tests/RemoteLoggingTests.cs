@@ -274,5 +274,8 @@ public sealed class RemoteLoggingTests
 			Forgets++;
 			return Task.CompletedTask;
 		}
+
+		public Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
+			Task.FromResult<DateTimeOffset?>(null);
 	}
 }

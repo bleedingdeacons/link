@@ -224,16 +224,14 @@
 			       HorizontalOptions="Center" />
 
 			<!--
-				Where this phone's logs go, under the build and just as quiet:
-				the first thing to check when a handset's logs have not
-				arrived. The token itself is never shown, only whether there
-				is one.
+				When the site's settings for this handset were last retrieved,
+				under the build and just as quiet: a value changed on the site
+				arrives on the next start, so the question is when that was.
 			-->
-			<Label Text="{Binding Logging}"
+			<Label Text="{Binding ConfigRetrieved}"
 			       FontSize="11"
 			       Opacity="0.5"
-			       HorizontalOptions="Center"
-			       HorizontalTextAlignment="Center" />
+			       HorizontalOptions="Center" />
 
 		</VerticalStackLayout>
 	</ScrollView>

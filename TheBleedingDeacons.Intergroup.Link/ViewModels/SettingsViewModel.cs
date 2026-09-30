@@ -5,7 +5,6 @@ using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Support;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
-using TheBleedingDeacons.Inventory;
 
 namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 
@@ -22,8 +21,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly INotificationPermission _notifications;
 	private readonly IArrivalSound _sound;
 	private readonly IRecipientListing _listing;
-	private readonly ILoggingSettingsStore _loggingSettings;
-	private readonly ILogShipper _shipper;
+	private readonly ILoggingSource _config;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -33,8 +31,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 		INotificationPermission notifications,
 		IArrivalSound sound,
 		IRecipientListing listing,
-		ILoggingSettingsStore loggingSettings,
-		ILogShipper shipper)
+		ILoggingSource config)
 	{
 		_auth = auth;
 		_sessions = sessions;
@@ -45,8 +42,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_soundOn = sound.Enabled;
 		_listing = listing;
 		_onlyRegistered = listing.OnlyRegistered;
-		_loggingSettings = loggingSettings;
-		_shipper = shipper;
+		_config = config;
 
 		// The recovery is hidden until there is something to recover
 		// from. It asks a member to sign in again, which is a great deal
@@ -197,17 +193,14 @@ public sealed partial class SettingsViewModel : ObservableObject
 #pragma warning restore S2325
 
 	/// <summary>
-	/// Where this handset's logs go, under the build and for the same
-	/// reader: the endpoint Freedom gave it, whether it is shipping, and
-	/// whether it holds a source token — never the token. See
-	/// <see cref="LoggingSummary"/>.
+	/// When this handset last heard from Freedom, under the build and for
+	/// the same reader. See <see cref="LastRetrieved"/>.
 	///
-	/// <para>Re-read on every visit, not once, because Freedom can change
-	/// it on any start and the point is to show what the handset holds
-	/// now.</para>
+	/// <para>Re-read on every visit, not once: a start while Settings was
+	/// away may have retrieved it since.</para>
 	/// </summary>
 	[ObservableProperty]
-	private string _logging = string.Empty;
+	private string _configRetrieved = string.Empty;
 
 	[RelayCommand]
 	public async Task LoadAsync()
@@ -218,8 +211,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		var held = await _history.AllAsync().ConfigureAwait(true);
 		Held = held.Count;
 
-		var logging = await _loggingSettings.LoadAsync().ConfigureAwait(true);
-		Logging = LoggingSummary.Describe(logging, _shipper.State);
+		var retrieved = await _config.LastRetrievedAsync().ConfigureAwait(true);
+		ConfigRetrieved = LastRetrieved.Describe(retrieved?.ToLocalTime());
 
 		await RefreshPushAsync().ConfigureAwait(true);
 	}

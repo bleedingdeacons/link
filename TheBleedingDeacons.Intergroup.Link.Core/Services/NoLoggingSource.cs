@@ -19,4 +19,7 @@ public sealed class NoLoggingSource : ILoggingSource
 		Task.FromResult<BetterStackConfiguration?>(null);
 
 	public Task ForgetAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+	public Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
+		Task.FromResult<DateTimeOffset?>(null);
 }

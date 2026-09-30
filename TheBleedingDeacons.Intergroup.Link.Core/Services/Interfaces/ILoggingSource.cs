@@ -27,4 +27,10 @@ public interface ILoggingSource
 	/// Forget whatever was held for a session that has ended.
 	/// </summary>
 	Task ForgetAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// When the settings were last confirmed by the site, whether anything
+	/// had changed or not; null if they never have been. For Settings.
+	/// </summary>
+	Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default);
 }
