@@ -136,18 +136,41 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		}
 	}
 
-	public async Task<long> HighestIdAsync(CancellationToken cancellationToken = default)
+	/// <inheritdoc />
+	/// <remarks>
+	/// A file written before the poll kept its own mark reads it as 0, so
+	/// the first sync after upgrading asks from the clear mark, or from the
+	/// beginning. That is deliberate: it collects whatever a later push
+	/// once hid. What is already held is replaced in place, what was
+	/// deleted stays deleted, and nothing already held counts as received.
+	/// </remarks>
+	public async Task<long> PollFromAsync(CancellationToken cancellationToken = default)
 	{
 		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
 
-		// The higher of the two, never the more recent. A cleared inbox
-		// that has since received one message holds an id above the mark;
-		// an inbox cleared after that holds a mark above every id. Taking
-		// whichever was set last would, in the first case, ask the server
-		// for everything the member has just cleared.
-		var highest = held.Messages.Count == 0 ? 0 : held.Messages.Keys.Max();
+		return Math.Max(held.PolledUpTo, held.ClearedUpTo);
+	}
 
-		return Math.Max(highest, held.ClearedUpTo);
+	/// <inheritdoc />
+	public async Task MarkPolledAsync(long messageId, CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			if (messageId <= held.PolledUpTo)
+			{
+				return;
+			}
+
+			await WriteUnguardedAsync(held with { PolledUpTo = messageId }, cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
 	}
 
 	public async Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default)
@@ -297,20 +320,12 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				return;
 			}
 
-			if (received is not null)
-			{
-				// Where the next poll starts must not walk backwards when
-				// the newest message is the one deleted — or the poll
-				// would ask for it again and put it straight back. Only a
-				// received id moves the mark: a sent one is not the
-				// inbox's, and raising the mark past it would skip
-				// anything that arrived on the server just before it.
-				var highest = held.Messages.Keys.Max();
-
-				held = held with { ClearedUpTo = Math.Max(highest, held.ClearedUpTo) };
-				held.Messages.Remove(messageId);
-			}
-
+			// Where the next poll starts is left alone. The Deleted record
+			// below is what stops a poll putting this straight back, and
+			// SaveAsync honours it. This used to raise the clear mark to
+			// the highest id held instead, which, when that id had come by
+			// push, also skipped any earlier message whose push dropped.
+			held.Messages.Remove(messageId);
 			held.Sent.Remove(messageId);
 			held.Deleted[messageId] = sent?.ReplyToId ?? received!.ReplyToId;
 
@@ -339,7 +354,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	/// offering this says so rather than implying otherwise.</para>
 	///
 	/// <para><b>The file is rewritten, not deleted</b>, and that is the
-	/// point. A poll asks for everything above the highest id held, so
+	/// point. A poll asks for everything above where the last one got to, so
 	/// deleting the file sent the next poll back to zero and the server
 	/// refilled the inbox seconds later, in front of a member who had just
 	/// been told it was cleared. What stays behind is a single number
@@ -356,15 +371,23 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 			var highest = held.Messages.Count == 0 ? 0 : held.Messages.Keys.Max();
 
+			// Deleted ids too. Their records go with the clear, and a
+			// deleted message can sit above everything held — one that
+			// came by push and was deleted before any poll collected it.
+			var deleted = held.Deleted.Count == 0 ? 0 : held.Deleted.Keys.Max();
+
 			// Never walk the mark backwards: clearing an inbox that is
 			// already empty must not un-clear the one cleared before it.
-			var mark = Math.Max(highest, held.ClearedUpTo);
+			var mark = Math.Max(Math.Max(highest, deleted), held.ClearedUpTo);
 
 			// The owner is carried across. Clearing is a member emptying
 			// their own inbox, not handing the phone on — and a store that
 			// forgot whose it was would be adopted by the next sign-in as
-			// though it were nobody's.
-			await WriteUnguardedAsync(new Held([], mark, held.MemberId), cancellationToken).ConfigureAwait(false);
+			// though it were nobody's. So is the poll mark, which says
+			// nothing about any message.
+			await WriteUnguardedAsync(
+				new Held([], mark, held.MemberId) { PolledUpTo = held.PolledUpTo },
+				cancellationToken).ConfigureAwait(false);
 		}
 		finally
 		{
@@ -534,6 +557,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				Math.Max(0, stored.ClearedUpTo),
 				Math.Max(0, stored.MemberId))
 			{
+				PolledUpTo = Math.Max(0, stored.PolledUpTo),
 				Sent = stored.Sent.Where(m => m.Id > 0).ToDictionary(m => m.Id),
 				Deleted = stored.Deleted.Where(d => d.Id > 0).ToDictionary(d => d.Id, d => d.ReplyToId),
 			};
@@ -544,6 +568,7 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		var stored = new StoredHistory
 		{
 			ClearedUpTo = held.ClearedUpTo,
+			PolledUpTo = held.PolledUpTo,
 			MemberId = held.MemberId,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
 			Sent = held.Sent.Values.OrderByDescending(m => m.Id).ToList(),
@@ -640,6 +665,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	private sealed record Held(Dictionary<long, LinkMessage> Messages, long ClearedUpTo, long MemberId = 0)
 	{
 		/// <summary>
+		/// The highest id a poll has collected. 0 on every Held built
+		/// without saying otherwise, so a reset or an adoption starts the
+		/// next member's poll from the beginning.
+		/// </summary>
+		public long PolledUpTo { get; init; }
+
+		/// <summary>
 		/// What this member has sent. Empty on every Held built without
 		/// saying otherwise, which is what makes a clear, a reset and an
 		/// adoption take the sent copies with the inbox.
@@ -669,6 +701,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	private sealed class StoredHistory
 	{
 		public long ClearedUpTo { get; set; }
+
+		/// <summary>
+		/// The highest id a poll has collected. Absent from every file
+		/// written before 2026-10-03, which reads as 0 — see
+		/// <see cref="PollFromAsync"/>.
+		/// </summary>
+		public long PolledUpTo { get; set; }
 
 		/// <summary>
 		/// The member these messages belong to, or 0 on a file written

@@ -76,7 +76,7 @@ public sealed class HistoryRecoveryTests : IDisposable
 	{
 		// First launch. No file, no directory.
 		Assert.Empty(await New().AllAsync());
-		Assert.Equal(0, await New().HighestIdAsync());
+		Assert.Equal(0, await New().PollFromAsync());
 	}
 
 	[Fact]

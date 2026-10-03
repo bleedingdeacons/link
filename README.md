@@ -98,9 +98,15 @@ surfaces; a handset whose FCM token silently rotated still gets its
 messages; a build with no `google-services.json` — CI's, for instance —
 gets all of them, just later.
 
-`MessageService.SyncAsync` asks for everything above the highest id it
-holds, so nothing is skipped because a push was dropped, delayed by Doze,
-or sent to a token that has moved on. A push and a poll produce the same
+`MessageService.SyncAsync` asks for everything above the highest id a
+poll has collected, and a push does not move that, so nothing is skipped
+because a push was dropped, delayed by Doze, or sent to a token that has
+moved on — even when a later message's push got through first. Fellowship
+pages the inbox oldest first and says whether there is more, so a handset
+that has been away walks forward through all of it, up to ten pages per
+sync. Until 2026-10-03 both went the other way, and each lost messages: the
+poll started from the highest id held, which a push raised, and the inbox
+was paged newest first. A push and a poll produce the same
 envelope and go through the same code, so how a message arrived is not
 something the rest of the app has to know.
 
@@ -154,7 +160,8 @@ says how many — "Read by 2 of 5" — which the ticks cannot.
 **Received means a phone opened it**, not that Fellowship stored it. Every
 sync tells Fellowship which held messages it has not yet acknowledged
 (`POST /messages/received`), whichever route brought them: a push handler has
-no session token, and a pushed message is never polled again. A message that
+no session token, and a fetch is not an opening — a pushed message is polled
+again only once the poll reaches it, which may be long after. A message that
 will not open is never held, so it is never acknowledged. Reading a message
 counts as receiving it, so a lost acknowledgement does not leave its sender
 on one tick.

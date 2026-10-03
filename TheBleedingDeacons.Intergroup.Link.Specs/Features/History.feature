@@ -45,7 +45,7 @@ Feature: This phone's own copy of the messages
 
   Rule: What was cleared stays cleared
 
-    A poll asks for everything above the highest id held, so a store that
+    A poll asks for everything above where the last one got to, so a store that
     merely deleted its file went back to asking from zero and the server
     refilled it within seconds — in front of a member who had just been
     told it was cleared. What stays behind is a single number inside the

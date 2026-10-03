@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using TheBleedingDeacons.Intergroup.Link.Models;
@@ -39,17 +40,122 @@ public sealed class MessageServiceTests
 	}
 
 	[Fact]
-	public async Task ItAsksForEverythingAboveWhatItAlreadyHolds()
+	public async Task ItAsksForEverythingAboveWherePollingGotTo()
 	{
 		// This is what makes push optional. A message whose push was
 		// dropped, delayed by Doze or sent to a rotated FCM token is
 		// picked up here regardless.
 		var client = new FakeClient();
-		var history = new FakeHistory { Highest = 900 };
+		var history = new FakeHistory { PollFrom = 900 };
 
 		await Service(client, history, "irrelevant").SyncAsync();
 
 		Assert.Equal(900, client.AskedSince);
+	}
+
+	[Fact]
+	public async Task ItWalksThroughEveryPageInOneSync()
+	{
+		using var mailbox = new Mailbox();
+		var client = new FakeClient();
+		client.Pages.Enqueue(new InboxPage { Messages = [mailbox.Envelope(1), mailbox.Envelope(2)], More = true });
+		client.Pages.Enqueue(new InboxPage { Messages = [mailbox.Envelope(3)], Unread = 3 });
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.Equal([0, 2], client.AskedSinceEach);
+		Assert.Equal(3, result.Received);
+		Assert.Equal(3, result.Unread);
+		Assert.Equal(3, history.PollFrom);
+		Assert.Equal([1, 2, 3], history.Held.Select(m => m.Id).Order());
+	}
+
+	[Fact]
+	public async Task APageThatOpensNothingLeavesThePollWhereItWas()
+	{
+		// A handset whose key has gone. Stepping past what it could not
+		// open would lose those messages for good; staying put means a
+		// replaced key brings every one of them back. And there is no
+		// second page, because asking again would fetch this one again.
+		using var mailbox = new Mailbox();
+		var client = new FakeClient();
+		client.Pages.Enqueue(new InboxPage { Messages = [mailbox.Envelope(1), mailbox.Envelope(2)], More = true });
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, Sealing.StrangersPrivateKey()).SyncAsync();
+
+		Assert.True(result.KeyFault);
+		Assert.Single(client.AskedSinceEach);
+		Assert.Equal(0, history.PollFrom);
+		Assert.Equal(1, client.KeyFaultsReported);
+	}
+
+	[Fact]
+	public async Task OneBadEnvelopeAmongGoodOnesIsSteppedOver()
+	{
+		// The key evidently works, so the bad one is the message's fault,
+		// and asking for it again would only fetch the same bytes.
+		using var mailbox = new Mailbox();
+		var bad = mailbox.Envelope(1) with { Payload = Sealing.Seal().Payload };
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [bad, mailbox.Envelope(2)] } };
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.True(result.KeyFault);
+		Assert.Equal(2, history.PollFrom);
+	}
+
+	[Fact]
+	public async Task AMessageAlreadyHeldIsNotReceivedAgain()
+	{
+		// Every pushed message is collected once more by the poll. It must
+		// not chime twice.
+		using var mailbox = new Mailbox();
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [mailbox.Envelope(5)] } };
+		var history = new FakeHistory();
+		history.Held.Add(new LinkMessage { Id = 5, Subject = "Pushed" });
+
+		var result = await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.Equal(0, result.Received);
+		Assert.Equal(5, history.PollFrom);
+		Assert.Single(history.Held);
+	}
+
+	[Fact]
+	public async Task OneSyncWalksNoMoreThanItsShareOfPages()
+	{
+		using var mailbox = new Mailbox();
+		var client = new FakeClient();
+		for (var id = 1; id <= MessageService.PagesPerSync + 1; id++)
+		{
+			client.Pages.Enqueue(new InboxPage { Messages = [mailbox.Envelope(id)], More = true });
+		}
+
+		var history = new FakeHistory();
+
+		await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.Equal(MessageService.PagesPerSync, client.AskedSinceEach.Count);
+		Assert.Equal(MessageService.PagesPerSync, history.PollFrom);
+	}
+
+	[Fact]
+	public async Task ALaterPageFailingKeepsWhatTheEarlierOnesBrought()
+	{
+		using var mailbox = new Mailbox();
+		var client = new FakeClient();
+		client.Pages.Enqueue(new InboxPage { Messages = [mailbox.Envelope(1)], More = true });
+		client.Pages.Enqueue(InboxPage.Failed);
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.False(result.Succeeded);
+		Assert.Single(history.Held);
+		Assert.Equal(1, history.PollFrom);
 	}
 
 	[Fact]
@@ -391,6 +497,28 @@ public sealed class MessageServiceTests
 		Unread = unread,
 	};
 
+	/// <summary>
+	/// One keypair, and as many envelopes sealed to it as a test wants,
+	/// each carrying its own id — for the tests that need a page of
+	/// several messages one key opens.
+	/// </summary>
+	private sealed class Mailbox : IDisposable
+	{
+		private readonly RSA _rsa = RSA.Create(Sealing.KeyBits);
+
+		public string PrivateKey => _rsa.ExportPkcs8PrivateKeyPem();
+
+		public SealedMessage Envelope(long id)
+		{
+			var payload = Sealing.Payload();
+			payload["id"] = id;
+
+			return Sealing.SealTo(_rsa, payload).Envelope(id);
+		}
+
+		public void Dispose() => _rsa.Dispose();
+	}
+
 	// ── Doubles ──────────────────────────────────────────────────────────
 	//
 	// Hand-written rather than mocked. There are four small interfaces
@@ -412,12 +540,23 @@ public sealed class MessageServiceTests
 
 		public bool SendCalled { get; private set; }
 
+		/// <summary>
+		/// Pages to answer with, in order, before falling back to
+		/// <see cref="Inbox"/>. For the tests about walking through more
+		/// than one.
+		/// </summary>
+		public Queue<InboxPage> Pages { get; } = [];
+
+		/// <summary>Every <c>sinceId</c> asked with, in order.</summary>
+		public List<long> AskedSinceEach { get; } = [];
+
 		public Task<InboxPage> FetchInboxAsync(string token, long sinceId, CancellationToken cancellationToken = default)
 		{
 			InboxFetched = true;
 			AskedSince = sinceId;
+			AskedSinceEach.Add(sinceId);
 
-			return Task.FromResult(Inbox);
+			return Task.FromResult(Pages.Count > 0 ? Pages.Dequeue() : Inbox);
 		}
 
 		public Task<bool> ReportKeyFaultAsync(string token, CancellationToken cancellationToken = default)
@@ -494,19 +633,31 @@ public sealed class MessageServiceTests
 
 		public List<long> MarkedRead { get; } = [];
 
-		public long Highest { get; set; }
+		/// <summary>Where the next poll starts. Only a poll moves it, as in the real one.</summary>
+		public long PollFrom { get; set; }
 
 		public Task<IReadOnlyList<LinkMessage>> AllAsync(CancellationToken cancellationToken = default) =>
 			Task.FromResult<IReadOnlyList<LinkMessage>>(Held);
 
 		public Task SaveAsync(IEnumerable<LinkMessage> messages, CancellationToken cancellationToken = default)
 		{
-			Held.AddRange(messages);
+			foreach (var message in messages.ToList())
+			{
+				Held.RemoveAll(m => m.Id == message.Id);
+				Held.Add(message);
+			}
 
 			return Task.CompletedTask;
 		}
 
-		public Task<long> HighestIdAsync(CancellationToken cancellationToken = default) => Task.FromResult(Highest);
+		public Task<long> PollFromAsync(CancellationToken cancellationToken = default) => Task.FromResult(PollFrom);
+
+		public Task MarkPolledAsync(long messageId, CancellationToken cancellationToken = default)
+		{
+			PollFrom = Math.Max(PollFrom, messageId);
+
+			return Task.CompletedTask;
+		}
 
 		public List<SentMessage> SentHeld { get; } = [];
 
@@ -572,7 +723,7 @@ public sealed class MessageServiceTests
 
 		public Task ClearAsync(CancellationToken cancellationToken = default)
 		{
-			Highest = Held.Count == 0 ? Highest : Math.Max(Highest, Held.Max(m => m.Id));
+			PollFrom = Held.Count == 0 ? PollFrom : Math.Max(PollFrom, Held.Max(m => m.Id));
 			Held.Clear();
 
 			return Task.CompletedTask;
@@ -585,7 +736,7 @@ public sealed class MessageServiceTests
 			if (Owner != memberId || memberId <= 0)
 			{
 				Held.Clear();
-				Highest = 0;
+				PollFrom = 0;
 			}
 
 			Owner = memberId;
@@ -596,7 +747,7 @@ public sealed class MessageServiceTests
 		public Task ResetAsync(CancellationToken cancellationToken = default)
 		{
 			Held.Clear();
-			Highest = 0;
+			PollFrom = 0;
 
 			return Task.CompletedTask;
 		}
