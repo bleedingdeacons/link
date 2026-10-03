@@ -238,6 +238,7 @@ public sealed class FellowshipClient : IFellowshipClient
 		{
 			Messages = sealedMessages,
 			Unread = (int)Number(json.Value, "unread"),
+			More = Flag(json.Value, "more"),
 		};
 	}
 

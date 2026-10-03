@@ -94,22 +94,31 @@ key a device presents.
 ## Push is the fast path, not the reliable one
 
 Every message is stored before any push is attempted, and a sync asks for
-everything above the highest id held. So a push that was dropped, delayed by
-Doze, or sent to a rotated token costs nothing — the message is collected on
-the next pass.
+everything above the highest id a poll has collected. So a push that was
+dropped, delayed by Doze, or sent to a rotated token costs nothing — the
+message is collected on the next pass.
 
-**The poll is strictly exclusive.** Fellowship's query is
-`message_id > since`, and a sync asks from the highest id it holds. A message
-therefore arrives exactly once, whichever route brought it, and a message
-already held is never fetched again.
+**A push does not move where the poll starts.** Message ids are shared
+across the whole fellowship, so a gap below a pushed message cannot be told
+apart from messages that were somebody else's. Until 2026-10-03 the poll
+started from the highest id held: message 9's push dropped, message 10's
+arrived, and the next sync asked for everything above 10, so 9 never came.
+The history now keeps a poll mark of its own, which only a sync moves, and
+only as far as the highest id it opened — so a handset whose key has gone
+stays put, and a replaced key brings everything back.
 
-That has one consequence worth knowing before reading the code.
-`JsonMessageHistory.SaveAsync` takes care to keep a local read flag when a
-second, unread copy of the same message is saved over it, and reasons that
-the poll's copy is where the read flag comes from. **No route reaches that
-branch**, because the poll cannot return a message this handset already
-holds. It is defensive code with a rationale that no longer holds; the
-specification says so rather than pretending to pin it down.
+**The poll is strictly exclusive**, and pages forward. Fellowship's query
+is `message_id > since`, oldest first, a page at a time, with `more` saying
+whether another is waiting. It was newest first until 2026-10-03, which cost
+a handset more than a page behind everything under the first page.
+
+So a message that arrived by push is collected once more by the poll. It is
+not *received* twice — nothing chimes for a message already held — but the
+poll's copy carries the read flag, which a push, sealed once at send, never
+does. That is the route into the branch of `JsonMessageHistory.SaveAsync`
+that keeps a local read flag when a second, unread copy is saved over it:
+a member reads a pushed message before the read reaches the server, and the
+poll's copy is still unread.
 
 ## What a lost key actually costs
 

@@ -44,6 +44,15 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	/// </summary>
 	public string DevicePublicKey { get; set; } = string.Empty;
 
+	/// <summary>
+	/// How many messages one poll hands back: Fellowship's default page.
+	///
+	/// <para>A double that answered everything at once could never show a
+	/// handset that is more than a page behind, which is where messages
+	/// went missing.</para>
+	/// </summary>
+	public int PageSize { get; set; } = 50;
+
 	/// <summary>How many of this member's messages are unread, per the server.</summary>
 	public int Unread { get; set; }
 
@@ -149,8 +158,14 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	/// Fellowship's query is <c>message_id &gt; %d</c>, strictly
 	/// exclusive. A double that handed back its whole page whatever it was
 	/// asked would let a scenario prove things no real handset can do —
-	/// most obviously that a message already held comes back carrying a
-	/// read flag set on another device, which it does not.</para>
+	/// most obviously that a message a poll has already collected comes
+	/// back carrying a read flag set on another device, which it does
+	/// not.</para>
+	///
+	/// <para><b>And it pages as the server does</b>: oldest first, a page
+	/// at a time, saying whether there is more. Fellowship paged newest
+	/// first until 2026-10-03, which is how a handset more than a page
+	/// behind lost everything underneath the first page.</para>
 	/// </summary>
 	public Task<InboxPage> FetchInboxAsync(string token, long sinceId, CancellationToken cancellationToken)
 	{
@@ -161,13 +176,18 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 			return Task.FromResult(Refusal);
 		}
 
-		var page = Stored
+		var waiting = Stored
 			.Where(message => message.Id > sinceId)
+			.OrderBy(message => message.Id)
+			.ToList();
+
+		var page = waiting
+			.Take(PageSize)
 			.Select(message => Sealing.Seal(message.Id, message.Payload, DevicePublicKey))
 			.Select(envelope => Tampered.Contains(envelope.Id) ? Sealing.Tamper(envelope) : envelope)
 			.ToList();
 
-		return Task.FromResult(new InboxPage { Messages = page, Unread = Unread });
+		return Task.FromResult(new InboxPage { Messages = page, Unread = Unread, More = waiting.Count > PageSize });
 	}
 
 	public Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken)

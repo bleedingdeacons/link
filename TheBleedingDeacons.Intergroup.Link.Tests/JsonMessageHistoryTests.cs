@@ -125,15 +125,131 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	}
 
 	[Fact]
-	public async Task TheHighestIdIsWhatAPollAsksFor()
+	public async Task WhatIsHeldDoesNotMoveWhereThePollStarts()
 	{
+		// A push saves straight into the history. Had that moved the poll,
+		// message 9 whose push dropped would never be fetched once message
+		// 10's push had arrived — which is exactly what used to happen.
 		using var history = New();
 
-		Assert.Equal(0, await history.HighestIdAsync());
+		Assert.Equal(0, await history.PollFromAsync());
 
 		await history.SaveAsync([Message(4, "a"), Message(11, "b"), Message(7, "c")]);
 
-		Assert.Equal(11, await history.HighestIdAsync());
+		Assert.Equal(0, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task APollMovesWhereTheNextOneStarts()
+	{
+		using var history = New();
+
+		await history.MarkPolledAsync(11);
+
+		Assert.Equal(11, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task ThePollMarkNeverWalksBackwards()
+	{
+		using var history = New();
+
+		await history.MarkPolledAsync(11);
+		await history.MarkPolledAsync(7);
+
+		Assert.Equal(11, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task ThePollMarkSurvivesBeingReopened()
+	{
+		using (var writing = New())
+		{
+			await writing.MarkPolledAsync(12);
+		}
+
+		using var reopened = New();
+
+		Assert.Equal(12, await reopened.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task DeletingAPushedMessageDoesNotMoveThePollPastOneThatNeverArrived()
+	{
+		// Deleting used to raise the clear mark to the highest id held. When
+		// that id had come by push, the message before it — whose push had
+		// dropped — was skipped for good.
+		using var history = New();
+
+		await history.MarkPolledAsync(8);
+		await history.SaveAsync([Message(10, "Pushed")]);
+		await history.DeleteAsync(10);
+
+		Assert.Equal(8, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task ADeletedMessageIsNotTakenBackByThePoll()
+	{
+		// What stops the poll putting it straight back, now that deleting
+		// no longer moves where the poll starts.
+		using var history = New();
+
+		await history.SaveAsync([Message(10, "Pushed")]);
+		await history.DeleteAsync(10);
+		await history.SaveAsync([Message(10, "Pushed")]);
+
+		Assert.Empty(await history.AllAsync());
+	}
+
+	[Fact]
+	public async Task ClearingCoversADeletedMessageAboveEverythingHeld()
+	{
+		// A clear forgets which messages were deleted one at a time, so its
+		// mark has to reach them or the next poll would bring them back.
+		using var history = New();
+
+		await history.SaveAsync([Message(4, "Held"), Message(10, "Pushed")]);
+		await history.DeleteAsync(10);
+		await history.ClearAsync();
+
+		Assert.Equal(10, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task ClearingKeepsThePollMark()
+	{
+		using var history = New();
+
+		await history.MarkPolledAsync(20);
+		await history.SaveAsync([Message(4, "Held")]);
+		await history.ClearAsync();
+
+		Assert.Equal(20, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task AnotherMemberStartsTheirPollFromTheBeginning()
+	{
+		using var history = New();
+
+		await history.AdoptAsync(7);
+		await history.MarkPolledAsync(20);
+		await history.AdoptAsync(9);
+
+		Assert.Equal(0, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task TheSameMemberSigningBackInKeepsTheirPollMark()
+	{
+		using var history = New();
+
+		await history.AdoptAsync(7);
+		await history.MarkPolledAsync(20);
+		await history.AdoptAsync(7);
+
+		Assert.Equal(20, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -151,7 +267,7 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	public async Task ClearedMessagesStayClearedRatherThanBeingFetchedBackAgain()
 	{
 		// The whole point of the mark. A poll asks for everything above
-		// the highest id held, so a store that dropped back to 0 had the
+		// where it last got to, so a store that dropped back to 0 had the
 		// server refill it seconds later, in front of somebody who had
 		// just been told their messages were cleared.
 		using var history = New();
@@ -159,7 +275,7 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.SaveAsync([Message(1, "Gone"), Message(2, "Also gone")]);
 		await history.ClearAsync();
 
-		Assert.Equal(2, await history.HighestIdAsync());
+		Assert.Equal(2, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -174,11 +290,11 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		using var reopened = New();
 
 		Assert.Empty(await reopened.AllAsync());
-		Assert.Equal(9, await reopened.HighestIdAsync());
+		Assert.Equal(9, await reopened.PollFromAsync());
 	}
 
 	[Fact]
-	public async Task AMessageArrivingAfterAClearMovesThePollPastTheMark()
+	public async Task AMessagePushedAfterAClearDoesNotMoveThePollPastTheMark()
 	{
 		using var history = New();
 
@@ -186,8 +302,21 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ClearAsync();
 		await history.SaveAsync([Message(5, "New")]);
 
-		Assert.Equal(5, await history.HighestIdAsync());
+		Assert.Equal(4, await history.PollFromAsync());
 		Assert.Single(await history.AllAsync());
+	}
+
+	[Fact]
+	public async Task AMessagePolledAfterAClearMovesThePollPastTheMark()
+	{
+		using var history = New();
+
+		await history.SaveAsync([Message(4, "Gone")]);
+		await history.ClearAsync();
+		await history.SaveAsync([Message(5, "New")]);
+		await history.MarkPolledAsync(5);
+
+		Assert.Equal(5, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -212,7 +341,7 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ClearAsync();
 		await history.ClearAsync();
 
-		Assert.Equal(6, await history.HighestIdAsync());
+		Assert.Equal(6, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -228,7 +357,7 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ResetAsync();
 
 		Assert.Empty(await history.AllAsync());
-		Assert.Equal(0, await history.HighestIdAsync());
+		Assert.Equal(0, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -242,7 +371,10 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		using var history = New();
 
 		Assert.Equal(8, Assert.Single(await history.AllAsync()).Id);
-		Assert.Equal(8, await history.HighestIdAsync());
+
+		// From the beginning: a file this old carries no poll mark, and the
+		// first sync collects whatever a later push once hid.
+		Assert.Equal(0, await history.PollFromAsync());
 	}
 
 	[Fact]
@@ -255,7 +387,7 @@ public sealed class JsonMessageHistoryTests : IDisposable
 		await history.ClearAsync();
 
 		Assert.Empty(await history.AllAsync());
-		Assert.Equal(8, await history.HighestIdAsync());
+		Assert.Equal(8, await history.PollFromAsync());
 	}
 
 	[Fact]

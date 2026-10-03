@@ -45,7 +45,7 @@ Feature: This phone's own copy of the messages
 
   Rule: What was cleared stays cleared
 
-    A poll asks for everything above the highest id held, so a store that
+    A poll asks for everything above where the last one got to, so a store that
     merely deleted its file went back to asking from zero and the server
     refilled it within seconds — in front of a member who had just been
     told it was cleared. What stays behind is a single number inside the
@@ -58,12 +58,22 @@ Feature: This phone's own copy of the messages
       Then the server was asked for everything above 13
       And nothing is held
 
-    Scenario: A message received after a clear moves the mark on
+    Scenario: A message pushed after a clear does not move the poll past what it missed
       Given messages 12 and 13 are held
       When the history is cleared
       And message 14 arrives by push
       And the handset syncs
+      Then the server was asked for everything above 13
+      And the messages read 14
+
+    Scenario: A message polled after a clear moves the mark on
+      Given messages 12 and 13 are held
+      When the history is cleared
+      And message 14 is waiting on the server
+      And the handset syncs
+      And the handset syncs
       Then the server was asked for everything above 14
+      And the messages read 14
 
     Scenario: Clearing an empty history does not walk the mark backwards
       Given messages 12 and 13 are held

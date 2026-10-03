@@ -38,8 +38,11 @@ Feature: Deleting one message from this phone
 
   Rule: What was deleted stays deleted
 
-    A poll asks for everything above the highest id held, so deleting
-    the newest message would otherwise send the next poll back for it.
+    A message deleted before any poll collected it — one that came by
+    push — is still above where the poll starts, so the next sync fetches
+    it again; what is left of it here is what keeps it out. Deleting does
+    not move where the poll starts: it used to, and that skipped any
+    earlier message whose push had dropped.
     And a message to a committee this member sits on arrives back as
     well as being sent, under the same id, so a copy can turn up after
     the member has deleted theirs.

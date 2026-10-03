@@ -21,11 +21,11 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// only ever this phone's copies.</para>
 ///
 /// <para><b>Why remembering is the whole trick.</b> A poll asks for
-/// everything above <see cref="HighestIdAsync"/>, so a store that merely
+/// everything above <see cref="PollFromAsync"/>, so a store that merely
 /// deleted its file went back to asking from zero and the server refilled
 /// it within seconds — leaving a button whose entire visible effect was
-/// nothing at all. Clearing therefore leaves a mark behind, and that mark
-/// is where the next poll starts.</para>
+/// nothing at all. Clearing therefore leaves a mark behind, and the next
+/// poll starts no lower than that mark.</para>
 ///
 /// <para><b>Which is exactly why signing out must not use it.</b> The
 /// mark belongs to the member who set it. Left in place for whoever signs
@@ -49,14 +49,29 @@ public interface IMessageHistory
 	Task SaveAsync(IEnumerable<LinkMessage> messages, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Where the next poll should start: the highest message id held, the
-	/// point a clear reached, or 0 when neither applies.
+	/// Where the next poll should start: the highest id a poll has
+	/// collected, the point a clear reached, or 0 when neither applies.
 	///
-	/// <para>The higher of the two, not the newer. Clearing an inbox and
-	/// then receiving one more message must not walk the starting point
-	/// backwards to what was cleared.</para>
+	/// <para><b>Not the highest id held.</b> A push puts a message in the
+	/// history without saying anything about the ones before it. Ids are
+	/// shared across the whole fellowship, so a gap below a pushed message
+	/// cannot be told apart from messages that were somebody else's. Until
+	/// 2026-10-03 the poll started from the highest id held: message 9's
+	/// push dropped, message 10's arrived, and the next sync asked for
+	/// everything above 10, so 9 never came. Only
+	/// <see cref="MarkPolledAsync"/> moves this, and only a sync calls
+	/// that.</para>
+	///
+	/// <para>The higher of the two, not the newer. Taking whichever was set
+	/// last would, after a clear, ask for everything just cleared.</para>
 	/// </summary>
-	Task<long> HighestIdAsync(CancellationToken cancellationToken = default);
+	Task<long> PollFromAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Record that a poll has collected everything it is going to up to
+	/// <paramref name="messageId"/>. Never moves the mark backwards.
+	/// </summary>
+	Task MarkPolledAsync(long messageId, CancellationToken cancellationToken = default);
 
 	Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default);
 

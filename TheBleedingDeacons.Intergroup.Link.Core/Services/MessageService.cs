@@ -22,9 +22,12 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// on how it arrived.</para>
 ///
 /// <para><b>Push is the fast path, not the reliable one.</b> Nothing here
-/// assumes a push arrived. A sync fetches everything above the highest id
-/// held, so a message whose push was dropped, delayed by Doze, or sent to
-/// a rotated FCM token is picked up on the next pass regardless.</para>
+/// assumes a push arrived. A sync fetches everything above where the last
+/// poll got to, and a push does not move that, so a message whose push was
+/// dropped, delayed by Doze, or sent to a rotated FCM token is picked up
+/// on the next pass regardless — even when a later message's push got
+/// through first. See <see cref="IMessageHistory.PollFromAsync"/> for how
+/// that used to go wrong.</para>
 /// </summary>
 public sealed class MessageService : IMessageService
 {
@@ -33,6 +36,13 @@ public sealed class MessageService : IMessageService
 	/// Fellowship's own cap, and the size of its largest poll page.
 	/// </summary>
 	internal const int IdsPerRequest = 200;
+
+	/// <summary>
+	/// The most inbox pages one sync walks through: 500 messages at
+	/// Fellowship's default page. A handset further behind than that
+	/// carries on from where it stopped on the next sync.
+	/// </summary>
+	public const int PagesPerSync = 10;
 
 	private readonly IFellowshipClient _client;
 	private readonly IMessageHistory _history;
@@ -59,55 +69,102 @@ public sealed class MessageService : IMessageService
 			return SyncResult.Failed;
 		}
 
-		var since = await _history.HighestIdAsync(cancellationToken).ConfigureAwait(false);
+		var since = await _history.PollFromAsync(cancellationToken).ConfigureAwait(false);
 
-		var page = await _client.FetchInboxAsync(session.Token, since, cancellationToken).ConfigureAwait(false);
-		if (!page.Succeeded)
-		{
-			await SignOutIfRefusedAsync(page.Failure).ConfigureAwait(false);
+		// What this phone already has, so that a message collected again —
+		// every pushed one is, once — is not counted as arriving twice.
+		// Received is what chimes, and nothing new arrived.
+		var known = (await _history.AllAsync(cancellationToken).ConfigureAwait(false))
+			.Select(m => m.Id)
+			.Concat((await _history.DeletedAsync(cancellationToken).ConfigureAwait(false)).Select(d => d.Id))
+			.ToHashSet();
 
-			return SyncResult.FailedWith(page.Failure);
-		}
-
-		if (page.Messages.Count == 0)
-		{
-			// Nothing arrived, so nothing failed to open. Said out loud
-			// rather than left implied, because a screen that only ever
-			// hears about faults can never stop showing one.
-			WeakReferenceMessenger.Default.Send(new KeyFaultChanged(false));
-
-			await ReportReceiptsAsync(session.Token, cancellationToken).ConfigureAwait(false);
-
-			return new SyncResult { Received = 0, Unread = page.Unread };
-		}
-
-		var privateKey = await _keys.PrivateKeyAsync().ConfigureAwait(false);
-
-		var opened = new List<LinkMessage>();
+		string? privateKey = null;
+		var fetched = 0;
+		var stored = 0;
+		var received = 0;
 		var unopened = 0;
+		var unread = 0;
 
-		foreach (var envelope in page.Messages)
+		for (var pages = 0; pages < PagesPerSync; pages++)
 		{
-			var message = Open(envelope, privateKey);
+			var page = await _client.FetchInboxAsync(session.Token, since, cancellationToken).ConfigureAwait(false);
+			if (!page.Succeeded)
+			{
+				// Whatever earlier pages brought is already kept, and the
+				// poll mark already past it, so the next sync carries on
+				// from there rather than starting again.
+				await SignOutIfRefusedAsync(page.Failure).ConfigureAwait(false);
 
-			if (message is null)
-			{
-				unopened++;
+				return SyncResult.FailedWith(page.Failure);
 			}
-			else
+
+			unread = page.Unread;
+
+			if (page.Messages.Count == 0)
 			{
+				break;
+			}
+
+			privateKey ??= await _keys.PrivateKeyAsync().ConfigureAwait(false);
+
+			var opened = new List<LinkMessage>();
+			var reached = since;
+
+			foreach (var envelope in page.Messages)
+			{
+				fetched++;
+
+				var message = Open(envelope, privateKey);
+				if (message is null)
+				{
+					unopened++;
+					continue;
+				}
+
 				opened.Add(message);
+
+				// By the id the server pages on, and only for what opened.
+				// A handset whose key has gone opens nothing, so its mark
+				// stays where it was and a replaced key brings every one of
+				// these back. One bad envelope among good ones is stepped
+				// over, as it always was: the key evidently works, so asking
+				// again would only fetch the same unreadable bytes.
+				reached = Math.Max(reached, envelope.Id);
+
+				if (known.Add(message.Id))
+				{
+					received++;
+				}
 			}
+
+			if (opened.Count > 0)
+			{
+				// Saved before the mark moves, so a sync killed in between
+				// fetches these again rather than skipping them.
+				await _history.SaveAsync(opened, cancellationToken).ConfigureAwait(false);
+				stored += opened.Count;
+			}
+
+			if (reached > since)
+			{
+				await _history.MarkPolledAsync(reached, cancellationToken).ConfigureAwait(false);
+			}
+
+			// Another page only when the server says there is one, and only
+			// when this one moved the mark — otherwise the next request
+			// would be this one again, word for word.
+			if (!page.More || reached <= since)
+			{
+				break;
+			}
+
+			since = reached;
 		}
 
-		if (opened.Count > 0)
+		if (stored > 0)
 		{
-			await _history.SaveAsync(opened, cancellationToken).ConfigureAwait(false);
-		}
-
-		if (opened.Count > 0)
-		{
-			Log.Information("Sync stored {Count} message(s); {Unread} unread", opened.Count, page.Unread);
+			Log.Information("Sync stored {Count} message(s), {Received} new; {Unread} unread", stored, received, unread);
 		}
 
 		if (unopened > 0)
@@ -117,19 +174,21 @@ public sealed class MessageService : IMessageService
 			Log.Error(
 				"{Unopened} of {Total} message(s) could not be opened; reporting a key fault",
 				unopened,
-				page.Messages.Count);
+				fetched);
 
 			await _client.ReportKeyFaultAsync(session.Token, cancellationToken).ConfigureAwait(false);
 		}
 
+		// Said out loud even when nothing arrived, because a screen that
+		// only ever hears about faults can never stop showing one.
 		WeakReferenceMessenger.Default.Send(new KeyFaultChanged(unopened > 0));
 
 		await ReportReceiptsAsync(session.Token, cancellationToken).ConfigureAwait(false);
 
 		return new SyncResult
 		{
-			Received = opened.Count,
-			Unread = page.Unread,
+			Received = received,
+			Unread = unread,
 			KeyFault = unopened > 0,
 		};
 	}
@@ -239,9 +298,11 @@ public sealed class MessageService : IMessageService
 	/// wrong about the thing the member can see.</para>
 	///
 	/// <para><b>Acknowledged from here, for both routes.</b> A push handler
-	/// has no session token, and a message it stored is never polled
-	/// again — the poll is strictly exclusive — so if the sync did not
-	/// report it nothing would. Anything held and not yet accepted is sent
+	/// has no session token, and the server cannot take a fetch for a
+	/// receipt: a fetch is not an opening, and a pushed message is polled
+	/// again only once the poll mark reaches it, which may be long after —
+	/// so if the sync did not report it nothing would. The poll itself is
+	/// still strictly exclusive. Anything held and not yet accepted is sent
 	/// again on every pass until it is. A message that would not open was
 	/// never held, so it is never acknowledged: a receipt for a message
 	/// nobody can read would tell its sender it got there, about the one

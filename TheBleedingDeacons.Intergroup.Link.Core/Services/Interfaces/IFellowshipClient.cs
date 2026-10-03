@@ -44,8 +44,8 @@ public interface IFellowshipClient
 	Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Messages newer than the id this handset already holds, still
-	/// sealed. Opening them is the caller's job — see
+	/// One page of messages above <paramref name="sinceId"/>, oldest first,
+	/// still sealed. Opening them is the caller's job — see
 	/// <see cref="MessagePayloadCipher"/> — because only the caller has
 	/// the private key.
 	/// </summary>
@@ -298,6 +298,15 @@ public sealed record InboxPage
 
 	/// <summary>How many of this member's messages are unread, per the server.</summary>
 	public int Unread { get; init; }
+
+	/// <summary>
+	/// Whether another page is waiting above this one.
+	///
+	/// <para>False from a Fellowship older than 2026-10-03, which never
+	/// says. A handset talking to one collects a page per sync rather than
+	/// all of them in one, which is slower and loses nothing.</para>
+	/// </summary>
+	public bool More { get; init; }
 
 	/// <summary>
 	/// False when the fetch did not happen — offline, a 401, a 500.
