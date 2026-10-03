@@ -61,6 +61,16 @@ public sealed class MessageSteps(World world)
 		}
 	}
 
+	/// <summary>Messages 1 to <paramref name="count"/>, for a handset that has been away.</summary>
+	[Given(@"^(\d+) messages are waiting on the server$")]
+	public void ManyWaiting(int count)
+	{
+		for (var id = 1; id <= count; id++)
+		{
+			world.ServerHolds(id);
+		}
+	}
+
 	[Given(@"^message (\d+) is waiting on the server, already read$")]
 	[When(@"^message (\d+) is waiting on the server, already read$")]
 	public void WaitingRead(long id) => world.ServerHolds(id, readAt: 1788000100);

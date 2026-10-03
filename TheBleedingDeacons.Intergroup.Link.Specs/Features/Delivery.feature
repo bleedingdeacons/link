@@ -31,7 +31,7 @@ Feature: A message arrives, however it travelled
       Then message 12 is held
       And its subject reads "Intergroup meeting moved"
 
-    Scenario: A message that arrived by push is not fetched again
+    Scenario: A message that arrived by push is not received twice
       When message 12 arrives by push
       And message 12 is waiting on the server
       And the handset syncs
@@ -41,16 +41,27 @@ Feature: A message arrives, however it travelled
   Rule: The poll asks for what this handset does not have
 
     Nothing here assumes a push arrived. A sync asks for everything above
-    the highest id held, so a message whose push was dropped, delayed by
-    Doze, or sent to a token that has moved on is picked up on the next
-    pass regardless.
+    the highest id a poll has collected, and only a poll moves that mark.
+    So a message whose push was dropped, delayed by Doze, or sent to a
+    token that has moved on is picked up on the next pass regardless,
+    even when a later message's push got through first.
+
+    Until 2026-10-03 the poll started from the highest id held, which a
+    push raised. Message 9's push dropped, message 10's arrived, and the
+    next sync asked for everything above 10: message 9 was never fetched.
 
     Scenario: A handset with nothing asks from the beginning
       When the handset syncs
       Then the server was asked for everything above 0
 
-    Scenario: A handset that has been pushed to asks from there
+    Scenario: A push does not move where the poll starts
       When message 12 arrives by push
+      And the handset syncs
+      Then the server was asked for everything above 0
+
+    Scenario: A poll moves where the next poll starts
+      Given message 12 is waiting on the server
+      When the handset syncs
       And the handset syncs
       Then the server was asked for everything above 12
 
@@ -58,6 +69,36 @@ Feature: A message arrives, however it travelled
       Given messages 12 and 13 are waiting on the server
       When the handset syncs
       Then 2 messages are held
+
+    Scenario: A dropped push is collected even after a later push arrived
+      Given messages 9 and 10 are waiting on the server
+      When message 10 arrives by push
+      And the handset syncs
+      Then message 9 is held
+      And 2 messages are held
+      And 1 message was received
+
+    Scenario: Deleting the message a later push brought does not lose the one before it
+      Given messages 9 and 10 are waiting on the server
+      When message 10 arrives by push
+      And message 10 is deleted
+      And the handset syncs
+      Then message 9 is held
+      And message 10 is not on this phone
+
+  Rule: A handset that has been away catches up on all of it
+
+    Fellowship hands back a page at a time. It used to hand back the
+    newest page, newest first, and the handset then asked from the top of
+    it, so a handset more than a page behind never fetched anything
+    underneath. It now walks forward from the oldest the handset lacks,
+    and says whether there is more.
+
+    Scenario: More than a page waiting is collected in one sync
+      Given 120 messages are waiting on the server
+      When the handset syncs
+      Then 120 messages are held
+      And 120 messages were received
 
   Rule: An empty inbox is an answer; an unreachable server is not
 

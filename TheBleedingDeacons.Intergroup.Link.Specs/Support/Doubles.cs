@@ -44,6 +44,15 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	/// </summary>
 	public string DevicePublicKey { get; set; } = string.Empty;
 
+	/// <summary>
+	/// How many messages one poll hands back: Fellowship's default page.
+	///
+	/// <para>A double that answered everything at once could never show a
+	/// handset that is more than a page behind, which is where messages
+	/// went missing.</para>
+	/// </summary>
+	public int PageSize { get; set; } = 50;
+
 	/// <summary>How many of this member's messages are unread, per the server.</summary>
 	public int Unread { get; set; }
 
@@ -163,6 +172,8 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 
 		var page = Stored
 			.Where(message => message.Id > sinceId)
+			.OrderByDescending(message => message.Id)
+			.Take(PageSize)
 			.Select(message => Sealing.Seal(message.Id, message.Payload, DevicePublicKey))
 			.Select(envelope => Tampered.Contains(envelope.Id) ? Sealing.Tamper(envelope) : envelope)
 			.ToList();

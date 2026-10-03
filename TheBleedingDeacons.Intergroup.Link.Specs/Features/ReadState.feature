@@ -49,23 +49,26 @@ Feature: What counts as read, and whose business it is
       When the handset syncs
       Then message 12 is not read here
 
-  Rule: What is already held is never fetched again
+  Rule: A pushed message is collected once more, and that copy carries the read flag
 
-    Fellowship's query is message_id > since, strictly exclusive, and a
-    sync asks from the highest id it holds. So a message arrives once and
-    only once, whichever route brought it.
+    A push does not move where the poll starts — see Delivery.feature,
+    where a later push used to hide an earlier dropped one. So a message
+    that arrived by push is fetched once more by the next poll. It is not
+    received twice: nothing new arrived, so nothing chimes. But the poll's
+    copy is sealed afresh with the read stamp, which a push, sealed once
+    at send, never carries.
 
-    Scenario: A pushed message is not collected a second time
+    Scenario: A pushed message is fetched again, but not received twice
       When message 12 arrives by push
       And message 12 is waiting on the server, already read
       And the handset syncs
       Then 0 messages were received
       And 1 message is held
+      And message 12 is read here
 
-    # Which is the one thing to know before reading JsonMessageHistory's
-    # SaveAsync: it takes care to keep a local read flag when a second,
-    # unread copy of the same message is saved over it, and reasons that
-    # the poll's copy is where the read flag comes from. No route reaches
-    # that branch — the poll cannot return a message this handset already
-    # holds. It is defensive code with a rationale that does not hold, not
-    # behaviour this suite can pin down, so nothing here pretends to.
+    Scenario: A read here survives the poll's unread copy
+      When message 12 arrives by push
+      And message 12 is read
+      And message 12 is waiting on the server, still unread
+      And the handset syncs
+      Then message 12 is read here
