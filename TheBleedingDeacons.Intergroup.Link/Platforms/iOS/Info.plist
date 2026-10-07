@@ -64,7 +64,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.thebleedingdeacons.intergroup.link</string>
+			<string>org.thebleedingdeacons.intergroup.link</string>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>

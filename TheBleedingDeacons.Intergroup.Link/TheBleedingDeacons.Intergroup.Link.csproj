@@ -117,7 +117,7 @@
 		<WarningsAsErrors>$(WarningsAsErrors);XC0022;XC0023;XC0024;XC0025;XC0045</WarningsAsErrors>
 
 		<ApplicationTitle>Link</ApplicationTitle>
-		<ApplicationId>com.thebleedingdeacons.intergroup.link</ApplicationId>
+		<ApplicationId>org.thebleedingdeacons.intergroup.link</ApplicationId>
 		<ApplicationDisplayVersion>1.29.1</ApplicationDisplayVersion>
 		<ApplicationVersion>59</ApplicationVersion>
 

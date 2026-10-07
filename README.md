@@ -463,7 +463,7 @@ The file is still there, and is still what to reach for with the handset
 in hand:
 
 ```
-adb -s <serial> exec-out run-as com.thebleedingdeacons.intergroup.link cat files/logs/link-<date>.log
+adb -s <serial> exec-out run-as org.thebleedingdeacons.intergroup.link cat files/logs/link-<date>.log
 ```
 
 `run-as` works because Debug builds are debuggable; a Release build's
