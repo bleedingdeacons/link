@@ -265,7 +265,7 @@ message arrives however it travelled, what was cleared stays cleared, a
 handset that cannot read its messages says so.
 
 ```bash
-dotnet test TheBleedingDeacons.Intergroup.Link.Specs
+dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs
 ```
 
 Both run over Link.Core, both run in CI, and the specs are a gate rather
@@ -520,7 +520,7 @@ just polls instead of being pushed to. CI writes the iOS one from a
 artifact that reaches a handset; the Android half is still unwritten.
 
 ```bash
-dotnet test TheBleedingDeacons.Intergroup.Link.Tests
+dotnet test --project TheBleedingDeacons.Intergroup.Link.Tests
 ```
 
 No workload needed — the test project and Link.Core are plain net10.0.

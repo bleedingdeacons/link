@@ -12,4 +12,4 @@
 // isolate it, which is a production change made to suit a test host. This
 // whole suite is a few hundred in-memory scenarios and a handful of small
 // temporary files; serialising it costs a second or two.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+[assembly: Xunit.v3.Parallelization(Mode = Xunit.Sdk.ParallelMode.None)]

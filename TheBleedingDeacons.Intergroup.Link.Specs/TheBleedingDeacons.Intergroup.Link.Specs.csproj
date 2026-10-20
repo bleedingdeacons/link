@@ -44,8 +44,7 @@
 		<OutputType>Exe</OutputType>
 		<IsPackable>false</IsPackable>
 		<IsTestProject>true</IsTestProject>
-		<!-- Run through Microsoft.Testing.Platform (not VSTest) under `dotnet test`. -->
-		<TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+		<!-- Run through Microsoft.Testing.Platform (not VSTest); global.json opts `dotnet test` in. -->
 		<UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
 		<!--
 			Test project: exempt from the repo's strict analyzer gate, as
@@ -59,8 +58,11 @@
 	<ItemGroup>
 		<PackageReference Include="Reqnroll.xunit.v3" Version="3.3.4" />
 		<PackageReference Include="Shouldly" Version="4.3.0" />
-		<PackageReference Include="xunit.v3" Version="3.2.2" />
-		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+		<PackageReference Include="xunit.v3" Version="4.0.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
 	</ItemGroup>
 
 	<ItemGroup>

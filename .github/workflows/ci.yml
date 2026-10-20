@@ -607,7 +607,7 @@ jobs:
       # Reqnroll skips them; nothing here has to filter them out.
       - name: Run the executable specification
         run: >
-          dotnet test TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
+          dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
           -c Debug
 
       - name: Upload coverage to Coveralls
