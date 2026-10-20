@@ -89,3 +89,44 @@ print(f"GoogleService-Info.plist validated for {expected}, with Cloud Messaging 
 PY
 
 echo "Wrote $target ($(wc -c < "$target") bytes). Contents deliberately not logged."
+
+# Native Google sign-in needs the app to claim the OAuth client's reversed id
+# as a URL scheme. GoogleSignIn raises an Objective-C exception, which is a
+# crash, when it is missing, so NativeGoogleSignIn checks for it and falls
+# back to the browser - but the scheme can only be written in here, at build
+# time, from the same file. Absent CLIENT_ID means Google sign-in has not been
+# turned on for this Firebase app yet, which is a warning, not a failure: the
+# build is good and Google goes through the browser as it always has.
+python3 - "$target" TheBleedingDeacons.Intergroup.Link/Platforms/iOS/Info.plist <<'PY'
+import plistlib
+import sys
+
+source, info_path = sys.argv[1], sys.argv[2]
+
+with open(source, "rb") as handle:
+    reversed_id = plistlib.load(handle).get("REVERSED_CLIENT_ID")
+
+if not reversed_id:
+    print(
+        "::warning::GOOGLE_SERVICES_PLIST has no REVERSED_CLIENT_ID: Google sign-in is not enabled "
+        "for this Firebase app, so this build signs in to Google through the browser. Enable the "
+        "Google provider in Firebase Authentication and download the file again."
+    )
+    sys.exit(0)
+
+with open(info_path, "rb") as handle:
+    info = plistlib.load(handle)
+
+types = info.setdefault("CFBundleURLTypes", [])
+if not any(reversed_id in entry.get("CFBundleURLSchemes", []) for entry in types):
+    types.append({
+        "CFBundleURLName": "google-sign-in",
+        "CFBundleTypeRole": "Editor",
+        "CFBundleURLSchemes": [reversed_id],
+    })
+
+with open(info_path, "wb") as handle:
+    plistlib.dump(info, handle)
+
+print("Registered the Google sign-in URL scheme in Info.plist.")
+PY

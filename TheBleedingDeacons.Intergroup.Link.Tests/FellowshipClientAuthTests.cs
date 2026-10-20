@@ -99,6 +99,117 @@ public sealed class FellowshipClientAuthTests
 		Assert.Equal("Email or password is incorrect.", result.Error);
 	}
 
+	// ── Native Google sign-in ─────────────────────────────────────────
+
+	[Fact]
+	public async Task AFirebaseTokenGoesToTheExchangeAlone()
+	{
+		// No state with it: Fellowship pins the token to its own Firebase
+		// project and spends it, which is what the state does elsewhere.
+		var handler = new StubHandler(HttpStatusCode.Created, """{"token":"fdt_abc"}""");
+
+		var result = await Client(handler).EnrolAsync(new EnrolmentRequest
+		{
+			FirebaseToken = "header.payload.signature",
+			PublicKey = "spki",
+			Platform = "ios",
+		});
+
+		Assert.True(result.Succeeded);
+		Assert.EndsWith("auth/device/exchange", handler.LastUri?.AbsolutePath, StringComparison.Ordinal);
+		Assert.Contains("\"firebase_token\":\"header.payload.signature\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.DoesNotContain("\"state\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.DoesNotContain("\"id_token\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.DoesNotContain("\"code\"", handler.LastBody, StringComparison.Ordinal);
+	}
+
+	[Theory]
+	[InlineData(HttpStatusCode.ServiceUnavailable, "fellowship_firebase_unavailable")]
+	[InlineData(HttpStatusCode.BadRequest, "fellowship_no_credential")]
+	public async Task AServerThatTakesNoFirebaseTokenSaysSoRatherThanFailing(HttpStatusCode status, string code)
+	{
+		// Unset up, or older than the field. Either way the caller goes to
+		// the browser and shows nothing, so it must not look like a refusal.
+		var handler = new StubHandler(status, $$"""{"code":"{{code}}","message":"Not here."}""");
+
+		var result = await Client(handler).EnrolAsync(new EnrolmentRequest
+		{
+			FirebaseToken = "header.payload.signature",
+			PublicKey = "spki",
+			Platform = "android",
+		});
+
+		Assert.False(result.Succeeded);
+		Assert.True(result.Unavailable);
+		Assert.Equal(string.Empty, result.Error);
+	}
+
+	[Fact]
+	public async Task ABadFirebaseTokenIsARefusalInTheServersWords()
+	{
+		var handler = new StubHandler(HttpStatusCode.Unauthorized, """
+			{"code":"fellowship_bad_id_token","message":"That sign-in could not be verified."}
+			""");
+
+		var result = await Client(handler).EnrolAsync(new EnrolmentRequest
+		{
+			FirebaseToken = "header.payload.signature",
+			PublicKey = "spki",
+			Platform = "android",
+		});
+
+		Assert.False(result.Unavailable);
+		Assert.Equal("That sign-in could not be verified.", result.Error);
+	}
+
+	[Fact]
+	public async Task NoCredentialWithoutAFirebaseTokenIsStillARefusal()
+	{
+		// The same code from a code exchange means something else entirely.
+		var handler = new StubHandler(HttpStatusCode.BadRequest, """
+			{"code":"fellowship_no_credential","message":"Send a sign-in code."}
+			""");
+
+		var result = await Client(handler).EnrolAsync(new EnrolmentRequest
+		{
+			Code = "dc_x",
+			PublicKey = "spki",
+			Platform = "android",
+		});
+
+		Assert.False(result.Unavailable);
+		Assert.Equal("Send a sign-in code.", result.Error);
+	}
+
+	[Fact]
+	public async Task AFirebaseTokenCanProveTheMemberForANewKey()
+	{
+		var handler = new StubHandler(HttpStatusCode.OK, """{"ok":true}""");
+
+		var result = await Client(handler).RotateKeyAsync(
+			"fdt_x",
+			new RotateKeyRequest { PublicKey = "new-spki", FirebaseToken = "header.payload.signature" });
+
+		Assert.True(result.Succeeded);
+		Assert.Contains("\"firebase_token\":\"header.payload.signature\"", handler.LastBody, StringComparison.Ordinal);
+		Assert.DoesNotContain("\"password\"", handler.LastBody, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task AKeyServerThatTakesNoFirebaseTokenSaysSo()
+	{
+		var handler = new StubHandler(HttpStatusCode.BadRequest, """
+			{"code":"fellowship_no_credential","message":"Send a sign-in code."}
+			""");
+
+		var result = await Client(handler).RotateKeyAsync(
+			"fdt_x",
+			new RotateKeyRequest { PublicKey = "new-spki", FirebaseToken = "header.payload.signature" });
+
+		Assert.False(result.Succeeded);
+		Assert.True(result.Unavailable);
+	}
+
 	// ── Asking for a code ─────────────────────────────────────────────
 
 	[Fact]

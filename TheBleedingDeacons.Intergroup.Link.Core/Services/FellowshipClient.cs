@@ -101,6 +101,10 @@ public sealed class FellowshipClient : IFellowshipClient
 		{
 			body["code"] = request.Code;
 		}
+		else if (!string.IsNullOrEmpty(request.FirebaseToken))
+		{
+			body["firebase_token"] = request.FirebaseToken;
+		}
 		else
 		{
 			body["state"] = request.State;
@@ -117,6 +121,11 @@ public sealed class FellowshipClient : IFellowshipClient
 
 		if (!response.IsSuccessStatusCode)
 		{
+			if (request.FirebaseToken.Length > 0 && FirebaseNotOffered(json))
+			{
+				return EnrolmentResult.NotOffered();
+			}
+
 			// The server's own message, where it gave one. These are
 			// written to be read by a member — see Fellowship's
 			// DeviceAuthController — and flattening them into "sign-in
@@ -468,6 +477,7 @@ public sealed class FellowshipClient : IFellowshipClient
 		Add(body, "code", request.Code);
 		Add(body, "state", request.State);
 		Add(body, "id_token", request.IdToken);
+		Add(body, "firebase_token", request.FirebaseToken);
 		Add(body, "email", request.Email);
 		Add(body, "password", request.Password);
 
@@ -483,6 +493,11 @@ public sealed class FellowshipClient : IFellowshipClient
 		}
 
 		var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+		if (request.FirebaseToken.Length > 0 && FirebaseNotOffered(json))
+		{
+			return RotateKeyResult.NotOffered();
+		}
+
 		var message = json is null ? string.Empty : Text(json.Value, "message");
 
 		// The server's own wording. "Sign in as the member this phone
@@ -602,6 +617,23 @@ public sealed class FellowshipClient : IFellowshipClient
 		HttpStatusCode.Forbidden => FellowshipFailure.NotEligible,
 		_ => FellowshipFailure.Server,
 	};
+
+	/// <summary>
+	/// Whether a refused Firebase token was refused because the server does
+	/// not take them, rather than because it was a bad one.
+	///
+	/// <para>Two ways to say so. A Fellowship with the route but no Firebase
+	/// project answers <c>fellowship_firebase_unavailable</c>. One older than
+	/// <c>firebase_token</c> never reads the field, finds no credential it
+	/// knows, and answers <c>fellowship_no_credential</c> — which, for a
+	/// request that carried nothing else, can only mean that.</para>
+	/// </summary>
+	private static bool FirebaseNotOffered(JsonElement? json)
+	{
+		var code = json is null ? string.Empty : Text(json.Value, "code");
+
+		return code is "fellowship_firebase_unavailable" or "fellowship_no_credential";
+	}
 
 	private async Task<HttpResponseMessage?> PostAsync(
 		string route,

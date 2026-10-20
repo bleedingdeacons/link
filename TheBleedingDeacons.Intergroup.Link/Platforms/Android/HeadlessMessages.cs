@@ -64,6 +64,8 @@ internal static class HeadlessMessages
 			// it does not sign anybody in — and unavailable on Android in
 			// any case.
 			new AppleSignIn(),
+			// Nor is this: native Google sign-in is a sign-in too.
+			new NativeGoogleSignIn(),
 			// Nor is this, for the same reason: the history is adopted at
 			// enrolment and nothing here enrols. It comes from
 			// LinkServices rather than being built fresh all the same,

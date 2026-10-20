@@ -669,3 +669,32 @@ can in principle be claimed by another app on the device, which is
 precisely why the thing that goes through it is worthless two minutes
 later and worthless once used, and why the credential itself is fetched
 over TLS from Link's own process afterwards.
+
+## Native Google sign-in
+
+On Android and iOS, **Continue with Google** — at sign-in and when
+replacing a key — skips the browser and `link://auth` entirely: the
+platform's own account picker (Credential Manager on Android, GoogleSignIn
+on iOS), then Firebase Auth, then the Firebase ID token to Fellowship as
+`firebase_token`. Fellowship pins it to the Firebase project of its FCM
+service account and accepts each token once. Link signs out of Firebase
+as soon as it has the token; the keypair and the device token are made
+exactly as before. See `NativeGoogleSignIn`.
+
+Anywhere it cannot work it quietly uses the browser instead: a Firebase
+config with no Google client in it, an APK signed with a key whose SHA-1 is
+not registered, a Fellowship older than the field or with no service
+account. To turn it on:
+
+1. Firebase console (project `fellowship-510917`) → **Authentication →
+   Sign-in method → Google** → enable.
+2. On the Android app, add the SHA-1 of every key that signs it: the upload
+   keystore, Play's app-signing key, and the debug key `/kick` installs with.
+3. Download `google-services.json` and `GoogleService-Info.plist` again —
+   the Google client ids only appear in them after step 1 — and update the
+   CI secrets. CI registers the plist's `REVERSED_CLIENT_ID` as a URL scheme
+   in `Info.plist`; GoogleSignIn crashes without it, so `NativeGoogleSignIn`
+   checks for it and stays on the browser when it is missing.
+
+Unlike Sign in with Apple this needs no paid team, so it works on the
+sideloaded build.
