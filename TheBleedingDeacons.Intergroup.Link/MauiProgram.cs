@@ -150,6 +150,7 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IArrivalSound, ArrivalSound>();
 		builder.Services.AddSingleton<IRecipientListing, RecipientListing>();
 		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
+		builder.Services.AddSingleton<INativeGoogleSignIn, NativeGoogleSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
 
 		// Where the log shipper's settings come from. See RemoteLogging.

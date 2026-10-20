@@ -137,6 +137,13 @@ public sealed record EnrolmentRequest
 	/// <summary>The platform-issued ID token (Apple).</summary>
 	public string IdToken { get; init; } = string.Empty;
 
+	/// <summary>
+	/// A Firebase ID token from native Google sign-in. Sent alone: it
+	/// needs no state, because Fellowship pins it to its own Firebase
+	/// project and accepts it once.
+	/// </summary>
+	public string FirebaseToken { get; init; } = string.Empty;
+
 	/// <summary>The address, for the password flow.</summary>
 	public string Email { get; init; } = string.Empty;
 
@@ -196,6 +203,15 @@ public sealed record EnrolmentResult
 	public static EnrolmentResult Cancelled() => new();
 
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
+
+	/// <summary>
+	/// The server does not take a Firebase token — too old for it, or no
+	/// Firebase project set up. Not the member's problem: the caller goes
+	/// to the browser instead and shows nothing.
+	/// </summary>
+	public bool Unavailable { get; init; }
+
+	public static EnrolmentResult NotOffered() => new() { Unavailable = true };
 }
 
 /// <summary>
@@ -225,6 +241,9 @@ public sealed record RotateKeyRequest
 	/// <summary>The platform-issued ID token (Apple).</summary>
 	public string IdToken { get; init; } = string.Empty;
 
+	/// <summary>A Firebase ID token from native Google sign-in.</summary>
+	public string FirebaseToken { get; init; } = string.Empty;
+
 	/// <summary>The address, for the password flow.</summary>
 	public string Email { get; init; } = string.Empty;
 
@@ -252,6 +271,11 @@ public sealed record RotateKeyResult
 	public static RotateKeyResult Ok() => new() { Succeeded = true };
 
 	public static RotateKeyResult Failed(string error) => new() { Error = error };
+
+	/// <summary>As <see cref="EnrolmentResult.Unavailable"/>.</summary>
+	public bool Unavailable { get; init; }
+
+	public static RotateKeyResult NotOffered() => new() { Unavailable = true };
 }
 
 /// <summary>What setting a password answered.</summary>

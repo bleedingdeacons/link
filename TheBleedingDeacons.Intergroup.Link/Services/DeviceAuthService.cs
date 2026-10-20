@@ -20,12 +20,16 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed class DeviceAuthService
 {
+	/// <summary>The provider name the sign-in page sends for Google.</summary>
+	private const string GoogleProvider = "google";
+
 	private readonly IFellowshipClient _client;
 	private readonly IDeviceKeyStore _keys;
 	private readonly ISessionStore _sessions;
 	private readonly IPushRegistrar _push;
 	private readonly IMessageHistory _history;
 	private readonly IAppleSignIn _apple;
+	private readonly INativeGoogleSignIn _nativeGoogle;
 	private readonly FellowshipConfiguration _configuration;
 
 	public DeviceAuthService(
@@ -34,10 +38,12 @@ public sealed class DeviceAuthService
 		ISessionStore sessions,
 		IPushRegistrar push,
 		IAppleSignIn apple,
+		INativeGoogleSignIn nativeGoogle,
 		IMessageHistory history,
 		FellowshipConfiguration configuration)
 	{
 		_apple = apple;
+		_nativeGoogle = nativeGoogle;
 		_client = client;
 		_keys = keys;
 		_sessions = sessions;
@@ -164,6 +170,20 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken = default)
 	{
+		if (provider == GoogleProvider && _nativeGoogle.IsAvailable)
+		{
+			var native = await SignInWithNativeGoogleAsync(cancellationToken).ConfigureAwait(false);
+			if (native is not null)
+			{
+				return native;
+			}
+
+			// Null means native sign-in could not be done here at all, on
+			// the handset or on the server — not that the member refused or
+			// was refused. The browser is the same Google account by another
+			// road, so take it rather than show an error nobody can act on.
+		}
+
 		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
 		if (refusal is not null)
 		{
@@ -177,6 +197,43 @@ public sealed class DeviceAuthService
 			Platform = PlatformName(),
 			Label = DeviceLabel(),
 		}, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Google through the platform's own picker, then Firebase, then the
+	/// exchange. Null when either end cannot do it and the browser should
+	/// be used instead.
+	/// </summary>
+	private async Task<EnrolmentResult?> SignInWithNativeGoogleAsync(CancellationToken cancellationToken)
+	{
+		var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
+
+		switch (signIn.Outcome)
+		{
+			case NativeGoogleSignInOutcome.Cancelled:
+				return EnrolmentResult.Cancelled();
+			case NativeGoogleSignInOutcome.Unavailable:
+				return null;
+		}
+
+		var result = await EnrolAsync(new EnrolmentRequest
+		{
+			FirebaseToken = signIn.IdToken,
+			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+			Platform = PlatformName(),
+			Label = DeviceLabel(),
+		}, cancellationToken).ConfigureAwait(false);
+
+		if (result.Unavailable)
+		{
+			// Fellowship is older than firebase_token, or has no Firebase
+			// project to check it against. The keypair just made is simply
+			// made again by the browser path; nothing was enrolled with it.
+			Log.Information("Fellowship does not offer native Google sign-in; using the browser");
+			return null;
+		}
+
+		return result;
 	}
 
 	/// <summary>
@@ -197,6 +254,34 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken = default)
 	{
+		if (provider == GoogleProvider && _nativeGoogle.IsAvailable)
+		{
+			var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
+			if (signIn.Outcome == NativeGoogleSignInOutcome.Cancelled)
+			{
+				return RotateKeyResult.Failed(string.Empty);
+			}
+
+			if (signIn.Outcome == NativeGoogleSignInOutcome.SignedIn)
+			{
+				var rotated = await RotateAsync(
+					new RotateKeyRequest { FirebaseToken = signIn.IdToken, PublicKey = string.Empty },
+					cancellationToken).ConfigureAwait(false);
+
+				if (!rotated.Unavailable)
+				{
+					return rotated;
+				}
+
+				// Fellowship does not take the token, and RotateAsync has
+				// already replaced the local pair for nothing. The old one
+				// is unrecoverable either way — that is what brought the
+				// member here — so the browser simply carries on with a
+				// fresh one of its own.
+				Log.Information("Fellowship does not offer native Google sign-in; using the browser");
+			}
+		}
+
 		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
 		if (refusal is not null)
 		{
