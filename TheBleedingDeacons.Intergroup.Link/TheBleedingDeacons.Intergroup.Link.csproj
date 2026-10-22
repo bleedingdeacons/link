@@ -317,10 +317,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.90" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.120" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.13" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.13" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.13" />
 		<PackageReference Include="Serilog" Version="4.4.0" />
 		<PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
 		<!-- Logging: the durable Better Stack sink, holding, flush on error,
@@ -331,9 +331,9 @@
 		<!-- Freedom's SecureStorage stores, on every head. See
 		     FreedomLoggingSource. -->
 		<PackageReference Include="Freedom.Client.Maui" Version="0.2.0" />
-		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.0" />
+		<PackageReference Include="CommunityToolkit.Maui" Version="15.0.1" />
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
+		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
@@ -345,7 +345,7 @@
 		LinkFirebaseMessagingService.
 	-->
 	<ItemGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
-		<PackageReference Include="Xamarin.Firebase.Messaging" Version="125.1.1" />
+		<PackageReference Include="Xamarin.Firebase.Messaging" Version="125.1.3" />
 
 		<!--
 			Native Google sign-in - see NativeGoogleSignIn. Firebase Auth brings
