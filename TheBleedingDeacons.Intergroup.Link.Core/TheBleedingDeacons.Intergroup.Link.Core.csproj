@@ -54,7 +54,7 @@
 	-->
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
 		<PackageReference Include="Serilog" Version="4.4.0" />
 		<!-- Logging: the Better Stack configuration, the log shipper and
 		     ShippingSettings, shared with Register. The app references
@@ -64,7 +64,7 @@
 		     plugin, signed in to with the handset's Fellowship session. The
 		     app references Freedom.Client.Maui at the same version. -->
 		<PackageReference Include="Freedom.Client" Version="0.2.0" />
-		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.32.0.713">
+		<PackageReference Include="SonarAnalyzer.CSharp" Version="10.35.0.4138">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
