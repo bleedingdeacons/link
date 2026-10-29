@@ -208,6 +208,26 @@
 			       FontSize="14"
 			       HorizontalTextAlignment="Center" />
 
+			<!--
+				The build, last and quiet, as Settings shows it, and the
+				site it signs in to under it. Settings is out of reach until
+				a member is signed in, and "which version have you got?" is
+				the first question for one who cannot be.
+			-->
+			<Label Text="{Binding Build}"
+			       Margin="0,24,0,0"
+			       FontSize="11"
+			       Opacity="0.5"
+			       HorizontalTextAlignment="Center"
+			       HorizontalOptions="Center" />
+
+			<Label Text="{Binding Server}"
+			       IsVisible="{Binding IsConfigured}"
+			       FontSize="11"
+			       Opacity="0.5"
+			       HorizontalTextAlignment="Center"
+			       HorizontalOptions="Center" />
+
 		</VerticalStackLayout>
 	</ScrollView>
 
