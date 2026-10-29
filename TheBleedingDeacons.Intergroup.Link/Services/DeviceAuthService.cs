@@ -484,8 +484,12 @@ public sealed class DeviceAuthService
 		catch (TaskCanceledException)
 		{
 			// The member closed the browser tab. Not a failure worth an
-			// error message — they know what they did.
+			// error message — they know what they did. Nor worth a stack
+			// trace: the exception is how WebAuthenticator says "closed",
+			// and it carries nothing more.
+#pragma warning disable S6667 // See above: the exception is the signal, not a fault.
 			Log.Information("The browser was closed before the sign-in finished");
+#pragma warning restore S6667
 			return (string.Empty, EnrolmentResult.Failed(string.Empty));
 		}
 	}
@@ -536,24 +540,6 @@ public sealed class DeviceAuthService
 		}
 	}
 
-	private async Task<EnrolmentResult> EnrolWithAppleAsync(string idToken, string state, CancellationToken cancellationToken)
-	{
-		if (string.IsNullOrEmpty(idToken) || string.IsNullOrEmpty(state))
-		{
-			Log.Warning("Apple sign-in arrived without {Missing}", string.IsNullOrEmpty(idToken) ? "an ID token" : "a state");
-			return EnrolmentResult.Failed("The sign-in did not complete. Please try again.");
-		}
-
-		return await EnrolAsync(new EnrolmentRequest
-		{
-			State = state,
-			IdToken = idToken,
-			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
-			Platform = PlatformName(),
-			Label = DeviceLabel(),
-		}, cancellationToken).ConfigureAwait(false);
-	}
-
 	/// <summary>
 	/// Sign in with Apple, end to end: ask Fellowship for a nonce, raise
 	/// the platform sheet, enrol with what it hands back.
@@ -579,6 +565,24 @@ public sealed class DeviceAuthService
 		{
 			throw;
 		}
+	}
+
+	private async Task<EnrolmentResult> EnrolWithAppleAsync(string idToken, string state, CancellationToken cancellationToken)
+	{
+		if (string.IsNullOrEmpty(idToken) || string.IsNullOrEmpty(state))
+		{
+			Log.Warning("Apple sign-in arrived without {Missing}", string.IsNullOrEmpty(idToken) ? "an ID token" : "a state");
+			return EnrolmentResult.Failed("The sign-in did not complete. Please try again.");
+		}
+
+		return await EnrolAsync(new EnrolmentRequest
+		{
+			State = state,
+			IdToken = idToken,
+			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+			Platform = PlatformName(),
+			Label = DeviceLabel(),
+		}, cancellationToken).ConfigureAwait(false);
 	}
 
 	private async Task<EnrolmentResult> SignInThroughAppleAsync(CancellationToken cancellationToken)
@@ -836,9 +840,14 @@ public sealed class DeviceAuthService
 			// level. This says only what was undone — and, unlike the line it
 			// replaces, does not call a Fellowship without Firebase a
 			// cancellation.
-			Log.Information(
-				"Fellowship did not enrol this handset ({Why}); discarding the keypair it was offered",
-				result.Unavailable ? "credential not offered" : string.IsNullOrEmpty(result.Error) ? "cancelled" : "refused");
+			var why = (result.Unavailable, string.IsNullOrEmpty(result.Error)) switch
+			{
+				(true, _) => "credential not offered",
+				(false, true) => "cancelled",
+				(false, false) => "refused",
+			};
+
+			Log.Information("Fellowship did not enrol this handset ({Why}); discarding the keypair it was offered", why);
 
 			// Enrolment failed after a keypair was generated. Clearing it
 			// keeps "has a key" and "is enrolled" in step, so a retry does
@@ -853,11 +862,20 @@ public sealed class DeviceAuthService
 	/// Which proof an enrolment carries, for the log. Mirrors the order
 	/// <c>FellowshipClient.EnrolAsync</c> picks one in.
 	/// </summary>
-	private static string CredentialKind(EnrolmentRequest request) =>
-		!string.IsNullOrEmpty(request.Password) ? "password"
-		: !string.IsNullOrEmpty(request.Code) ? "one-time code"
-		: !string.IsNullOrEmpty(request.FirebaseToken) ? "Firebase token"
-		: "Apple ID token";
+	private static string CredentialKind(EnrolmentRequest request)
+	{
+		if (!string.IsNullOrEmpty(request.Password))
+		{
+			return "password";
+		}
+
+		if (!string.IsNullOrEmpty(request.Code))
+		{
+			return "one-time code";
+		}
+
+		return string.IsNullOrEmpty(request.FirebaseToken) ? "Apple ID token" : "Firebase token";
+	}
 
 	/// <summary>
 	/// Turn one of Fellowship's redirect error values into something a
