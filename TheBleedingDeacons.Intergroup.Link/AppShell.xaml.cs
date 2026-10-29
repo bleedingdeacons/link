@@ -45,6 +45,20 @@ public partial class AppShell : Shell
 		var session = await LinkServices.Sessions.LoadAsync().ConfigureAwait(false);
 		var signedIn = session is not null && session.IsSignedIn;
 
+		// The one line that says what state sign-in left the handset in, at
+		// launch and after every sign-in and sign-out.
+		if (signedIn)
+		{
+			Log.Information(
+				"Signed in as device {DeviceId} for member {MemberId}; showing the messages",
+				session!.DeviceId,
+				session.MemberId);
+		}
+		else
+		{
+			Log.Information("Not signed in; showing the sign-in page");
+		}
+
 		// GoToAsync rather than setting CurrentItem: it works the same on a
 		// fresh launch and on a sign-out from a pushed Settings page, which
 		// setting CurrentItem does not. An absolute route also clears that
