@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
+using TheBleedingDeacons.Intergroup.Link.Support;
 
 namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 
@@ -113,6 +114,37 @@ public sealed partial class SignInViewModel : ObservableObject
 	/// <i>and</i> this build knows which intergroup to enrol against.
 	/// </summary>
 	public bool CanOfferApple => IsConfigured && IsAppleAvailable;
+
+	/// <summary>
+	/// Which build is running, exactly as Settings shows it: version, build
+	/// number, when it was made, which runtime.
+	///
+	/// <para>On this page too because Settings cannot be reached from it.
+	/// The member who cannot sign in is the one most likely to be asked
+	/// which version they have, and until now they had no way to
+	/// tell.</para>
+	///
+	/// <para>Instance, not static, for the reason given on
+	/// <c>SettingsViewModel.Build</c>: a XAML binding cannot see a static
+	/// member and binds to nothing, silently.</para>
+	/// </summary>
+#pragma warning disable S2325 // See above: static breaks the binding.
+	public string Build => BuildInfo.Summary;
+#pragma warning restore S2325
+
+	/// <summary>
+	/// The site this build signs in to, as host and path — e.g.
+	/// <c>aa-bristol.org/amber</c>. Empty for a build with no intergroup,
+	/// which already says so in amber at the top.
+	///
+	/// <para>The other half of "which release is this": a build pointed at
+	/// the test bed looks identical to a live one until a sign-in is
+	/// refused for reasons nobody can see.</para>
+	/// </summary>
+	public string Server =>
+		IsConfigured && Uri.TryCreate(_configuration.BaseUrl, UriKind.Absolute, out var site)
+			? site.Host + site.AbsolutePath.TrimEnd('/')
+			: string.Empty;
 
 	/// <summary>
 	/// Google, Microsoft or Facebook — every provider whose flow is a
