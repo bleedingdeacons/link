@@ -46,6 +46,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		ArgumentNullException.ThrowIfNull(session);
 
 		var sync = await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
+		Log.Debug("Freedom sync for device {DeviceId} answered {Status}", session.DeviceId, sync.Status);
 
 		// Not a Freedom tablet yet, or not any more — a new Fellowship
 		// enrolment is a new tablet. Hand the session over. Anything else
@@ -53,13 +54,18 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		// and so does the logger.
 		if (sync.Status is SyncStatus.NotEnrolled or SyncStatus.Revoked)
 		{
+			// Freedom's sign-in, done with Link's: the second half of every
+			// first launch after a sign-in, so worth a line either way.
+			Log.Information("Handing device {DeviceId}'s Link session to Freedom ({Status})", session.DeviceId, sync.Status);
+
 			var enrolled = await _freedom.EnrolAsync(FreedomProof.ExistingSession(session.Token), cancellationToken).ConfigureAwait(false);
 			if (!enrolled.Succeeded)
 			{
-				Log.Information("Freedom did not take this handset's session ({Status}): {Message}", enrolled.Status, enrolled.Message);
+				Log.Warning("Freedom did not take this handset's session ({Status}): {Message}", enrolled.Status, enrolled.Message);
 				return null;
 			}
 
+			Log.Information("Freedom took the Link session; this handset is now one of its tablets");
 			_handover.MarkCurrent();
 			sync = enrolled.Sync ?? await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
 		}
@@ -72,6 +78,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 			var refreshed = await _freedom.EnrolAsync(FreedomProof.ExistingSession(session.Token), cancellationToken).ConfigureAwait(false);
 			if (refreshed.Succeeded)
 			{
+				Log.Information("Freedom has this build's details for device {DeviceId}", session.DeviceId);
 				_handover.MarkCurrent();
 				sync = refreshed.Sync ?? sync;
 			}
@@ -99,8 +106,11 @@ public sealed class FreedomLoggingSource : ILoggingSource
 	private static bool IsAnswer(SyncStatus status) =>
 		status is SyncStatus.UpToDate or SyncStatus.Updated or SyncStatus.KeyFault;
 
-	public Task ForgetAsync(CancellationToken cancellationToken = default) =>
-		_freedom.SignOutAsync(cancellationToken);
+	public Task ForgetAsync(CancellationToken cancellationToken = default)
+	{
+		Log.Debug("Signing out of Freedom");
+		return _freedom.SignOutAsync(cancellationToken);
+	}
 
 	public Task<DateTimeOffset?> LastRetrievedAsync(CancellationToken cancellationToken = default) =>
 		_freedom.LastRetrievedAsync(cancellationToken);

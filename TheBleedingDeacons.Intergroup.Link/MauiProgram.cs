@@ -112,7 +112,17 @@ public static class MauiProgram
 			// shipper that names itself is worth having in its own right.
 			UserAgent = AppUserAgent.Current(),
 			Configure = cfg => cfg.ReadFrom.Configuration(builder.Configuration),
+			// Email addresses become per-handset tokens before any sink sees
+			// them, exception text included. Sign-in is logged in detail, and
+			// a password sign-in or a refusal from Fellowship can carry the
+			// address the member typed. See EmailRedactor.
+			Redact = new EmailRedactor(LogRedactionKey.Get()).Redact,
 		});
+
+		if (LogRedactionKey.Fault is { } redactionFault)
+		{
+			Log.Warning(redactionFault, "The log redaction key could not be kept; addresses are still hidden, but their tokens will not match across launches");
+		}
 
 		// Framework is its own property rather than folded into the message
 		// so the aggregator can filter on it directly — the quickest way to

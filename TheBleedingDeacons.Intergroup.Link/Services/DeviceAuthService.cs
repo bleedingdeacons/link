@@ -1,6 +1,7 @@
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
+using TheBleedingDeacons.Intergroup.Link.Support;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
@@ -170,18 +171,42 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken = default)
 	{
-		if (provider == GoogleProvider && _nativeGoogle.IsAvailable)
+		using var attempt = AuthAttempt.Begin("Sign-in", provider);
+		try
 		{
-			var native = await SignInWithNativeGoogleAsync(cancellationToken).ConfigureAwait(false);
-			if (native is not null)
-			{
-				return native;
-			}
+			return attempt.Finished(await SignInThroughProviderAsync(provider, cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
+	}
 
-			// Null means native sign-in could not be done here at all, on
-			// the handset or on the server — not that the member refused or
-			// was refused. The browser is the same Google account by another
-			// road, so take it rather than show an error nobody can act on.
+	private async Task<EnrolmentResult> SignInThroughProviderAsync(
+		string provider,
+		CancellationToken cancellationToken)
+	{
+		if (provider == GoogleProvider)
+		{
+			if (_nativeGoogle.IsAvailable)
+			{
+				var native = await SignInWithNativeGoogleAsync(cancellationToken).ConfigureAwait(false);
+				if (native is not null)
+				{
+					return native;
+				}
+
+				// Null means native sign-in could not be done here at all, on
+				// the handset or on the server — not that the member refused
+				// or was refused. The browser is the same Google account by
+				// another road, so take it rather than show an error nobody
+				// can act on.
+				Log.Information("Native Google sign-in could not be used; falling back to the browser");
+			}
+			else
+			{
+				Log.Debug("Native Google sign-in is not available in this build; using the browser");
+			}
 		}
 
 		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
@@ -206,7 +231,9 @@ public sealed class DeviceAuthService
 	/// </summary>
 	private async Task<EnrolmentResult?> SignInWithNativeGoogleAsync(CancellationToken cancellationToken)
 	{
+		Log.Debug("Raising the native Google account picker");
 		var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
+		Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
 
 		switch (signIn.Outcome)
 		{
@@ -254,9 +281,27 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken = default)
 	{
+		using var attempt = AuthAttempt.Begin("Key replacement", provider);
+		try
+		{
+			return attempt.Finished(await ReplaceKeyThroughProviderAsync(provider, cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
+	}
+
+	private async Task<RotateKeyResult> ReplaceKeyThroughProviderAsync(
+		string provider,
+		CancellationToken cancellationToken)
+	{
 		if (provider == GoogleProvider && _nativeGoogle.IsAvailable)
 		{
+			Log.Debug("Raising the native Google account picker");
 			var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
+			Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
+
 			if (signIn.Outcome == NativeGoogleSignInOutcome.Cancelled)
 			{
 				return RotateKeyResult.Failed(string.Empty);
@@ -299,6 +344,19 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task<RotateKeyResult> ReplaceKeyWithAppleAsync(CancellationToken cancellationToken = default)
 	{
+		using var attempt = AuthAttempt.Begin("Key replacement", "apple");
+		try
+		{
+			return attempt.Finished(await ReplaceKeyThroughAppleAsync(cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
+	}
+
+	private async Task<RotateKeyResult> ReplaceKeyThroughAppleAsync(CancellationToken cancellationToken)
+	{
 		if (!_apple.IsAvailable)
 		{
 			return RotateKeyResult.Failed("This device cannot sign in with Apple.");
@@ -307,10 +365,11 @@ public sealed class DeviceAuthService
 		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
 		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
 		{
+			Log.Warning("Fellowship did not start an Apple sign-in (unreachable, or no Apple set up)");
 			return RotateKeyResult.Failed("The intergroup is not set up for Apple sign-in.");
 		}
 
-		var idToken = await _apple.GetIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
+		var idToken = await AppleIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
 		if (string.IsNullOrEmpty(idToken))
 		{
 			// Dismissed the sheet. Says nothing, exactly as a cancelled
@@ -332,14 +391,26 @@ public sealed class DeviceAuthService
 		string password,
 		CancellationToken cancellationToken = default)
 	{
-		if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+		using var attempt = AuthAttempt.Begin("Key replacement", "password");
+		try
 		{
-			return RotateKeyResult.Failed("Please enter your email address and password.");
-		}
+			if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+			{
+				return attempt.Finished(RotateKeyResult.Failed("Please enter your email address and password."));
+			}
 
-		return await RotateAsync(
-			new RotateKeyRequest { Email = email.Trim(), Password = password, PublicKey = string.Empty },
-			cancellationToken).ConfigureAwait(false);
+			// The address, which the redactor turns into a token; never the
+			// password.
+			Log.Information("Proving the handset's holder with the password for {Email}", email.Trim());
+
+			return attempt.Finished(await RotateAsync(
+				new RotateKeyRequest { Email = email.Trim(), Password = password, PublicKey = string.Empty },
+				cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
 	}
 
 	/// <summary>
@@ -357,9 +428,20 @@ public sealed class DeviceAuthService
 		var start = await _client.StartSignInAsync(provider, cancellationToken).ConfigureAwait(false);
 		if (start is null || !start.IsBrowserFlow)
 		{
+			// Null is either side of the wire: Fellowship refused (its
+			// client has logged the status) or never answered (logged at
+			// Debug). Not a browser flow is a provider it knows but does not
+			// offer that way.
+			Log.Warning(
+				"Fellowship did not start a browser sign-in for {Provider}: {Why}",
+				provider,
+				start is null ? "no answer, or refused" : "not a browser flow");
+
 			return (string.Empty, EnrolmentResult.Failed(
 				$"This intergroup is not set up for {Describe(provider)} sign-in."));
 		}
+
+		Log.Information("Opening the browser for {Provider} sign-in", provider);
 
 		try
 		{
@@ -379,20 +461,31 @@ public sealed class DeviceAuthService
 			// act on, so they are translated rather than collapsed.
 			if (result.Properties.TryGetValue("error", out var error))
 			{
+				// Fellowship's own code — not_a_member, declined,
+				// verification — which says more than the sentence it
+				// becomes on screen.
+				Log.Warning("The browser came back with Fellowship's error {CallbackError}", error);
 				return (string.Empty, EnrolmentResult.Failed(Explain(error)));
 			}
 
 			if (!result.Properties.TryGetValue("code", out var returned) || string.IsNullOrEmpty(returned))
 			{
+				Log.Warning(
+					"The browser came back with neither a code nor an error; it carried {CallbackKeys}",
+					string.Join(",", result.Properties.Keys));
 				return (string.Empty, EnrolmentResult.Failed("The sign-in did not complete. Please try again."));
 			}
 
+			// That a code came back, never the code: it is a credential
+			// until it is spent.
+			Log.Information("The browser came back with a one-time code");
 			return (returned, null);
 		}
 		catch (TaskCanceledException)
 		{
 			// The member closed the browser tab. Not a failure worth an
 			// error message — they know what they did.
+			Log.Information("The browser was closed before the sign-in finished");
 			return (string.Empty, EnrolmentResult.Failed(string.Empty));
 		}
 	}
@@ -406,6 +499,7 @@ public sealed class DeviceAuthService
 		var session = await _sessions.LoadAsync().ConfigureAwait(false);
 		if (session is null || !session.IsSignedIn)
 		{
+			Log.Warning("A key replacement was asked for on a handset that is not signed in");
 			return RotateKeyResult.Failed("This device is not signed in.");
 		}
 
@@ -413,6 +507,7 @@ public sealed class DeviceAuthService
 		// thrown away until a credential has actually been gathered — a
 		// member who backs out of the browser tab keeps whatever they had.
 		var publicKey = await _keys.RegenerateAsync().ConfigureAwait(false);
+		Log.Information("New keypair generated; presenting it for device {DeviceId}", session.DeviceId);
 
 		return await _client.RotateKeyAsync(
 			session.Token, request with { PublicKey = publicKey }, cancellationToken).ConfigureAwait(false);
@@ -430,8 +525,22 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task<EnrolmentResult> SignInWithAppleAsync(string idToken, string state, CancellationToken cancellationToken = default)
 	{
+		using var attempt = AuthAttempt.Begin("Sign-in", "apple");
+		try
+		{
+			return attempt.Finished(await EnrolWithAppleAsync(idToken, state, cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
+	}
+
+	private async Task<EnrolmentResult> EnrolWithAppleAsync(string idToken, string state, CancellationToken cancellationToken)
+	{
 		if (string.IsNullOrEmpty(idToken) || string.IsNullOrEmpty(state))
 		{
+			Log.Warning("Apple sign-in arrived without {Missing}", string.IsNullOrEmpty(idToken) ? "an ID token" : "a state");
 			return EnrolmentResult.Failed("The sign-in did not complete. Please try again.");
 		}
 
@@ -461,6 +570,19 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task<EnrolmentResult> SignInWithAppleAsync(CancellationToken cancellationToken = default)
 	{
+		using var attempt = AuthAttempt.Begin("Sign-in", "apple");
+		try
+		{
+			return attempt.Finished(await SignInThroughAppleAsync(cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
+	}
+
+	private async Task<EnrolmentResult> SignInThroughAppleAsync(CancellationToken cancellationToken)
+	{
 		if (!_apple.IsAvailable)
 		{
 			return EnrolmentResult.Failed("This device cannot sign in with Apple.");
@@ -469,16 +591,32 @@ public sealed class DeviceAuthService
 		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
 		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
 		{
+			Log.Warning("Fellowship did not start an Apple sign-in (unreachable, or no Apple set up)");
 			return EnrolmentResult.Failed("The intergroup is not set up for Apple sign-in.");
 		}
 
-		var idToken = await _apple.GetIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
+		var idToken = await AppleIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
 		if (string.IsNullOrEmpty(idToken))
 		{
 			return EnrolmentResult.Cancelled();
 		}
 
-		return await SignInWithAppleAsync(idToken, start.State, cancellationToken).ConfigureAwait(false);
+		return await EnrolWithAppleAsync(idToken, start.State, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Raise Apple's sheet, and say how it came back — never with what.
+	/// </summary>
+	private async Task<string?> AppleIdTokenAsync(string nonce, CancellationToken cancellationToken)
+	{
+		Log.Debug("Raising Apple's sign-in sheet");
+		var idToken = await _apple.GetIdTokenAsync(nonce, cancellationToken).ConfigureAwait(false);
+
+		Log.Information(
+			"Apple's sheet {AppleOutcome}",
+			string.IsNullOrEmpty(idToken) ? "was dismissed" : "returned an ID token");
+
+		return idToken;
 	}
 
 	/// <summary>
@@ -496,19 +634,32 @@ public sealed class DeviceAuthService
 		string password,
 		CancellationToken cancellationToken = default)
 	{
-		if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+		using var attempt = AuthAttempt.Begin("Sign-in", "password");
+		try
 		{
-			return EnrolmentResult.Failed("Please enter your email address and password.");
-		}
+			if (string.IsNullOrWhiteSpace(email) || string.IsNullOrEmpty(password))
+			{
+				return attempt.Finished(EnrolmentResult.Failed("Please enter your email address and password."));
+			}
 
-		return await EnrolAsync(new EnrolmentRequest
+			// The address, which the redactor turns into a token: whether
+			// it is the same address failing every time is the first
+			// question about a refused password. Never the password.
+			Log.Information("Password sign-in for {Email}", email.Trim());
+
+			return attempt.Finished(await EnrolAsync(new EnrolmentRequest
+			{
+				Email = email.Trim(),
+				Password = password,
+				PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+				Platform = PlatformName(),
+				Label = DeviceLabel(),
+			}, cancellationToken).ConfigureAwait(false));
+		}
+		catch (Exception ex) when (attempt.Threw(ex))
 		{
-			Email = email.Trim(),
-			Password = password,
-			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
-			Platform = PlatformName(),
-			Label = DeviceLabel(),
-		}, cancellationToken).ConfigureAwait(false);
+			throw;
+		}
 	}
 
 	/// <summary>
@@ -519,8 +670,24 @@ public sealed class DeviceAuthService
 	/// say which addresses belong to members — so the screen must say
 	/// the same thing either way.</para>
 	/// </summary>
-	public Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default) =>
-		_client.RequestPasswordLinkAsync((email ?? string.Empty).Trim(), cancellationToken);
+	public async Task<bool> RequestPasswordLinkAsync(string email, CancellationToken cancellationToken = default)
+	{
+		var address = (email ?? string.Empty).Trim();
+
+		var reached = await _client.RequestPasswordLinkAsync(address, cancellationToken).ConfigureAwait(false);
+
+		// Only whether it arrived, because that is all there is to know.
+		if (reached)
+		{
+			Log.Information("Password-setting code requested for {Email}", address);
+		}
+		else
+		{
+			Log.Warning("Password-setting code request for {Email} did not reach the intergroup", address);
+		}
+
+		return reached;
+	}
 
 	/// <summary>
 	/// Set a password with the code from that email.
@@ -529,11 +696,26 @@ public sealed class DeviceAuthService
 	/// are separate acts, and keeping them separate means a code that
 	/// reaches the wrong handset cannot enrol it.</para>
 	/// </summary>
-	public Task<PasswordSetResult> SetPasswordAsync(
+	public async Task<PasswordSetResult> SetPasswordAsync(
 		string code,
 		string password,
-		CancellationToken cancellationToken = default) =>
-		_client.SetPasswordAsync((code ?? string.Empty).Trim(), password ?? string.Empty, cancellationToken);
+		CancellationToken cancellationToken = default)
+	{
+		var result = await _client.SetPasswordAsync((code ?? string.Empty).Trim(), password ?? string.Empty, cancellationToken)
+			.ConfigureAwait(false);
+
+		// Neither the code nor the password, either way.
+		if (result.Succeeded)
+		{
+			Log.Information("Password set with an emailed code");
+		}
+		else
+		{
+			Log.Warning("Password could not be set with the emailed code: {Reason}", result.Error);
+		}
+
+		return result;
+	}
 
 	/// <summary>
 	/// Begin an Apple sign-in, to get the nonce the platform sheet needs.
@@ -558,20 +740,46 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task SignOutAsync(CancellationToken cancellationToken = default)
 	{
-		var session = await _sessions.LoadAsync().ConfigureAwait(false);
-
-		if (session is not null && session.IsSignedIn)
+		using var attempt = AuthAttempt.Begin("Sign-out", "device");
+		try
 		{
-			await _client.SignOutAsync(session.Token, cancellationToken).ConfigureAwait(false);
+			var session = await _sessions.LoadAsync().ConfigureAwait(false);
+
+			var revoked = false;
+			if (session is not null && session.IsSignedIn)
+			{
+				Log.Information("Signing out device {DeviceId} for member {MemberId}", session.DeviceId, session.MemberId);
+				revoked = await _client.SignOutAsync(session.Token, cancellationToken).ConfigureAwait(false);
+			}
+
+			await _sessions.ClearAsync().ConfigureAwait(false);
+			await _keys.ClearAsync().ConfigureAwait(false);
+
+			// The registration belonged to the device row that has just been
+			// revoked. Leaving it standing would have the next sign-in screen
+			// claim push was connected for a handset the server no longer knows.
+			PushRegistered = false;
+
+			// The handset is signed out either way. Said as a warning when
+			// the server did not hear it, because that device row is still
+			// live until somebody revokes it from the Devices screen.
+			if (session is null || !session.IsSignedIn)
+			{
+				attempt.Finished(succeeded: true, "there was no session; local state cleared");
+			}
+			else
+			{
+				attempt.Finished(
+					revoked,
+					revoked
+						? "the intergroup revoked this device; local state cleared"
+						: "the intergroup did not confirm it; local state cleared, and the device row stays live until revoked");
+			}
 		}
-
-		await _sessions.ClearAsync().ConfigureAwait(false);
-		await _keys.ClearAsync().ConfigureAwait(false);
-
-		// The registration belonged to the device row that has just been
-		// revoked. Leaving it standing would have the next sign-in screen
-		// claim push was connected for a handset the server no longer knows.
-		PushRegistered = false;
+		catch (Exception ex) when (attempt.Threw(ex))
+		{
+			throw;
+		}
 	}
 
 	private async Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken)
@@ -583,6 +791,14 @@ public sealed class DeviceAuthService
 		// enrolment blocked on Firebase would be an enrolment that fails
 		// on a phone with no Play Services.
 		var pushToken = await _push.CurrentTokenAsync().ConfigureAwait(false);
+
+		// Which credential, by name only. The values are all secrets.
+		Log.Information(
+			"Enrolling with Fellowship by {Credential} as {Platform} \"{Label}\"; push token {PushToken}",
+			CredentialKind(request),
+			request.Platform,
+			request.Label,
+			string.IsNullOrEmpty(pushToken) ? "not yet issued" : "present");
 
 		var result = await _client.EnrolAsync(
 			request with { PushProvider = string.IsNullOrEmpty(pushToken) ? string.Empty : "fcm", PushToken = pushToken },
@@ -616,7 +832,13 @@ public sealed class DeviceAuthService
 		}
 		else
 		{
-			Log.Warning("Enrolment refused: {Reason}", string.IsNullOrEmpty(result.Error) ? "cancelled" : result.Error);
+			// The attempt's outcome line carries the reason at the right
+			// level. This says only what was undone — and, unlike the line it
+			// replaces, does not call a Fellowship without Firebase a
+			// cancellation.
+			Log.Information(
+				"Fellowship did not enrol this handset ({Why}); discarding the keypair it was offered",
+				result.Unavailable ? "credential not offered" : string.IsNullOrEmpty(result.Error) ? "cancelled" : "refused");
 
 			// Enrolment failed after a keypair was generated. Clearing it
 			// keeps "has a key" and "is enrolled" in step, so a retry does
@@ -626,6 +848,16 @@ public sealed class DeviceAuthService
 
 		return result;
 	}
+
+	/// <summary>
+	/// Which proof an enrolment carries, for the log. Mirrors the order
+	/// <c>FellowshipClient.EnrolAsync</c> picks one in.
+	/// </summary>
+	private static string CredentialKind(EnrolmentRequest request) =>
+		!string.IsNullOrEmpty(request.Password) ? "password"
+		: !string.IsNullOrEmpty(request.Code) ? "one-time code"
+		: !string.IsNullOrEmpty(request.FirebaseToken) ? "Firebase token"
+		: "Apple ID token";
 
 	/// <summary>
 	/// Turn one of Fellowship's redirect error values into something a

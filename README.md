@@ -475,6 +475,42 @@ Serilog's silent default, and every `Log.*` call downstream becomes a
 no-op rather than a null reference — which is exactly the behaviour Link
 had before any of this existed.
 
+### Sign-in, step by step
+
+"I can't get in" was the report the log could least answer. It used to
+say that an enrolment succeeded or was refused, and nothing else: not
+which button, not whether Google's native sheet was tried and fell back,
+not whether the browser came back with an error, a code or nothing.
+
+Every sign-in, key replacement and sign-out is now an **attempt**
+(`AuthAttempt`). While one is open, every event logged on its path carries
+`AuthAttempt` (eight hex digits), `AuthOperation` and `AuthMethod` through
+Serilog's log context — including Fellowship's client's refusals, logged
+from a layer that does not know a sign-in is happening. One Better Stack
+query on the attempt id is the whole story. Each attempt ends in exactly
+one outcome line with its duration: succeeded (Information, with device
+and member ids), cancelled by the member (Information, because a closed
+browser tab is not a fault), not offered (Information), refused (Warning,
+with the sentence the member was shown), or threw (Error, logged from an
+exception filter so the attempt's properties are still attached; the
+exception goes on exactly as before).
+
+Between those: the native picker's answer, the browser opening and what
+came back (Fellowship's own error code, such as `not_a_member`), which
+credential the enrolment carried and whether a push token went with it,
+the Freedom handover, and on every launch which page the shell chose.
+
+**What never goes in:** passwords, one-time codes, Apple and Firebase ID
+tokens, the device token. **What does, hidden:** the email address a
+member typed. Inventory's `Redact` runs `EmailRedactor` over everything
+every sink writes, exception text included, so an address becomes
+`email:3f9a2c1b` — an HMAC under a key made on the handset and kept in
+SecureStorage (`LogRedactionKey`). The same address gives the same token on
+that handset, so three failures in a row are visibly the same address;
+nobody holding only the logs can turn a token back into an address. Any
+address in a log line is redacted the same way, including the contact
+address in the user agent.
+
 ## Building
 
 ```bash
