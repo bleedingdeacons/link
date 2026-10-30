@@ -21,7 +21,7 @@
 		that cannot be scrolled to its own submit button is worse than a
 		slightly longer one.
 	-->
-	<ScrollView>
+	<ScrollView x:Name="Scroller">
 		<VerticalStackLayout Padding="24,40" Spacing="16">
 
 			<Label Text="Link"
@@ -65,6 +65,39 @@
 			       Opacity="0.6"
 			       HorizontalTextAlignment="Center"
 			       IsVisible="{Binding IsConfigured}" />
+
+			<!--
+				What happened, above the buttons rather than under the
+				password section. Down there it was off the bottom of a phone
+				screen after a tap on "Continue with Google", so a sign-in
+				that said exactly why it stopped looked as though it had said
+				nothing at all. The page also scrolls here whenever a message
+				appears (see SignInPage.xaml.cs), so one answering the
+				set-a-password section at the foot is seen too.
+
+				Two messages, two colours. "Check your email" is not a
+				failure and must not be painted as one — and it is what the
+				app has to say whether or not a code was actually sent, since
+				the server will not reveal which.
+			-->
+			<VerticalStackLayout x:Name="Messages" Spacing="8">
+
+				<ActivityIndicator IsRunning="{Binding Busy}"
+				                   IsVisible="{Binding Busy}"
+				                   HorizontalOptions="Center" />
+
+				<Label Text="{Binding Notice}"
+				       IsVisible="{Binding HasNotice}"
+				       FontSize="14"
+				       HorizontalTextAlignment="Center" />
+
+				<Label Text="{Binding Error}"
+				       IsVisible="{Binding HasError}"
+				       TextColor="{StaticResource Warning}"
+				       FontSize="14"
+				       HorizontalTextAlignment="Center" />
+
+			</VerticalStackLayout>
 
 			<!--
 				One command with a parameter, three buttons. The provider
@@ -186,27 +219,6 @@
 				        Command="{Binding SetPasswordCommand}" />
 
 			</VerticalStackLayout>
-
-			<ActivityIndicator IsRunning="{Binding Busy}"
-			                   IsVisible="{Binding Busy}"
-			                   HorizontalOptions="Center" />
-
-			<!--
-				Two messages, two colours. "Check your email" is not a
-				failure and must not be painted as one — and it is what
-				the app has to say whether or not a code was actually
-				sent, since the server will not reveal which.
-			-->
-			<Label Text="{Binding Notice}"
-			       IsVisible="{Binding HasNotice}"
-			       FontSize="14"
-			       HorizontalTextAlignment="Center" />
-
-			<Label Text="{Binding Error}"
-			       IsVisible="{Binding HasError}"
-			       TextColor="{StaticResource Warning}"
-			       FontSize="14"
-			       HorizontalTextAlignment="Center" />
 
 			<!--
 				The build, last and quiet, as Settings shows it, and the
