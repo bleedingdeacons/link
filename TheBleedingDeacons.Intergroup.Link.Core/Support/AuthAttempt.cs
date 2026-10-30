@@ -100,7 +100,7 @@ public sealed class AuthAttempt : IDisposable
 		}
 		else
 		{
-			NotSucceeded(result.Error, result.Unavailable);
+			NotSucceeded(result.Error, result.Unavailable, result.Detail);
 		}
 
 		return result;
@@ -205,7 +205,7 @@ public sealed class AuthAttempt : IDisposable
 			memberId);
 	}
 
-	private void NotSucceeded(string error, bool unavailable)
+	private void NotSucceeded(string error, bool unavailable, string detail = "")
 	{
 		_finished = true;
 
@@ -219,13 +219,15 @@ public sealed class AuthAttempt : IDisposable
 		}
 		else if (string.IsNullOrEmpty(error))
 		{
-			// An empty error is the member backing out — the screen says
-			// nothing, and neither should a warning.
+			// An empty error is a sign-in that stopped — usually the member
+			// backing out, which is not worth a warning. The platform's own
+			// words go with it, because "usually" is not "always".
 			Log.Information(
-				"{AuthOperation} with {AuthMethod} cancelled by the member after {ElapsedMs} ms",
+				"{AuthOperation} with {AuthMethod} cancelled after {ElapsedMs} ms: {CancelDetail}",
 				Operation,
 				Method,
-				ElapsedMs);
+				ElapsedMs,
+				string.IsNullOrEmpty(detail) ? "no reason given" : detail);
 		}
 		else
 		{

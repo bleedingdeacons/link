@@ -121,6 +121,21 @@ public sealed class AuthAttemptTests
 	}
 
 	[Fact]
+	public void ACancellationCarriesWhatThePlatformSaid()
+	{
+		// Not every "cancelled" is the member: Android's picker answers it
+		// unseen once Google has paused the prompt, and says so only here.
+		using (var attempt = AuthAttempt.Begin("Sign-in", "google", _log))
+		{
+			attempt.Finished(EnrolmentResult.Cancelled("Caller has been temporarily blocked"));
+		}
+
+		var outcome = _sink.Events[^1];
+		Assert.Equal(LogEventLevel.Information, outcome.Level);
+		Assert.Contains("temporarily blocked", outcome.Properties["CancelDetail"].ToString(), StringComparison.Ordinal);
+	}
+
+	[Fact]
 	public void NotOfferedIsNeitherACancellationNorARefusal()
 	{
 		using (var attempt = AuthAttempt.Begin("Key replacement", "google", _log))
