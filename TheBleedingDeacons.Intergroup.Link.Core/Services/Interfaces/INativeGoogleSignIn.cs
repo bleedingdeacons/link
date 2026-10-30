@@ -32,7 +32,12 @@ public enum NativeGoogleSignInOutcome
 	/// <summary><see cref="NativeGoogleSignInResult.IdToken"/> holds a Firebase ID token.</summary>
 	SignedIn,
 
-	/// <summary>The member closed the picker. Not an error.</summary>
+	/// <summary>
+	/// The picker answered "cancelled". Usually the member closing it, but
+	/// not always: Android's answers it without showing anything once
+	/// Google has paused the prompt. <see cref="NativeGoogleSignInResult.Detail"/>
+	/// says which.
+	/// </summary>
 	Cancelled,
 
 	/// <summary>
@@ -49,4 +54,12 @@ public sealed record NativeGoogleSignInResult(NativeGoogleSignInOutcome Outcome,
 	public static NativeGoogleSignInResult Cancelled { get; } = new(NativeGoogleSignInOutcome.Cancelled);
 
 	public static NativeGoogleSignInResult Unavailable { get; } = new(NativeGoogleSignInOutcome.Unavailable);
+
+	/// <summary>
+	/// What the platform said, for the screen. Never a token: only the
+	/// words of the error it answered instead of one.
+	/// </summary>
+	public string Detail { get; init; } = string.Empty;
+
+	public NativeGoogleSignInResult Because(string detail) => this with { Detail = detail };
 }

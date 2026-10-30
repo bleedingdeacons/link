@@ -190,17 +190,51 @@ public sealed record EnrolmentResult
 	public static EnrolmentResult Failed(string error) => new() { Error = error };
 
 	/// <summary>
-	/// The member changed their mind, which is not a failure.
+	/// Something on this phone threw before the sign-in could finish.
 	///
-	/// <para>An empty error has always meant this — the sign-in screen
-	/// shows nothing rather than accusing somebody of a fault they did
-	/// not commit — but it meant it by convention, discoverable only from
-	/// a comment in one view model. Apple's sheet made cancelling common
-	/// enough to be worth naming, since it is the ordinary way to back
-	/// out of a system dialog rather than the rare way to abandon a
-	/// browser tab.</para>
+	/// <para>Said on screen, with the exception's own words. Nothing about
+	/// it reached the intergroup, so the site's log cannot say what went
+	/// wrong, and a handset that has never signed in cannot ship its own
+	/// log either: the screen is the only place left to read it.</para>
 	/// </summary>
-	public static EnrolmentResult Cancelled() => new();
+	public static EnrolmentResult Threw(Exception exception)
+	{
+		ArgumentNullException.ThrowIfNull(exception);
+
+		return Failed($"The sign-in could not finish on this phone.\n{exception.Message}");
+	}
+
+	/// <summary>
+	/// The sign-in stopped before it reached the intergroup — the member
+	/// closed the picker or the browser, or the platform said it had.
+	///
+	/// <para>Not a failure, so no <see cref="Error"/>. It used to say
+	/// nothing at all, on the reasoning that the member knew what they
+	/// did. That holds for a member who closed a browser tab, and fails
+	/// for one whose phone answered "cancelled" without ever showing
+	/// them anything — which Android's account picker does after too many
+	/// dismissed prompts. From the screen the two looked identical, and
+	/// neither reached the site's log. See <see cref="Notice"/>.</para>
+	/// </summary>
+	/// <param name="detail">What the platform said, where it said anything.</param>
+	public static EnrolmentResult Cancelled(string detail = "") => new() { Detail = detail };
+
+	/// <summary>
+	/// What the platform said when a sign-in stopped. Empty when it said
+	/// nothing, and for every other outcome.
+	/// </summary>
+	public string Detail { get; init; } = string.Empty;
+
+	/// <summary>
+	/// What the sign-in screen says, neutrally, about a sign-in that
+	/// stopped: empty for every other outcome.
+	/// </summary>
+	public string Notice =>
+		Succeeded || Unavailable || Error.Length > 0
+			? string.Empty
+			: string.IsNullOrWhiteSpace(Detail)
+				? "The sign-in stopped before it finished. Please try again."
+				: $"The sign-in stopped before it finished.\n{Detail.Trim()}";
 
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
 

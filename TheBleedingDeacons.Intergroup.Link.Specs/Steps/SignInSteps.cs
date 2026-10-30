@@ -30,6 +30,12 @@ public sealed class SignInSteps
 	[Given(@"^the member cancelled the sign-in$")]
 	public void Cancelled() => _enrolment = EnrolmentResult.Cancelled();
 
+	[Given(@"^the phone stopped the sign-in, saying ""(.+)""$")]
+	public void StoppedBecause(string detail) => _enrolment = EnrolmentResult.Cancelled(detail);
+
+	[Given(@"^the sign-in threw ""(.+)""$")]
+	public void Threw(string message) => _enrolment = EnrolmentResult.Threw(new InvalidOperationException(message));
+
 	[Given(@"^Fellowship refused the sign-in, saying ""(.+)""$")]
 	public void Refused(string reason) => _enrolment = EnrolmentResult.Failed(reason);
 
@@ -61,19 +67,37 @@ public sealed class SignInSteps
 			.ShouldBe(string.Equals(outcome, "succeeded", StringComparison.Ordinal));
 
 	[Then(@"^there is nothing to tell them$")]
-	public void NothingToSay() => _enrolment.ShouldNotBeNull().Error.ShouldBeEmpty();
+	public void NothingToSay()
+	{
+		var enrolment = _enrolment.ShouldNotBeNull();
+		enrolment.Error.ShouldBeEmpty();
+		enrolment.Notice.ShouldBeEmpty();
+	}
 
+	[Then(@"^there is no error$")]
+	public void NoError() => _enrolment.ShouldNotBeNull().Error.ShouldBeEmpty();
+
+	/// <summary>
+	/// Whichever the screen would show: a sign-in has an error or a
+	/// notice, never both, so the one that is set is the one meant.
+	/// </summary>
 	[Then(@"^they are told ""(.+)""$")]
 	public void ToldWhy(string reason)
 	{
 		if (_enrolment is not null)
 		{
-			_enrolment.Error.ShouldBe(reason);
+			(_enrolment.Error.Length > 0 ? _enrolment.Error : _enrolment.Notice).ShouldBe(reason);
 			return;
 		}
 
 		_password.ShouldNotBeNull().Error.ShouldBe(reason);
 	}
+
+	[Then(@"^the notice ends ""(.+)""$")]
+	public void NoticeEnds(string detail) => _enrolment.ShouldNotBeNull().Notice.ShouldEndWith(detail);
+
+	[Then(@"^the error ends ""(.+)""$")]
+	public void ErrorEnds(string detail) => _enrolment.ShouldNotBeNull().Error.ShouldEndWith(detail);
 
 	[Then(@"^it was accepted$")]
 	public void LinkWasAccepted() => _linkAccepted.ShouldBeTrue();

@@ -238,7 +238,7 @@ public sealed class DeviceAuthService
 		switch (signIn.Outcome)
 		{
 			case NativeGoogleSignInOutcome.Cancelled:
-				return EnrolmentResult.Cancelled();
+				return EnrolmentResult.Cancelled(signIn.Detail);
 			case NativeGoogleSignInOutcome.Unavailable:
 				return null;
 		}
@@ -490,7 +490,7 @@ public sealed class DeviceAuthService
 #pragma warning disable S6667 // See above: the exception is the signal, not a fault.
 			Log.Information("The browser was closed before the sign-in finished");
 #pragma warning restore S6667
-			return (string.Empty, EnrolmentResult.Failed(string.Empty));
+			return (string.Empty, EnrolmentResult.Cancelled("The browser was closed."));
 		}
 	}
 
@@ -602,7 +602,7 @@ public sealed class DeviceAuthService
 		var idToken = await AppleIdTokenAsync(start.Nonce, cancellationToken).ConfigureAwait(false);
 		if (string.IsNullOrEmpty(idToken))
 		{
-			return EnrolmentResult.Cancelled();
+			return EnrolmentResult.Cancelled("Apple's sign-in sheet was closed.");
 		}
 
 		return await EnrolWithAppleAsync(idToken, start.State, cancellationToken).ConfigureAwait(false);

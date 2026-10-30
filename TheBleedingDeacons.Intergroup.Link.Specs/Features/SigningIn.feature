@@ -26,19 +26,34 @@ Feature: Getting a phone onto the fellowship's list
       # issued, every single time — which would look like a server bug
       # from the app and an app bug from the server.
 
-  Rule: Changing your mind is not a failure
+  Rule: A sign-in that stops says so, without calling it a failure
 
-    An empty error has always meant this — the sign-in screen shows
-    nothing rather than accusing somebody of a fault they did not
-    commit — but it meant it by convention, discoverable only from a
-    comment in one view model. Apple's sheet made cancelling common
-    enough to be worth naming: it is the ordinary way to back out of a
-    system dialog rather than the rare way to abandon a browser tab.
+    It used to say nothing, on the reasoning that the member knew what
+    they did. That holds for a closed browser tab, and fails for a phone
+    that answers "cancelled" without showing anything — Android's
+    account picker does, once Google has paused it for a handset that
+    dismissed it too often. Neither reaches the intergroup's log, and a
+    handset that has never signed in ships none of its own, so the
+    screen is the only place left to say it.
 
-    Scenario: A cancelled sign-in has nothing to say
+    Scenario: A cancelled sign-in is mentioned, not blamed
       Given the member cancelled the sign-in
       Then the sign-in did not succeed
-      And there is nothing to tell them
+      And there is no error
+      And they are told "The sign-in stopped before it finished. Please try again."
+
+    Scenario: What the phone said when it stopped reaches the screen
+      Given the phone stopped the sign-in, saying "Caller has been temporarily blocked due to too many canceled sign-in prompts."
+      Then the sign-in did not succeed
+      And there is no error
+      And the notice ends "Caller has been temporarily blocked due to too many canceled sign-in prompts."
+
+    Scenario: Something that threw on the phone is shown, not swallowed
+      Given the sign-in threw "Activity is not attached to a window"
+      Then the sign-in did not succeed
+      And the error ends "Activity is not attached to a window"
+
+  Rule: Every other ending says something only when there is something to say
 
     Scenario: A refused sign-in carries the server's own words
       Given Fellowship refused the sign-in, saying "That address does not match a member record"

@@ -218,6 +218,13 @@ public sealed partial class SignInViewModel : ObservableObject
 
 			SettingPassword = true;
 		}
+#pragma warning disable CA1031 // As in RunAsync: whatever it was, the member is told.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Serilog.Log.Error(ex, "Asking for a password code threw");
+			Error = EnrolmentResult.Threw(ex).Error;
+		}
 		finally
 		{
 			Busy = false;
@@ -259,6 +266,13 @@ public sealed partial class SignInViewModel : ObservableObject
 
 			Notice = "Password set. You can sign in with it now.";
 		}
+#pragma warning disable CA1031 // As in RunAsync: whatever it was, the member is told.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Serilog.Log.Error(ex, "Setting a password threw");
+			Error = EnrolmentResult.Threw(ex).Error;
+		}
 		finally
 		{
 			Busy = false;
@@ -277,6 +291,13 @@ public sealed partial class SignInViewModel : ObservableObject
 	/// <summary>
 	/// The shared half of every sign-in: busy on, errors cleared, and the
 	/// shell refreshed if a session came back.
+	///
+	/// <para><b>Every way it ends says something.</b> A refusal shows the
+	/// server's words, a sign-in that stopped says so neutrally, and an
+	/// exception shows its own message rather than escaping the command.
+	/// A handset that has never signed in has no log anyone can read, and
+	/// a failure that never reached the intergroup is in no log at all, so
+	/// the screen is the only witness.</para>
 	/// </summary>
 	private async Task RunAsync(Func<Task<EnrolmentResult>> signIn)
 	{
@@ -298,11 +319,15 @@ public sealed partial class SignInViewModel : ObservableObject
 				return;
 			}
 
-			// An empty error is a cancelled sign-in — the member closed
-			// the browser tab or dismissed the sheet, and knows what they
-			// did. Saying anything would be the app talking for the sake
-			// of it.
 			Error = result.Error;
+			Notice = result.Notice;
+		}
+#pragma warning disable CA1031 // Deliberately broad: whatever it was, the member is told.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			// DeviceAuthService has already logged it inside its attempt.
+			Error = EnrolmentResult.Threw(ex).Error;
 		}
 		finally
 		{

@@ -53,7 +53,8 @@ public sealed partial class NativeGoogleSignIn
 		}
 		catch (NSErrorException ex) when (ex.Code == CancelledCode)
 		{
-			return NativeGoogleSignInResult.Cancelled;
+			return NativeGoogleSignInResult.Cancelled.Because(
+				string.IsNullOrWhiteSpace(ex.Message) ? "Google's account picker was closed." : ex.Message);
 		}
 #pragma warning disable CA1031 // Deliberately broad: every failure here has the same answer.
 		catch (Exception ex)

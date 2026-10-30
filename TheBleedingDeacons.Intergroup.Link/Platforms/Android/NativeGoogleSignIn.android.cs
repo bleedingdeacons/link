@@ -57,13 +57,19 @@ public sealed partial class NativeGoogleSignIn
 		{
 			googleIdToken = await PickAccountAsync(activity, WebClientId(), cancellationToken).ConfigureAwait(false);
 		}
-		catch (GetCredentialCancellationException)
+		catch (GetCredentialCancellationException ex)
 		{
-			return NativeGoogleSignInResult.Cancelled;
+			// Not always the member. Credential Manager answers this at once,
+			// without showing anything, once Google has paused the prompt
+			// for a handset that dismissed it too often — and its message is
+			// the only place that says so.
+			Log.Information(ex, "Credential Manager answered cancelled: {CancelDetail}", ex.Message);
+			return NativeGoogleSignInResult.Cancelled.Because(
+				string.IsNullOrWhiteSpace(ex.Message) ? "Google's account picker was closed." : ex.Message);
 		}
 		catch (OperationCanceledException)
 		{
-			return NativeGoogleSignInResult.Cancelled;
+			return NativeGoogleSignInResult.Cancelled.Because("Google's account picker was closed.");
 		}
 #pragma warning disable CA1031 // Deliberately broad: every failure here has the same answer.
 		catch (Exception ex)
