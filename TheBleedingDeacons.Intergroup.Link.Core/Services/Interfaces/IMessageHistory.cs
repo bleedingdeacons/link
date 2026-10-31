@@ -31,7 +31,9 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// mark belongs to the member who set it. Left in place for whoever signs
 /// in next, it would hand them an inbox that silently refuses to fetch
 /// their own history, with nothing on screen to explain why — so sign-out
-/// calls <see cref="ResetAsync"/> instead.</para>
+/// calls <see cref="ResetAsync"/> instead, which deletes the messages but
+/// keeps the mark against its member. The same member signing back in
+/// finds it still there; anyone else is adopted onto an empty store.</para>
 /// </summary>
 public interface IMessageHistory
 {
@@ -124,11 +126,15 @@ public interface IMessageHistory
 	Task ClearAsync(CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Delete everything, the mark left by <see cref="ClearAsync"/>
-	/// included, leaving the store as it was before anybody signed in.
+	/// Delete every message, received and sent, keeping only the mark left
+	/// by <see cref="ClearAsync"/> and the ids left by
+	/// <see cref="DeleteAsync"/>, against the member who set them.
 	///
-	/// <para>For signing out, and for nothing else. The next member on
-	/// this handset must start from zero and fetch their own history.</para>
+	/// <para>For signing out, and for nothing else. The same member
+	/// signing back in gets back what they had not cleared, and not what
+	/// they had; the next member on this handset is adopted onto an empty
+	/// store by <see cref="AdoptAsync"/> and fetches their own history from
+	/// zero.</para>
 	/// </summary>
 	Task ResetAsync(CancellationToken cancellationToken = default);
 

@@ -396,8 +396,21 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	}
 
 	/// <summary>
-	/// Delete the store outright, mark and all. See the interface remarks:
-	/// this is for signing out, and clearing is not.
+	/// Delete every message, received and sent, keeping only what the
+	/// member chose to be rid of. See the interface remarks: this is for
+	/// signing out, and clearing is not.
+	///
+	/// <para><b>What stays behind is the clear mark and the deleted ids,
+	/// against the member who set them</b> — numbers, inside the same
+	/// encrypted envelope as a clear leaves. Until 2026-10-31 this deleted
+	/// the file outright, so a member who cleared, signed out and signed
+	/// back in had everything they cleared fetched straight back. The poll
+	/// mark goes, so what they had not cleared comes back to them; and a
+	/// different member signing in is adopted onto an empty store, mark
+	/// and all, exactly as before.</para>
+	///
+	/// <para>With nothing chosen, or no owner to hold it against, there is
+	/// nothing worth keeping and the file is deleted.</para>
 	/// </summary>
 	public async Task ResetAsync(CancellationToken cancellationToken = default)
 	{
@@ -405,7 +418,15 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 		try
 		{
-			if (File.Exists(_path))
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			if (held.MemberId > 0 && (held.ClearedUpTo > 0 || held.Deleted.Count > 0))
+			{
+				await WriteUnguardedAsync(
+					new Held([], held.ClearedUpTo, held.MemberId) { Deleted = held.Deleted },
+					cancellationToken).ConfigureAwait(false);
+			}
+			else if (File.Exists(_path))
 			{
 				File.Delete(_path);
 			}
@@ -682,7 +703,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		/// Messages deleted one at a time, as the id each answered. Empty
 		/// on every Held built without saying otherwise, for the same
 		/// reason as <see cref="Sent"/>: a clear's mark already covers
-		/// them, and a reset or an adoption must not carry them over.
+		/// them, and an adoption must not carry them over. A reset carries
+		/// them on purpose — see <see cref="ResetAsync"/>.
 		/// </summary>
 		public Dictionary<long, long> Deleted { get; init; } = [];
 
