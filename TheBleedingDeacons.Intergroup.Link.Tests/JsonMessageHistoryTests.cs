@@ -361,6 +361,59 @@ public sealed class JsonMessageHistoryTests : IDisposable
 	}
 
 	[Fact]
+	public async Task SigningOutAndBackInKeepsTheClearMark()
+	{
+		// What was cleared stays cleared. Before this, signing out
+		// deleted the mark with the file and the member who signed back
+		// in had everything they cleared fetched straight back.
+		using var history = New();
+
+		await history.AdoptAsync(7);
+		await history.SaveAsync([Message(3, "Cleared")]);
+		await history.MarkPolledAsync(3);
+		await history.ClearAsync();
+		await history.SaveAsync([Message(5, "Not cleared")]);
+		await history.MarkPolledAsync(5);
+		await history.ResetAsync();
+		await history.AdoptAsync(7);
+
+		Assert.Empty(await history.AllAsync());
+		Assert.Equal(3, await history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task SigningOutAndBackInKeepsWhatWasDeleted()
+	{
+		using var history = New();
+
+		await history.AdoptAsync(7);
+		await history.SaveAsync([Message(3, "Deleted")]);
+		await history.DeleteAsync(3);
+		await history.ResetAsync();
+		await history.AdoptAsync(7);
+		await history.SaveAsync([Message(3, "Deleted")]);
+
+		Assert.Empty(await history.AllAsync());
+	}
+
+	[Fact]
+	public async Task AnotherMemberAfterSigningOutStartsFromTheBeginning()
+	{
+		using var history = New();
+
+		await history.AdoptAsync(7);
+		await history.SaveAsync([Message(3, "Member 7's")]);
+		await history.DeleteAsync(3);
+		await history.SaveAsync([Message(4, "Member 7's")]);
+		await history.ClearAsync();
+		await history.ResetAsync();
+		await history.AdoptAsync(9);
+
+		Assert.Equal(0, await history.PollFromAsync());
+		Assert.Empty(await history.DeletedAsync());
+	}
+
+	[Fact]
 	public async Task AHistoryWrittenBeforeTheMarkExistedIsStillRead()
 	{
 		// Handsets are carrying files in the old shape — a bare array

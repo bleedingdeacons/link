@@ -89,6 +89,13 @@ Feature: This phone's own copy of the messages
     fetch their own history, with nothing on screen to explain why — so
     signing out resets the store instead of clearing it.
 
+    Resetting deletes the messages but keeps the mark, and the ids of
+    anything deleted one at a time, against the member who set them.
+    Until 2026-10-31 it kept nothing, and a member who cleared, signed
+    out and signed back in watched everything they had cleared come
+    back. The same member gets back only what they had not cleared;
+    anyone else is adopted onto an empty store and starts from zero.
+
     The steps below say "reset, as signing out resets it" rather than
     "signs out", and the wording is exact rather than coy: sign-out
     itself is DeviceAuthService's, which is MAUI and therefore not
@@ -97,12 +104,45 @@ Feature: This phone's own copy of the messages
     the difference between the two, which is where the bug would be.
 
     Scenario: The next member starts from the beginning
-      Given messages 12 and 13 are held
+      Given member 7 is signed in on this phone
+      And messages 12 and 13 are held
       When the history is cleared
       And the history is reset, as signing out resets it
+      And member 9 signs in on this phone
       And the handset syncs
       Then the server was asked for everything above 0
       And 2 messages are held
+
+    Scenario: The same member signing back in does not get back what they cleared
+      Given member 7 is signed in on this phone
+      And messages 12 and 13 are held
+      When the history is cleared
+      And the history is reset, as signing out resets it
+      And member 7 signs in on this phone
+      And the handset syncs
+      Then the server was asked for everything above 13
+      And nothing is held
+
+    Scenario: The same member signing back in gets back what they had not cleared
+      Given member 7 is signed in on this phone
+      And messages 12 and 13 are held
+      When the history is cleared
+      And message 14 is waiting on the server
+      And the handset syncs
+      And the history is reset, as signing out resets it
+      And member 7 signs in on this phone
+      And the handset syncs
+      Then the server was asked for everything above 13
+      And the messages read 14
+
+    Scenario: A message deleted before signing out stays deleted
+      Given member 7 is signed in on this phone
+      And messages 12 and 13 are held
+      When message 13 is deleted
+      And the history is reset, as signing out resets it
+      And member 7 signs in on this phone
+      And the handset syncs
+      Then the messages read 12
 
     Scenario: Resetting leaves no messages behind
       Given messages 12 and 13 are held

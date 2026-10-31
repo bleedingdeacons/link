@@ -426,7 +426,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 			// which is right for the member who asked for it, and wrong
 			// for whoever signs in next: they would inherit a mark set
 			// against somebody else's messages and never see their own
-			// history, with nothing on screen to say why.
+			// history, with nothing on screen to say why. Reset keeps the
+			// mark against the member who set it, so the same member
+			// signing back in still does not get back what they cleared.
 			await _history.ResetAsync().ConfigureAwait(true);
 
 			if (Shell.Current is AppShell shell)
