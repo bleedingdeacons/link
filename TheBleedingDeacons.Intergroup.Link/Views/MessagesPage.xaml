@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models="clr-namespace:TheBleedingDeacons.Intergroup.Link.Models;assembly=TheBleedingDeacons.Intergroup.Link.Core"
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagesPage"
+             x:Name="Page"
              x:DataType="vm:MessagesViewModel"
              Title="Messages">
 
@@ -177,7 +178,7 @@
 				</CollectionView.EmptyView>
 
 				<CollectionView.ItemTemplate>
-					<DataTemplate x:DataType="models:Conversation">
+					<DataTemplate x:DataType="vm:ConversationRow">
 						<!--
 							One row per conversation, in Hand's history-row
 							shape: a strip down the side and the text beside it,
@@ -197,23 +198,50 @@
 							landed?", and under somebody else's answer they
 							would answer nothing.
 						-->
-						<Grid Margin="12,5" ColumnDefinitions="6,*">
+						<Grid Margin="12,5" ColumnDefinitions="Auto,6,*">
 
 							<!--
-								The command lives on the page's view model, not on the
-								conversation, so this binding's x:DataType has to
+								The commands live on the page's view model, not on
+								the row, so these bindings' x:DataType has to
 								override the DataTemplate's. Without it the compiler
-								resolves OpenCommand against Conversation, does not
-								find it, and raises XC0045 - which is an error.
+								resolves OpenCommand against ConversationRow, does
+								not find it, and raises XC0045 - which is an error.
 
 								The whole row is the target, as it is in Hand: a
 								subject line is not what somebody should have to hit.
+
+								The toolkit's TouchBehavior rather than gesture
+								recognizers, because MAUI has no long press of its
+								own, and a TapGestureRecognizer beside a
+								TouchBehavior on the same view is a fight over the
+								same Android touches. One behavior takes both: a tap
+								opens (or ticks, while choosing), a long press
+								starts choosing.
+
+								Reached through the page by x:Reference, not by
+								RelativeSource as the checkbox below does it: a
+								behavior is not in the visual tree, so it has no
+								ancestors to search.
 							-->
-							<Grid.GestureRecognizers>
-								<TapGestureRecognizer
-									Command="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=OpenCommand, x:DataType=vm:MessagesViewModel}"
-									CommandParameter="{Binding .}" />
-							</Grid.GestureRecognizers>
+							<Grid.Behaviors>
+								<toolkit:TouchBehavior
+									Command="{Binding Source={x:Reference Page}, Path=ViewModel.OpenCommand, x:DataType=views:MessagesPage}"
+									CommandParameter="{Binding .}"
+									LongPressCommand="{Binding Source={x:Reference Page}, Path=ViewModel.SelectCommand, x:DataType=views:MessagesPage}"
+									LongPressCommandParameter="{Binding .}" />
+							</Grid.Behaviors>
+
+							<!--
+								Shown only while choosing what to delete. Input
+								transparent, and bound one way: the row's tap is
+								what ticks it, so a tap on the box itself cannot
+								tick it twice and cancel itself out.
+							-->
+							<CheckBox Grid.Column="0"
+							          VerticalOptions="Center"
+							          InputTransparent="True"
+							          IsChecked="{Binding IsChecked, Mode=OneWay}"
+							          IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=Selecting, x:DataType=vm:MessagesViewModel}" />
 
 							<!--
 								BackgroundColor is set to Transparent on purpose. The
@@ -222,26 +250,26 @@
 								Left unset, the square background showed through at each
 								rounded end as a dark cap.
 							-->
-							<BoxView Grid.Column="0"
+							<BoxView Grid.Column="1"
 							         CornerRadius="3"
 							         BackgroundColor="Transparent"
 							         Color="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}">
 								<BoxView.Triggers>
-									<DataTrigger TargetType="BoxView" Binding="{Binding HasUnread}" Value="True">
+									<DataTrigger TargetType="BoxView" Binding="{Binding Conversation.HasUnread}" Value="True">
 										<Setter Property="Color" Value="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}" />
 									</DataTrigger>
 								</BoxView.Triggers>
 							</BoxView>
 
-							<VerticalStackLayout Grid.Column="1" Padding="12,10" Spacing="4">
+							<VerticalStackLayout Grid.Column="2" Padding="12,10" Spacing="4">
 
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
-									       Text="{Binding Root.Subject}"
+									       Text="{Binding Conversation.Root.Subject}"
 									       FontSize="17"
 									       LineBreakMode="TailTruncation">
 										<Label.Triggers>
-											<DataTrigger TargetType="Label" Binding="{Binding HasUnread}" Value="True">
+											<DataTrigger TargetType="Label" Binding="{Binding Conversation.HasUnread}" Value="True">
 												<Setter Property="FontAttributes" Value="Bold" />
 											</DataTrigger>
 										</Label.Triggers>
@@ -251,23 +279,23 @@
 									       FontSize="13"
 									       Opacity="0.6"
 									       VerticalOptions="Center"
-									       Text="{Binding LatestLocal, StringFormat='{0:d MMM, HH:mm}'}" />
+									       Text="{Binding Conversation.LatestLocal, StringFormat='{0:d MMM, HH:mm}'}" />
 								</Grid>
 
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
-									       Text="{Binding Summary}"
+									       Text="{Binding Conversation.Summary}"
 									       FontSize="13"
 									       Opacity="0.6"
 									       LineBreakMode="TailTruncation" />
 
 									<views:ReceiptTicks Grid.Column="1"
-									                    State="{Binding Latest.Receipt}"
-									                    IsVisible="{Binding Latest.IsSent}" />
+									                    State="{Binding Conversation.Latest.Receipt}"
+									                    IsVisible="{Binding Conversation.Latest.IsSent}" />
 								</Grid>
 
 								<!-- The newest message's words: what is new in it. -->
-								<Label Text="{Binding Latest.Body}"
+								<Label Text="{Binding Conversation.Latest.Body}"
 								       FontSize="15"
 								       MaxLines="3"
 								       LineBreakMode="TailTruncation" />
@@ -300,6 +328,7 @@
 			message so this never sits on top of one for good.
 		-->
 		<Border x:Name="ComposeButton"
+		        IsVisible="{Binding Browsing}"
 		        HorizontalOptions="End"
 		        VerticalOptions="End"
 		        Margin="0,0,16,16"
@@ -332,6 +361,42 @@
 			      WidthRequest="22"
 			      HeightRequest="22"
 			      Margin="2,0,0,0"
+			      HorizontalOptions="Center"
+			      VerticalOptions="Center" />
+		</Border>
+
+		<!--
+			Delete, in the compose button's place while the list is choosing
+			what to delete. The same round button where the thumb already is,
+			red as Delete is everywhere else in Link, because it throws
+			something away rather than sending something on. The icon is the
+			Material "delete" bin, as a Path for the reasons given above.
+		-->
+		<Border x:Name="DeleteButton"
+		        IsVisible="{Binding Selecting}"
+		        HorizontalOptions="End"
+		        VerticalOptions="End"
+		        Margin="0,0,16,16"
+		        WidthRequest="56"
+		        HeightRequest="56"
+		        StrokeThickness="0"
+		        BackgroundColor="{StaticResource Warning}"
+		        SemanticProperties.Description="Delete the ticked conversations">
+			<Border.StrokeShape>
+				<RoundRectangle CornerRadius="28" />
+			</Border.StrokeShape>
+			<Border.Shadow>
+				<Shadow Brush="Black" Opacity="0.3" Radius="10" Offset="0,4" />
+			</Border.Shadow>
+			<Border.GestureRecognizers>
+				<TapGestureRecognizer Tapped="OnDeleteTapped" />
+			</Border.GestureRecognizers>
+
+			<Path Data="M6,19 C6,20.1 6.9,21 8,21 L16,21 C17.1,21 18,20.1 18,19 L18,7 L6,7 Z M19,4 L15.5,4 L14.5,3 L9.5,3 L8.5,4 L5,4 L5,6 L19,6 Z"
+			      Fill="White"
+			      Aspect="Uniform"
+			      WidthRequest="22"
+			      HeightRequest="22"
 			      HorizontalOptions="Center"
 			      VerticalOptions="Center" />
 		</Border>

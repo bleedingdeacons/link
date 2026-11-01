@@ -78,6 +78,20 @@ public sealed class ConversationSteps(World world)
 		});
 	}
 
+	/// <summary>
+	/// What Delete does to a conversation ticked on the list: every message
+	/// in it, one at a time. <c>MessagesViewModel.DeleteCheckedAsync</c>,
+	/// which is MAUI and out of reach.
+	/// </summary>
+	[When(@"^conversation (\d+) is deleted from the list$")]
+	public async Task ConversationDeleted(long root)
+	{
+		foreach (var entry in (await ConversationAsync(root)).Messages)
+		{
+			await world.History.DeleteAsync(entry.Id);
+		}
+	}
+
 	[Then(@"^the conversations read ([\d, ]+)$")]
 	public async Task ConversationsRead(string ids) =>
 		(await ConversationsAsync()).Select(c => c.Root.Id).ShouldBe(Ids(ids));

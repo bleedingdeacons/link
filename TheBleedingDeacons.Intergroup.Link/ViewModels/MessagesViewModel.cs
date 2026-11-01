@@ -84,7 +84,21 @@ public sealed partial class MessagesViewModel : ObservableObject
 	}
 
 	/// <summary>Every conversation, the one with the newest message first.</summary>
-	public ObservableCollection<Conversation> Conversations { get; } = [];
+	public ObservableCollection<ConversationRow> Conversations { get; } = [];
+
+	/// <summary>
+	/// True while the list is choosing conversations to delete: a long
+	/// press starts it, every row shows a checkbox, and the compose button
+	/// becomes Delete. Back ends it; see <c>MessagesPage.OnBackButtonPressed</c>.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(Browsing))]
+	private bool _selecting;
+
+	/// <summary>The opposite of <see cref="Selecting"/>, for the compose button to bind to.</summary>
+	public bool Browsing => !Selecting;
+
+	public int CheckedCount => Conversations.Count(row => row.IsChecked);
 
 	[ObservableProperty]
 	private bool _busy;
@@ -182,17 +196,84 @@ public sealed partial class MessagesViewModel : ObservableObject
 	/// root's, so a conversation whose root changes while it is open — an
 	/// original arriving after its answer — is still found.</para>
 	/// </summary>
+	/// <remarks>
+	/// While <see cref="Selecting"/>, a tap ticks or unticks the row
+	/// instead. The whole row is the target either way, checkbox included.
+	/// </remarks>
 	[RelayCommand]
-	public async Task OpenAsync(Conversation? conversation)
+	public async Task OpenAsync(ConversationRow? row)
 	{
-		if (conversation is null)
+		if (row is null)
 		{
 			return;
 		}
 
-		var route = string.Create(CultureInfo.InvariantCulture, $"conversation?id={conversation.Latest.Id}");
+		if (Selecting)
+		{
+			row.IsChecked = !row.IsChecked;
+			return;
+		}
+
+		var route = string.Create(CultureInfo.InvariantCulture, $"conversation?id={row.Conversation.Latest.Id}");
 
 		await Shell.Current.GoToAsync(route).ConfigureAwait(true);
+	}
+
+	/// <summary>
+	/// A long press: start choosing, with the row pressed already ticked —
+	/// it is the one the member had in mind. A long press while already
+	/// choosing ticks that row too, rather than doing nothing.
+	/// </summary>
+	[RelayCommand]
+	public void Select(ConversationRow? row)
+	{
+		if (row is null)
+		{
+			return;
+		}
+
+		Selecting = true;
+		row.IsChecked = true;
+	}
+
+	/// <summary>Stop choosing, and untick everything so the next long press starts clean.</summary>
+	public void EndSelecting()
+	{
+		foreach (var row in Conversations)
+		{
+			row.IsChecked = false;
+		}
+
+		Selecting = false;
+	}
+
+	/// <summary>
+	/// Delete this phone's copy of every message in every ticked
+	/// conversation, then stop choosing and redraw.
+	/// </summary>
+	/// <remarks>
+	/// One message at a time through <see cref="IMessageHistory.DeleteAsync"/>,
+	/// the same delete the conversation screen offers, so everything said
+	/// there holds here: nothing is unsent, the server is not told, and
+	/// what was deleted stays deleted. An answer that arrives later to a
+	/// conversation deleted this way starts a conversation of its own.
+	/// </remarks>
+	public async Task DeleteCheckedAsync()
+	{
+		var ids = Conversations
+			.Where(row => row.IsChecked)
+			.SelectMany(row => row.Conversation.Messages)
+			.Select(entry => entry.Id)
+			.ToList();
+
+		foreach (var id in ids)
+		{
+			await _history.DeleteAsync(id).ConfigureAwait(true);
+		}
+
+		EndSelecting();
+
+		await LoadAsync().ConfigureAwait(true);
 	}
 
 	internal async Task LoadAsync()
@@ -201,11 +282,24 @@ public sealed partial class MessagesViewModel : ObservableObject
 		var sent = await _history.SentAsync().ConfigureAwait(true);
 		var deleted = await _history.DeletedAsync().ConfigureAwait(true);
 
+		// A message arriving while the member is choosing redraws the list,
+		// and the ticks have to survive that. Carried by message rather
+		// than by row, because the rows are new and a conversation's root
+		// can change underneath them.
+		var ticked = Conversations
+			.Where(row => row.IsChecked)
+			.SelectMany(row => row.Conversation.Messages)
+			.Select(entry => entry.Id)
+			.ToHashSet();
+
 		Conversations.Clear();
 
 		foreach (var conversation in Models.Conversations.Build(received, sent, deleted))
 		{
-			Conversations.Add(conversation);
+			Conversations.Add(new ConversationRow(conversation)
+			{
+				IsChecked = conversation.Messages.Any(entry => ticked.Contains(entry.Id)),
+			});
 		}
 
 		Loaded = true;

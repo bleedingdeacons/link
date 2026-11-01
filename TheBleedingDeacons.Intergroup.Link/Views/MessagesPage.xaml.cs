@@ -15,6 +15,13 @@ public partial class MessagesPage : ContentPage
 	}
 
 	/// <summary>
+	/// For the rows' TouchBehavior, which reaches the view model through
+	/// the page because a behavior has no ancestors to search. See the
+	/// comment on it in MessagesPage.xaml.
+	/// </summary>
+	public MessagesViewModel ViewModel => _viewModel;
+
+	/// <summary>
 	/// Refresh every time the page is shown.
 	///
 	/// <para>Not only on first load: the app is most often opened *because*
@@ -31,9 +38,22 @@ public partial class MessagesPage : ContentPage
 	}
 
 	/// <summary>
-	/// Back closes an open menu first. Without this the back gesture would
-	/// leave the app with the menu still drawn, and it would still be open
-	/// when the member came back.
+	/// Leaving the list stops choosing. Coming back to checkboxes ticked
+	/// before going to Settings would be a delete the member had forgotten
+	/// they started.
+	/// </summary>
+	protected override void OnDisappearing()
+	{
+		base.OnDisappearing();
+
+		_viewModel.EndSelecting();
+	}
+
+	/// <summary>
+	/// Back closes an open menu first, then stops choosing what to delete,
+	/// and only then leaves. Without this the back gesture would leave the
+	/// app with the menu still drawn, and it would still be open when the
+	/// member came back.
 	/// </summary>
 	protected override bool OnBackButtonPressed()
 	{
@@ -43,11 +63,51 @@ public partial class MessagesPage : ContentPage
 			return true;
 		}
 
+		if (_viewModel.Selecting)
+		{
+			_viewModel.EndSelecting();
+			return true;
+		}
+
 		return base.OnBackButtonPressed();
 	}
 
 	private static async void OnComposeTapped(object? sender, TappedEventArgs e) =>
 		await Shell.Current.GoToAsync("compose");
+
+	/// <summary>
+	/// Ask, then delete this phone's copy of every message in every ticked
+	/// conversation. Nothing ticked, nothing asked.
+	/// </summary>
+	/// <remarks>
+	/// The confirmation says what it does not do, as the conversation
+	/// screen's Delete does; see ConversationPage.OnDeleteClicked. Still
+	/// choosing after "Keep them", so a member who wanted to change what was
+	/// ticked has not lost the ticks.
+	/// </remarks>
+	private async void OnDeleteTapped(object? sender, TappedEventArgs e)
+	{
+		var count = _viewModel.CheckedCount;
+
+		if (count == 0)
+		{
+			return;
+		}
+
+		var confirmed = await DisplayAlertAsync(
+			count == 1 ? "Delete this conversation?" : $"Delete {count} conversations?",
+			"This deletes every message in " + (count == 1 ? "it" : "them") + " from this phone, and they will not come back. "
+				+ "It does not unsend anything — everyone else still has their copy, and the intergroup keeps its own record.",
+			"Delete",
+			count == 1 ? "Keep it" : "Keep them");
+
+		if (!confirmed)
+		{
+			return;
+		}
+
+		await _viewModel.DeleteCheckedAsync();
+	}
 
 	private void OnMoreClicked(object? sender, EventArgs e) =>
 		ShowMenu(!MoreMenu.IsVisible);
