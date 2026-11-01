@@ -50,6 +50,9 @@ Feature: This phone's own copy of the messages
     refilled it within seconds — in front of a member who had just been
     told it was cleared. What stays behind is a single number inside the
     same encrypted envelope: no message, no subject, no sender.
+    Until Link is uninstalled, which takes that number with it: a
+    reinstall fetches back everything the intergroup still holds, and
+    the confirmation says so.
 
     Scenario: The next sync does not fetch back what was cleared
       Given messages 12 and 13 are held

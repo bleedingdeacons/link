@@ -46,6 +46,10 @@ Feature: Deleting one message from this phone
     And a message to a committee this member sits on arrives back as
     well as being sent, under the same id, so a copy can turn up after
     the member has deleted theirs.
+    Until Link is uninstalled. What is left of a deleted message lives in
+    the same file as the messages, the server is never told, and nothing
+    is backed up, so a reinstall fetches back everything the intergroup
+    still holds. The confirmation says so.
 
     Scenario: The next sync does not fetch back the newest message deleted
       Given messages 12 and 13 are held
