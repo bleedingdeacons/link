@@ -98,3 +98,25 @@ Feature: Deleting one message from this phone
       And message 21 is deleted
       And the app is killed and opened again
       Then conversation 20 holds replies 22
+
+  Rule: Deleting a conversation from the list takes every message in it
+
+    A long press on the list puts a checkbox beside every conversation
+    and turns the compose button into Delete; back puts it all away
+    again. Delete is the same delete as above, once for each message in
+    each ticked conversation, so everything above holds for it.
+
+    Scenario: The other conversations are left alone
+      Given message 12 is held
+      And this member sent message 20 to Jo B
+      And message 21, answering 20, arrives by push
+      When conversation 20 is deleted from the list
+      Then the conversations read 12
+
+    Scenario: An answer arriving afterwards starts a conversation of its own
+      Given this member sent message 20 to Jo B
+      And message 21, answering 20, arrives by push
+      When conversation 20 is deleted from the list
+      And message 22, answering 21, arrives by push
+      Then the conversations read 22
+      And conversation 22 has no replies
