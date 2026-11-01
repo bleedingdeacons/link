@@ -46,6 +46,24 @@ public sealed record Conversation
 		_ => Join(Root.Counterpart, string.Create(CultureInfo.CurrentCulture, $"{Replies.Count} replies")),
 	};
 
+	/// <summary>
+	/// The letter in the row's avatar on Android: the first letter of
+	/// whoever is on the other end, as Material's lists draw it. Taken from
+	/// the person rather than from "To Jo B", so a conversation this member
+	/// started shows J rather than T. A question mark when there is nobody
+	/// to name, which is better than an empty circle.
+	/// </summary>
+	public string Initial
+	{
+		get
+		{
+			var who = Root.IsSent ? Root.To : Root.Sender;
+			var first = who.FirstOrDefault(char.IsLetterOrDigit);
+
+			return first == default ? "?" : char.ToUpper(first, CultureInfo.CurrentCulture).ToString();
+		}
+	}
+
 	private static string Join(string who, string replies) =>
 		who.Length > 0 ? who + " · " + replies : replies;
 }
