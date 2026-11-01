@@ -1,3 +1,5 @@
+using System.Windows.Input;
+using CommunityToolkit.Maui.Core;
 using TheBleedingDeacons.Intergroup.Link.ViewModels;
 
 namespace TheBleedingDeacons.Intergroup.Link.Views;
@@ -13,13 +15,6 @@ public partial class MessagesPage : ContentPage
 		_viewModel = viewModel;
 		BindingContext = viewModel;
 	}
-
-	/// <summary>
-	/// For the rows' TouchBehavior, which reaches the view model through
-	/// the page because a behavior has no ancestors to search. See the
-	/// comment on it in MessagesPage.xaml.
-	/// </summary>
-	public MessagesViewModel ViewModel => _viewModel;
 
 	/// <summary>
 	/// Refresh every time the page is shown.
@@ -74,6 +69,37 @@ public partial class MessagesPage : ContentPage
 
 	private static async void OnComposeTapped(object? sender, TappedEventArgs e) =>
 		await Shell.Current.GoToAsync("compose");
+
+	/// <summary>
+	/// A tap on a row: open it, or tick it while choosing. The sender is the
+	/// row's Grid, which the TouchBehavior passes as itself; see the comment
+	/// on it in MessagesPage.xaml for why this is not a command binding.
+	/// </summary>
+	private async void OnRowTapped(object? sender, TouchGestureCompletedEventArgs e)
+	{
+		if (sender is BindableObject { BindingContext: ConversationRow row })
+		{
+			await _viewModel.OpenAsync(row);
+		}
+	}
+
+	/// <summary>
+	/// The rows' LongPressCommand, which does nothing: its presence is what
+	/// makes the toolkit swallow the tap raised when the finger lifts after
+	/// a long press. The long press itself is handled by
+	/// <see cref="OnRowLongPressed"/>. See the comment on the TouchBehavior
+	/// in MessagesPage.xaml.
+	/// </summary>
+	public static ICommand SwallowsTheTapAfterALongPress { get; } = new Command(() => { });
+
+	/// <summary>A long press on a row: start choosing, with that row ticked.</summary>
+	private void OnRowLongPressed(object? sender, LongPressCompletedEventArgs e)
+	{
+		if (sender is BindableObject { BindingContext: ConversationRow row })
+		{
+			_viewModel.Select(row);
+		}
+	}
 
 	/// <summary>
 	/// Ask, then delete this phone's copy of every message in every ticked
