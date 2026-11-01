@@ -5,7 +5,6 @@
              xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.MessagesPage"
-             x:Name="Page"
              x:DataType="vm:MessagesViewModel"
              Title="Messages">
 
@@ -201,12 +200,6 @@
 						<Grid Margin="12,5" ColumnDefinitions="Auto,6,*">
 
 							<!--
-								The commands live on the page's view model, not on
-								the row, so these bindings' x:DataType has to
-								override the DataTemplate's. Without it the compiler
-								resolves OpenCommand against ConversationRow, does
-								not find it, and raises XC0045 - which is an error.
-
 								The whole row is the target, as it is in Hand: a
 								subject line is not what somebody should have to hit.
 
@@ -218,17 +211,27 @@
 								opens (or ticks, while choosing), a long press
 								starts choosing.
 
-								Reached through the page by x:Reference, not by
-								RelativeSource as the checkbox below does it: a
-								behavior is not in the visual tree, so it has no
-								ancestors to search.
+								Handled in the code-behind through the behavior's
+								events, not bound to commands. A behavior is not in
+								the visual tree, so it cannot reach the view model
+								by RelativeSource, and the way round that - binding
+								through the page by x:Reference - shipped in 1.34.0
+								and left both gestures doing nothing at all. The
+								events hand over the row itself as the sender, so
+								nothing has to be found. See MessagesPage.xaml.cs.
+
+								LongPressCommand is set, to a command that does
+								nothing, on purpose. The toolkit only swallows the
+								tap that lifting the finger after a long press
+								would otherwise raise when a LongPressCommand is
+								present; with events alone, the long press ticked
+								the row and the tap on release unticked it again.
 							-->
 							<Grid.Behaviors>
 								<toolkit:TouchBehavior
-									Command="{Binding Source={x:Reference Page}, Path=ViewModel.OpenCommand, x:DataType=views:MessagesPage}"
-									CommandParameter="{Binding .}"
-									LongPressCommand="{Binding Source={x:Reference Page}, Path=ViewModel.SelectCommand, x:DataType=views:MessagesPage}"
-									LongPressCommandParameter="{Binding .}" />
+									TouchGestureCompleted="OnRowTapped"
+									LongPressCompleted="OnRowLongPressed"
+									LongPressCommand="{x:Static views:MessagesPage.SwallowsTheTapAfterALongPress}" />
 							</Grid.Behaviors>
 
 							<!--

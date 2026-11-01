@@ -224,7 +224,6 @@ public sealed partial class MessagesViewModel : ObservableObject
 	/// it is the one the member had in mind. A long press while already
 	/// choosing ticks that row too, rather than doing nothing.
 	/// </summary>
-	[RelayCommand]
 	public void Select(ConversationRow? row)
 	{
 		if (row is null)
