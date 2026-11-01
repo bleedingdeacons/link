@@ -7,9 +7,13 @@ public partial class App : Application
 {
 	private readonly DeviceAuthService _auth;
 
-	public App(DeviceAuthService auth)
+	public App(DeviceAuthService auth, ThemeChoice theme)
 	{
 		InitializeComponent();
+
+		// Before CreateWindow builds the first page, so nothing is drawn
+		// in the empty colours the styles' dynamic resources start with.
+		theme.Apply();
 
 		_auth = auth;
 	}

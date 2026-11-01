@@ -137,8 +137,8 @@
 			        IsVisible="False"
 			        Margin="0,-8,0,0"
 			        Padding="0,4"
-			        BackgroundColor="{AppThemeBinding Light={StaticResource White}, Dark={StaticResource Gray900}}"
-			        Stroke="{AppThemeBinding Light={StaticResource Gray200}, Dark={StaticResource Gray600}}"
+			        BackgroundColor="{DynamicResource Surface}"
+			        Stroke="{DynamicResource SeparatorBrush}"
 			        StrokeThickness="1">
 				<Border.StrokeShape>
 					<RoundRectangle CornerRadius="8" />

@@ -4,21 +4,18 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
 
-    <!-- Note: For Android please see also Platforms\Android\Resources\values\colors.xml -->
+    <!--
+        Fixed colours only. The ones that change with the member's style
+        and the phone's light or dark - Primary, the page, the text - are
+        not here: they are published at runtime as dynamic resources by
+        ThemeChoice, from LinkPalette, and a page asks for them with
+        {DynamicResource Primary}. A Primary defined here as well would
+        sit under that one and be found by anything that asked for it
+        statically, which would then never change.
 
-    <!-- Primary is the splash background, so the first screen and every
-         button after it are the same blue. Was #512BD4, the .NET template
-         purple, which belonged to nothing in this app. Dark theme takes a
-         light tint of the same hue rather than the solid colour: the
-         Button style pairs PrimaryDark with PrimaryDarkText (#242424), so
-         a dark-theme button is a light fill with dark text, and dropping
-         #3977C3 in there would put near-black text on a mid blue. -->
-    <Color x:Key="Primary">#3977C3</Color>
-    <Color x:Key="PrimaryDark">#A9C8E8</Color>
-    <Color x:Key="PrimaryDarkText">#242424</Color>
-    <Color x:Key="Secondary">#DFD8F7</Color>
-    <Color x:Key="SecondaryDarkText">#9880e5</Color>
-    <Color x:Key="Tertiary">#2B0B98</Color>
+        The splash is still #3977C3, set in the project file, so a
+        member on the blue sees the same colour from launch onwards.
+    -->
 
     <Color x:Key="White">White</Color>
     <Color x:Key="Black">Black</Color>
@@ -35,9 +32,6 @@
     <Color x:Key="Gray900">#212121</Color>
     <Color x:Key="Gray950">#141414</Color>
 
-    <SolidColorBrush x:Key="PrimaryBrush" Color="{StaticResource Primary}"/>
-    <SolidColorBrush x:Key="SecondaryBrush" Color="{StaticResource Secondary}"/>
-    <SolidColorBrush x:Key="TertiaryBrush" Color="{StaticResource Tertiary}"/>
     <SolidColorBrush x:Key="WhiteBrush" Color="{StaticResource White}"/>
     <SolidColorBrush x:Key="BlackBrush" Color="{StaticResource Black}"/>
 
