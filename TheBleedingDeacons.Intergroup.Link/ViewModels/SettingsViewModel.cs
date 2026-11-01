@@ -271,7 +271,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var confirmed = await page.DisplayAlertAsync(
 			"Clear messages on this phone?",
-			"This deletes the copies held on this handset, and they will not come back. It does not unsend anything — "
+			"This deletes the copies held on this handset. They will not come back unless Link is uninstalled and installed again. "
+				+ "It does not unsend anything — "
 				+ "everyone else still has theirs, and the intergroup keeps its own record.",
 			"Clear",
 			"Keep them").ConfigureAwait(true);

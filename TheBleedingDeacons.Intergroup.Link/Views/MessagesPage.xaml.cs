@@ -96,7 +96,8 @@ public partial class MessagesPage : ContentPage
 
 		var confirmed = await DisplayAlertAsync(
 			count == 1 ? "Delete this conversation?" : $"Delete {count} conversations?",
-			"This deletes every message in " + (count == 1 ? "it" : "them") + " from this phone, and they will not come back. "
+			"This deletes every message in " + (count == 1 ? "it" : "them") + " from this phone. "
+				+ "They will not come back unless Link is uninstalled and installed again. "
 				+ "It does not unsend anything — everyone else still has their copy, and the intergroup keeps its own record.",
 			"Delete",
 			count == 1 ? "Keep it" : "Keep them");

@@ -65,7 +65,8 @@ public partial class ConversationPage : ContentPage
 
 		var confirmed = await DisplayAlertAsync(
 			"Delete this message?",
-			"This deletes it from this phone, and it will not come back. It does not unsend anything — "
+			"This deletes it from this phone. It will not come back unless Link is uninstalled and installed again. "
+				+ "It does not unsend anything — "
 				+ "everyone else still has their copy, and the intergroup keeps its own record.",
 			"Delete",
 			"Keep it");
