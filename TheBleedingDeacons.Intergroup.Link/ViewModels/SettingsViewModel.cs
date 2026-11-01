@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly IArrivalSound _sound;
 	private readonly IRecipientListing _listing;
 	private readonly ILoggingSource _config;
+	private readonly IThemeChoice _theme;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -31,7 +32,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		INotificationPermission notifications,
 		IArrivalSound sound,
 		IRecipientListing listing,
-		ILoggingSource config)
+		ILoggingSource config,
+		IThemeChoice theme)
 	{
 		_auth = auth;
 		_sessions = sessions;
@@ -43,6 +45,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_listing = listing;
 		_onlyRegistered = listing.OnlyRegistered;
 		_config = config;
+		_theme = theme;
+		_style = theme.Style;
 
 		// The recovery is hidden until there is something to recover
 		// from. It asks a member to sign in again, which is a great deal
@@ -129,6 +133,17 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private bool _onlyRegistered;
 
 	partial void OnOnlyRegisteredChanged(bool value) => _listing.OnlyRegistered = value;
+
+	/// <summary>
+	/// Which of the two styles the app is drawn in. Read once and written
+	/// straight through, as <see cref="SoundOn"/> is; writing it repaints
+	/// this page and everything under it there and then. See
+	/// <see cref="IThemeChoice"/>.
+	/// </summary>
+	[ObservableProperty]
+	private LinkStyle _style;
+
+	partial void OnStyleChanged(LinkStyle value) => _theme.Style = value;
 
 	[ObservableProperty]
 	private string _memberName = string.Empty;

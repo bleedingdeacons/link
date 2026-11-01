@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:models="clr-namespace:TheBleedingDeacons.Intergroup.Link.Models;assembly=TheBleedingDeacons.Intergroup.Link.Core"
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.SettingsPage"
              x:DataType="vm:SettingsViewModel"
@@ -82,6 +83,31 @@
 				        IsToggled="{Binding OnlyRegistered}"
 				        VerticalOptions="Center" />
 			</Grid>
+
+			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
+
+			<!--
+				The look of the app. Two styles, each with a light and a dark
+				version - which of those shows is the phone's own setting -
+				and each drawn in the platform's own manner, so this is the
+				same choice on an iPhone and on Android and looks native on
+				both. Changing it repaints this page straight away; that is
+				the preview.
+
+				Radio buttons rather than a picker: there are two, and both
+				names should be readable without opening anything.
+			-->
+			<Label Text="Style" FontSize="13" Opacity="0.6" />
+			<VerticalStackLayout RadioButtonGroup.GroupName="style"
+			                     RadioButtonGroup.SelectedValue="{Binding Style}"
+			                     Spacing="0">
+				<RadioButton Content="Link blue"
+				             FontSize="15"
+				             Value="{x:Static models:LinkStyle.LinkBlue}" />
+				<RadioButton Content="Intergroup green"
+				             FontSize="15"
+				             Value="{x:Static models:LinkStyle.IntergroupGreen}" />
+			</VerticalStackLayout>
 
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 

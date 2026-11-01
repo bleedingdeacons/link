@@ -185,6 +185,11 @@ public static class MauiProgram
 				: NoLoggingSource.Instance);
 		builder.Services.AddSingleton<RemoteLogging>();
 
+		// One instance, as the concrete type for App to apply at startup and
+		// as the interface for Settings to change.
+		builder.Services.AddSingleton<ThemeChoice>();
+		builder.Services.AddSingleton<IThemeChoice>(sp => sp.GetRequiredService<ThemeChoice>());
+
 		builder.Services.AddSingleton<SignInViewModel>();
 		builder.Services.AddSingleton<MessagesViewModel>();
 		// Transient, unlike the others: one instance per conversation

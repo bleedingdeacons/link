@@ -18,10 +18,11 @@ namespace TheBleedingDeacons.Intergroup.Link.Views;
 /// not something to find out from a member's screenshot. The compose
 /// button's paper plane is a Path for the same reason.</para>
 ///
-/// <para><b>Blue is the unread strip's blue</b>, on purpose: in both lists
-/// that colour means "this is about reading". Grey is the strip's grey
-/// after reading. A member who cannot tell the two apart still has the
-/// count of ticks, and the opened message says it in words.</para>
+/// <para><b>Blue is the unread strip's colour</b> - Primary, so green on
+/// the green style - on purpose: in both lists that colour means "this is
+/// about reading". Grey is the quiet text colour. A member who cannot tell
+/// the two apart still has the count of ticks, and the opened message says
+/// it in words.</para>
 /// </summary>
 public sealed class ReceiptTicks : ContentView
 {
@@ -80,12 +81,11 @@ public sealed class ReceiptTicks : ContentView
 
 		var read = State == ReceiptState.Read;
 
+		// Dynamic, so the ticks repaint with the rest of the screen when the
+		// style or the phone's light and dark changes. See ThemeChoice.
 		foreach (var tick in new[] { _first, _second })
 		{
-			tick.SetAppTheme<Brush>(
-				Shape.StrokeProperty,
-				new SolidColorBrush(Colour(read ? "Primary" : "Gray500", read ? Color.FromArgb("#3977C3") : Color.FromArgb("#6E6E6E"))),
-				new SolidColorBrush(Colour(read ? "PrimaryDark" : "Gray400", read ? Color.FromArgb("#A9C8E8") : Color.FromArgb("#919191"))));
+			tick.SetDynamicResource(Shape.StrokeProperty, read ? "PrimaryBrush" : "TextSecondaryBrush");
 		}
 
 		// Said to a screen reader in words, since a shape says nothing.
@@ -96,14 +96,4 @@ public sealed class ReceiptTicks : ContentView
 			_ => "Sent",
 		});
 	}
-
-	/// <summary>
-	/// A colour from the app's own palette, so the ticks follow it if it
-	/// changes. The fallback is only for a control built outside the app,
-	/// such as a XAML previewer.
-	/// </summary>
-	private static Color Colour(string key, Color fallback) =>
-		Application.Current?.Resources.TryGetValue(key, out var value) == true && value is Color colour
-			? colour
-			: fallback;
 }
