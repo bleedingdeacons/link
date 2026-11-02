@@ -30,17 +30,21 @@ public sealed partial class MessagesViewModel : ObservableObject
 	private readonly IMessageHistory _history;
 	private readonly IUiDispatcher _dispatcher;
 	private readonly IArrivalSound _sound;
+	private readonly IPullToRefresh _pull;
 
 	public MessagesViewModel(
 		IMessageService messages,
 		IMessageHistory history,
 		IUiDispatcher dispatcher,
-		IArrivalSound sound)
+		IArrivalSound sound,
+		IPullToRefresh pull)
 	{
 		_messages = messages;
 		_history = history;
 		_dispatcher = dispatcher;
 		_sound = sound;
+		_pull = pull;
+		_canPull = pull.Enabled;
 
 		// A pushed message announces itself; see MessageReceived. The
 		// handler arrives on whichever thread the push service used, so it
@@ -101,7 +105,33 @@ public sealed partial class MessagesViewModel : ObservableObject
 	public int CheckedCount => Conversations.Count(row => row.IsChecked);
 
 	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(PullSpinning))]
 	private bool _busy;
+
+	/// <summary>
+	/// Whether the list can be pulled down to check for new messages. Read
+	/// from <see cref="IPullToRefresh"/> each time the list is shown, so
+	/// turning it on in Settings takes effect on the way back. See
+	/// <see cref="ReadPreferences"/>.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(PullSpinning))]
+	[NotifyPropertyChangedFor(nameof(CannotPull))]
+	private bool _canPull;
+
+	/// <summary>The opposite, for the empty list's wording to bind to, as <see cref="Browsing"/> is.</summary>
+	public bool CannotPull => !CanPull;
+
+	/// <summary>
+	/// The pull's spinner. Only while the pull is on: with it off, the
+	/// check made each time the list is shown happens without one, rather
+	/// than a spinner dropping from the top of a list that cannot be
+	/// pulled.
+	/// </summary>
+	public bool PullSpinning => CanPull && Busy;
+
+	/// <summary>Pick up anything changed in Settings since the list was last shown.</summary>
+	public void ReadPreferences() => CanPull = _pull.Enabled;
 
 	[ObservableProperty]
 	[NotifyPropertyChangedFor(nameof(IsEmpty))]
