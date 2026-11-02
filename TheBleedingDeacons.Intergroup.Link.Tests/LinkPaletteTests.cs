@@ -52,6 +52,8 @@ public class LinkPaletteTests
 		AtLeast(4.5, p.TextPrimary, p.PageBackground);
 		AtLeast(4.5, p.TextPrimary, p.Surface);
 		AtLeast(4.5, p.TextSecondary, p.PageBackground);
+		AtLeast(4.5, p.TextPrimary, p.Row);
+		AtLeast(4.5, p.TextSecondary, p.Row);
 	}
 
 	[Theory]
@@ -71,8 +73,10 @@ public class LinkPaletteTests
 		var p = LinkPalette.For(style, apple, dark);
 
 		// Quiet buttons set their label in Primary straight on the page,
-		// so this is text, not just a mark.
+		// so this is text, not just a mark. An unread row's time is set in
+		// it too.
 		AtLeast(4.5, p.Primary, p.PageBackground);
+		AtLeast(4.5, p.Primary, p.Row);
 	}
 
 	[Fact]

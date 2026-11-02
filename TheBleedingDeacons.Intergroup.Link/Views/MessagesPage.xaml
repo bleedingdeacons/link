@@ -31,20 +31,21 @@
 	<Grid RowDefinitions="Auto,Auto,Auto,*">
 
 		<!--
-			Hand's status-line proportions: 18 bold, and the buttons as
-			small as they can be while still being hit reliably. The
-			shared style's 14,10 padding is for a button that owns its
-			row; these sit beside a title.
+			The title in each platform's own manner: iOS's large bold
+			title, Material's top app bar title at 22 and regular weight.
+			The buttons stay as small as they can be while still being hit
+			reliably. The shared style's 14,10 padding is for a button that
+			owns its row; these sit beside a title.
 		-->
 		<Grid x:Name="Header"
 		      Grid.Row="0"
 		      ColumnDefinitions="*,Auto"
-		      Padding="12,14"
+		      Padding="{OnPlatform Default='16,14,12,14', iOS='16,14,12,8'}"
 		      ColumnSpacing="6">
 			<Label Grid.Column="0"
 			       Text="Messages"
-			       FontSize="18"
-			       FontAttributes="Bold"
+			       FontSize="{OnPlatform Default=22, iOS=34}"
+			       FontAttributes="{OnPlatform Default=None, iOS=Bold}"
 			       VerticalOptions="Center" />
 
 			<!--
@@ -179,15 +180,24 @@
 				<CollectionView.ItemTemplate>
 					<DataTemplate x:DataType="vm:ConversationRow">
 						<!--
-							One row per conversation, in Hand's history-row
-							shape: a strip down the side and the text beside it,
-							so a list reads as a shape before it reads as words.
+							One row per conversation, laid out per platform as
+							the style mockups drew them.
 
-							The strip carries unread - blue while anything in
-							the conversation is unopened, grey after - and the
-							subject is bold for the same reason. Weight as well
-							as colour: weight survives sunlight and a member who
-							cannot tell the two colours apart.
+							Android, Material's list: a letter avatar in the
+							soft primary container, then who, the subject, and a
+							line of the newest message. Full width, with a
+							hairline under each row.
+
+							iPhone, a grouped list: rows on the Row colour, inset
+							from the grouped grey page, with a dot for unread
+							where Android has the avatar.
+
+							Unread is said in weight as well as colour - the
+							name goes bold and the time takes Primary - because
+							weight survives sunlight and a member who cannot
+							tell the colours apart. It used to be a strip down
+							the side, Hand's history row, which neither
+							platform's own lists draw.
 
 							The subject is the first message's, which is what
 							the conversation is about. The time is the newest
@@ -197,7 +207,10 @@
 							landed?", and under somebody else's answer they
 							would answer nothing.
 						-->
-						<Grid Margin="12,5" ColumnDefinitions="Auto,6,*">
+						<Grid Margin="{OnPlatform Default='0', iOS='16,0'}"
+						      BackgroundColor="{DynamicResource Row}"
+						      ColumnDefinitions="Auto,Auto,*"
+						      RowDefinitions="Auto,Auto">
 
 							<!--
 								The whole row is the target, as it is in Hand: a
@@ -247,16 +260,22 @@
 							          IsVisible="{Binding Source={RelativeSource AncestorType={x:Type vm:MessagesViewModel}}, Path=Selecting, x:DataType=vm:MessagesViewModel}" />
 
 							<!--
-								BackgroundColor is set to Transparent on purpose. The
-								implicit BoxView style paints BackgroundColor near-black,
-								and CornerRadius rounds only Color, which is drawn on top.
-								Left unset, the square background showed through at each
-								rounded end as a dark cap.
+								iPhone: the unread dot. Transparent rather than
+								hidden once read, so the text does not shift
+								sideways as a conversation is opened.
+								BackgroundColor is Transparent as well as Color:
+								the implicit BoxView style paints the background
+								near-black, and CornerRadius rounds only Color.
 							-->
 							<BoxView Grid.Column="1"
-							         CornerRadius="3"
+							         IsVisible="{OnPlatform Default=False, iOS=True}"
+							         WidthRequest="10"
+							         HeightRequest="10"
+							         CornerRadius="5"
+							         Margin="12,19,0,0"
+							         VerticalOptions="Start"
 							         BackgroundColor="Transparent"
-							         Color="{DynamicResource Separator}">
+							         Color="Transparent">
 								<BoxView.Triggers>
 									<DataTrigger TargetType="BoxView" Binding="{Binding Conversation.HasUnread}" Value="True">
 										<Setter Property="Color" Value="{DynamicResource Primary}" />
@@ -264,12 +283,33 @@
 								</BoxView.Triggers>
 							</BoxView>
 
-							<VerticalStackLayout Grid.Column="2" Padding="12,10" Spacing="4">
+							<!-- Android: the letter avatar, Material's list leading. -->
+							<Border Grid.Column="1"
+							        IsVisible="{OnPlatform Default=True, iOS=False}"
+							        WidthRequest="40"
+							        HeightRequest="40"
+							        Margin="16,12,0,0"
+							        VerticalOptions="Start"
+							        StrokeThickness="0"
+							        BackgroundColor="{DynamicResource Fab}">
+								<Border.StrokeShape>
+									<RoundRectangle CornerRadius="20" />
+								</Border.StrokeShape>
+								<Label Text="{Binding Conversation.Initial}"
+								       TextColor="{DynamicResource OnFab}"
+								       FontSize="16"
+								       FontAttributes="Bold"
+								       HorizontalOptions="Center"
+								       VerticalOptions="Center" />
+							</Border>
 
+							<VerticalStackLayout Grid.Column="2" Padding="12,12,16,12" Spacing="2">
+
+								<!-- Who, and how many replies; the time on the right. -->
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
-									       Text="{Binding Conversation.Root.Subject}"
-									       FontSize="17"
+									       Text="{Binding Conversation.Summary}"
+									       FontSize="16"
 									       LineBreakMode="TailTruncation">
 										<Label.Triggers>
 											<DataTrigger TargetType="Label" Binding="{Binding Conversation.HasUnread}" Value="True">
@@ -280,16 +320,21 @@
 
 									<Label Grid.Column="1"
 									       FontSize="13"
-									       Opacity="0.6"
+									       TextColor="{DynamicResource TextSecondary}"
 									       VerticalOptions="Center"
-									       Text="{Binding Conversation.LatestLocal, StringFormat='{0:d MMM, HH:mm}'}" />
+									       Text="{Binding Conversation.LatestLocal, StringFormat='{0:d MMM, HH:mm}'}">
+										<Label.Triggers>
+											<DataTrigger TargetType="Label" Binding="{Binding Conversation.HasUnread}" Value="True">
+												<Setter Property="TextColor" Value="{DynamicResource Primary}" />
+											</DataTrigger>
+										</Label.Triggers>
+									</Label>
 								</Grid>
 
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
-									       Text="{Binding Conversation.Summary}"
-									       FontSize="13"
-									       Opacity="0.6"
+									       Text="{Binding Conversation.Root.Subject}"
+									       FontSize="15"
 									       LineBreakMode="TailTruncation" />
 
 									<views:ReceiptTicks Grid.Column="1"
@@ -297,13 +342,29 @@
 									                    IsVisible="{Binding Conversation.Latest.IsSent}" />
 								</Grid>
 
-								<!-- The newest message's words: what is new in it. -->
+								<!--
+									The newest message's words, one line and quiet:
+									the list is for choosing what to open, and the
+									conversation page has all of it.
+								-->
 								<Label Text="{Binding Conversation.Latest.Body}"
-								       FontSize="15"
-								       MaxLines="3"
+								       FontSize="14"
+								       TextColor="{DynamicResource TextSecondary}"
+								       MaxLines="1"
 								       LineBreakMode="TailTruncation" />
 
 							</VerticalStackLayout>
+
+							<!--
+								The hairline under each row, inset to where the
+								text starts, as both platforms inset theirs.
+							-->
+							<BoxView Grid.Row="1"
+							         Grid.Column="1"
+							         Grid.ColumnSpan="2"
+							         HeightRequest="1"
+							         Margin="{OnPlatform Default='68,0,0,0', iOS='34,0,0,0'}"
+							         BackgroundColor="{DynamicResource Separator}" />
 						</Grid>
 					</DataTemplate>
 				</CollectionView.ItemTemplate>

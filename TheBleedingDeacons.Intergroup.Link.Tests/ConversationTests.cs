@@ -104,6 +104,30 @@ public sealed class ConversationTests
 	}
 
 	[Fact]
+	public void TheAvatarLetterIsTheSendersOnAReceivedMessage()
+	{
+		var only = Assert.Single(Conversations.Build([Received(30)], []));
+
+		Assert.Equal("D", only.Initial);
+	}
+
+	[Fact]
+	public void TheAvatarLetterIsTheRecipientsNotTheWordTo()
+	{
+		var only = Assert.Single(Conversations.Build([], [new SentMessage { Id = 31, To = "literature", Recipients = 4 }]));
+
+		Assert.Equal("L", only.Initial);
+	}
+
+	[Fact]
+	public void TheAvatarLetterIsAQuestionMarkWhenThereIsNobodyToName()
+	{
+		var only = Assert.Single(Conversations.Build([], [new SentMessage { Id = 32, To = string.Empty, Recipients = 1 }]));
+
+		Assert.Equal("?", only.Initial);
+	}
+
+	[Fact]
 	public void AForwardOfNoSubjectIsStillAForward()
 	{
 		Assert.Equal("Fwd:", Forwarding.Prefill(ConversationEntry.From(Received(12, subject: " "))).Subject);

@@ -17,6 +17,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// </summary>
 /// <param name="PageBackground">Behind everything.</param>
 /// <param name="Surface">Things that sit above the page: menus, dropdowns.</param>
+/// <param name="Row">Behind a row on the message list: the grouped card on iPhone, the page itself on Android.</param>
 /// <param name="Separator">Hairlines, outlines, and the faint fill of a disabled control.</param>
 /// <param name="TextPrimary">Body text, and the implicit divider at low opacity.</param>
 /// <param name="TextSecondary">Placeholders and quieter text.</param>
@@ -27,6 +28,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 public sealed record LinkPalette(
 	string PageBackground,
 	string Surface,
+	string Row,
 	string Separator,
 	string TextPrimary,
 	string TextSecondary,
@@ -38,9 +40,10 @@ public sealed record LinkPalette(
 	/// <summary>
 	/// The palette for a style, platform and appearance.
 	///
-	/// <para><b>Apple:</b> the system's own neutrals - white and true black
-	/// pages, its separator greys - with the style's colour as the tint and
-	/// the compose button filled with it.</para>
+	/// <para><b>Apple:</b> the system's own neutrals - the grouped grey
+	/// page with white rows on it, true black with dark grey rows, its
+	/// separator greys - with the style's colour as the tint and the
+	/// compose button filled with it.</para>
 	///
 	/// <para><b>Android:</b> Material 3 tones generated from the style's
 	/// colour, so the neutrals carry a trace of it, and the compose button
@@ -53,34 +56,40 @@ public sealed record LinkPalette(
 	/// </summary>
 	public static LinkPalette For(LinkStyle style, bool apple, bool dark) => (style, apple, dark) switch
 	{
+		// A shade deeper than the splash blue. On the grouped grey page
+		// #3977C3 is 4.1:1, and the Quiet buttons set their words in it.
 		(LinkStyle.LinkBlue, true, false) => new(
-			PageBackground: "#FFFFFF",
+			PageBackground: "#F2F2F7",
 			Surface: "#FFFFFF",
+			Row: "#FFFFFF",
 			Separator: "#C6C6C8",
 			TextPrimary: "#000000",
 			TextSecondary: "#6C6C70",
-			Primary: "#3977C3",
+			Primary: "#2F6AB0",
 			OnPrimary: "#FFFFFF",
-			Fab: "#3977C3",
+			Fab: "#2F6AB0",
 			OnFab: "#FFFFFF"),
 
-		// Primary stays the same blue in dark. It is the one tone that
-		// takes white text and still stands off true black: a lighter
-		// blue reads better as a tint and fails the button label.
+		// A light blue with dark ink on it. No blue takes white text and
+		// still reads on the dark grey rows as well as on black: the
+		// unread time is set in Primary on a row, and #3977C3 is 3.7:1
+		// there. So the fill lightens and the label darkens instead.
 		(LinkStyle.LinkBlue, true, true) => new(
 			PageBackground: "#000000",
 			Surface: "#1C1C1E",
+			Row: "#1C1C1E",
 			Separator: "#38383A",
 			TextPrimary: "#FFFFFF",
 			TextSecondary: "#98989F",
-			Primary: "#3977C3",
-			OnPrimary: "#FFFFFF",
-			Fab: "#3977C3",
-			OnFab: "#FFFFFF"),
+			Primary: "#6AA6EC",
+			OnPrimary: "#0B1F33",
+			Fab: "#6AA6EC",
+			OnFab: "#0B1F33"),
 
 		(LinkStyle.LinkBlue, false, false) => new(
 			PageBackground: "#F9F9FF",
 			Surface: "#EDEDF4",
+			Row: "#F9F9FF",
 			Separator: "#C3C6CF",
 			TextPrimary: "#191C20",
 			TextSecondary: "#43474E",
@@ -92,6 +101,7 @@ public sealed record LinkPalette(
 		(LinkStyle.LinkBlue, false, true) => new(
 			PageBackground: "#111418",
 			Surface: "#1D2024",
+			Row: "#111418",
 			Separator: "#43474E",
 			TextPrimary: "#E1E2E8",
 			TextSecondary: "#C3C6CF",
@@ -101,8 +111,9 @@ public sealed record LinkPalette(
 			OnFab: "#D3E4FF"),
 
 		(LinkStyle.IntergroupGreen, true, false) => new(
-			PageBackground: "#F7F4EE",
+			PageBackground: "#F4F1EA",
 			Surface: "#FFFDF8",
+			Row: "#FFFDF8",
 			Separator: "#D9D2C5",
 			TextPrimary: "#1E2420",
 			TextSecondary: "#5F645C",
@@ -114,6 +125,7 @@ public sealed record LinkPalette(
 		(LinkStyle.IntergroupGreen, true, true) => new(
 			PageBackground: "#0D1210",
 			Surface: "#18201C",
+			Row: "#18201C",
 			Separator: "#2A3530",
 			TextPrimary: "#EEF2EF",
 			TextSecondary: "#8D9A93",
@@ -125,6 +137,7 @@ public sealed record LinkPalette(
 		(LinkStyle.IntergroupGreen, false, false) => new(
 			PageBackground: "#F5FBF6",
 			Surface: "#E9EFEA",
+			Row: "#F5FBF6",
 			Separator: "#BFC9C2",
 			TextPrimary: "#171D1A",
 			TextSecondary: "#404944",
@@ -136,6 +149,7 @@ public sealed record LinkPalette(
 		(LinkStyle.IntergroupGreen, false, true) => new(
 			PageBackground: "#0F1512",
 			Surface: "#1B211E",
+			Row: "#0F1512",
 			Separator: "#404944",
 			TextPrimary: "#DEE4DF",
 			TextSecondary: "#BFC9C2",
@@ -156,6 +170,7 @@ public sealed record LinkPalette(
 	{
 		yield return new(nameof(PageBackground), PageBackground);
 		yield return new(nameof(Surface), Surface);
+		yield return new(nameof(Row), Row);
 		yield return new(nameof(Separator), Separator);
 		yield return new(nameof(TextPrimary), TextPrimary);
 		yield return new(nameof(TextSecondary), TextSecondary);
