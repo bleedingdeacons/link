@@ -103,15 +103,16 @@
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
 			<!--
-				The look of the app. Two styles, each with a light and a dark
+				The look of the app. Two styles each with a light and a dark
 				version - which of those shows is the phone's own setting -
 				and each drawn in the platform's own manner, so this is the
 				same choice on an iPhone and on Android and looks native on
-				both. Changing it repaints this page straight away; that is
-				the preview.
+				both. The third, the starship console, is a look of its own:
+				always dark, and the same on both. Changing it repaints this
+				page straight away; that is the preview.
 
-				Radio buttons rather than a picker: there are two, and both
-				names should be readable without opening anything.
+				Radio buttons rather than a picker: there are three, and all
+				the names should be readable without opening anything.
 			-->
 			<Label Text="Style" FontSize="13" Opacity="0.6" />
 			<VerticalStackLayout RadioButtonGroup.GroupName="style"
@@ -123,6 +124,9 @@
 				<RadioButton Content="Intergroup green"
 				             FontSize="15"
 				             Value="{x:Static models:LinkStyle.IntergroupGreen}" />
+				<RadioButton Content="Starship console"
+				             FontSize="15"
+				             Value="{x:Static models:LinkStyle.StarshipConsole}" />
 			</VerticalStackLayout>
 
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />

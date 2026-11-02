@@ -53,6 +53,9 @@ public sealed record LinkPalette(
 	/// <para>Anything that is not Apple is drawn as Android. Link ships on
 	/// those two, and a Windows build used for debugging is better off
 	/// looking like the Android one than like nothing in particular.</para>
+	///
+	/// <para><b>Starship console:</b> neither. The same black palette on
+	/// every platform in either appearance.</para>
 	/// </summary>
 	public static LinkPalette For(LinkStyle style, bool apple, bool dark) => (style, apple, dark) switch
 	{
@@ -157,6 +160,23 @@ public sealed record LinkPalette(
 			OnPrimary: "#003829",
 			Fab: "#0D5040",
 			OnFab: "#B1F0D6"),
+
+		// One palette for both platforms and both appearances: the console
+		// is always black (see LinkStyles.AlwaysDark). Peach for reading,
+		// orange for what can be pressed, lilac for the compose button and
+		// the rules between things - the colours of the bars and elbows
+		// around a console's screen, with black lettering on them.
+		(LinkStyle.StarshipConsole, _, _) => new(
+			PageBackground: "#000000",
+			Surface: "#1C1424",
+			Row: "#000000",
+			Separator: "#6E5A8A",
+			TextPrimary: "#FFCC99",
+			TextSecondary: "#9999FF",
+			Primary: "#FF9900",
+			OnPrimary: "#000000",
+			Fab: "#CC99CC",
+			OnFab: "#000000"),
 
 		_ => throw new ArgumentOutOfRangeException(nameof(style), style, "No palette for this style."),
 	};

@@ -21,6 +21,11 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// <c>Shape.Fill</c> take a Brush and a dynamic resource is not
 /// converted on its way in the way a static one is.</para>
 ///
+/// <para>Two resources are not colours: <c>ButtonCornerRadius</c> and
+/// <c>BodyFontFamily</c>, from <see cref="LinkStyles"/>, so the console
+/// style's buttons can be pills and its text can be set in its own
+/// lettering.</para>
+///
 /// <para>Kept in <see cref="Preferences"/>, as <see cref="RecipientListing"/>
 /// is: it is a choice about the screen with nothing to protect.</para>
 /// </summary>
@@ -67,10 +72,25 @@ public sealed class ThemeChoice : IThemeChoice
 			app.RequestedThemeChanged += (_, _) => Apply();
 		}
 
+		var style = Style;
+
+		// A style that is always dark asks the platform for dark as well,
+		// so RequestedTheme below says so and the status bar and system
+		// sheets match the page. Any other hands the choice back to the
+		// phone. Setting it may raise RequestedThemeChanged and so run
+		// this again from inside; the second run finds nothing to change
+		// here and publishes the same palette.
+		var wanted = style.AlwaysDark() ? AppTheme.Dark : AppTheme.Unspecified;
+
+		if (app.UserAppTheme != wanted)
+		{
+			app.UserAppTheme = wanted;
+		}
+
 		var dark = app.RequestedTheme == AppTheme.Dark;
 
 		var palette = LinkPalette.For(
-			Style,
+			style,
 			apple: DeviceInfo.Platform == DevicePlatform.iOS || DeviceInfo.Platform == DevicePlatform.MacCatalyst,
 			dark: dark);
 
@@ -80,6 +100,9 @@ public sealed class ThemeChoice : IThemeChoice
 			app.Resources[role] = colour;
 			app.Resources[role + "Brush"] = new SolidColorBrush(colour);
 		}
+
+		app.Resources["ButtonCornerRadius"] = style.ButtonCornerRadius();
+		app.Resources["BodyFontFamily"] = style.BodyFontFamily();
 
 		InkTheSystemBars(dark);
 	}

@@ -80,6 +80,12 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 				fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+
+				// The starship console's lettering: tall and narrow, under
+				// the SIL Open Font License (Resources/Licences). Regular
+				// only, because bold here is FontAttributes, which Android
+				// draws from the regular face whatever else is registered.
+				fonts.AddFont("Antonio-Regular.ttf", "AntonioRegular");
 			});
 
 		// ── Logging ───────────────────────────────────────────────────

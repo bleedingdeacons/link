@@ -5,7 +5,7 @@ using Xunit;
 namespace TheBleedingDeacons.Intergroup.Link.Tests;
 
 /// <summary>
-/// The eight palettes, checked for what nobody checks by eye on every
+/// Every palette, checked for what nobody checks by eye on every
 /// change: that text can be read on what it sits on.
 ///
 /// <para>The thresholds are WCAG's. 4.5:1 for anything set as text, which
@@ -86,14 +86,48 @@ public class LinkPaletteTests
 	}
 
 	[Fact]
-	public void The_two_styles_differ_on_every_platform()
+	public void The_styles_differ_on_every_platform()
 	{
 		foreach (var apple in new[] { true, false })
 		{
-			Assert.NotEqual(
-				LinkPalette.For(LinkStyle.LinkBlue, apple, dark: false).Primary,
-				LinkPalette.For(LinkStyle.IntergroupGreen, apple, dark: false).Primary);
+			var primaries = Enum.GetValues<LinkStyle>()
+				.Select(style => LinkPalette.For(style, apple, dark: false).Primary)
+				.ToList();
+
+			Assert.Equal(primaries.Count, primaries.Distinct().Count());
 		}
+	}
+
+	[Theory]
+	[MemberData(nameof(Every))]
+	public void A_style_that_is_always_dark_is_dark_when_the_phone_is_light(LinkStyle style, bool apple, bool dark)
+	{
+		if (!style.AlwaysDark())
+		{
+			return;
+		}
+
+		// The app asks the platform for dark as well, so the status bar
+		// is inked for a dark page. A light palette under it would lose
+		// the clock.
+		Assert.Equal(LinkPalette.For(style, apple, dark: true), LinkPalette.For(style, apple, dark));
+		Assert.True(Contrast(LinkPalette.For(style, apple, dark).PageBackground, "#000000") < 1.5);
+	}
+
+	[Fact]
+	public void Only_the_console_changes_the_buttons()
+	{
+		Assert.Equal(8, LinkStyle.LinkBlue.ButtonCornerRadius());
+		Assert.Equal(8, LinkStyle.IntergroupGreen.ButtonCornerRadius());
+		Assert.Equal(22, LinkStyle.StarshipConsole.ButtonCornerRadius());
+	}
+
+	[Fact]
+	public void Only_the_console_changes_the_lettering()
+	{
+		Assert.Equal("OpenSansRegular", LinkStyle.LinkBlue.BodyFontFamily());
+		Assert.Equal("OpenSansRegular", LinkStyle.IntergroupGreen.BodyFontFamily());
+		Assert.Equal("AntonioRegular", LinkStyle.StarshipConsole.BodyFontFamily());
 	}
 
 	private static void AtLeast(double ratio, string foreground, string background)
