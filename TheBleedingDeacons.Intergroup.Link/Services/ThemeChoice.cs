@@ -67,10 +67,12 @@ public sealed class ThemeChoice : IThemeChoice
 			app.RequestedThemeChanged += (_, _) => Apply();
 		}
 
+		var dark = app.RequestedTheme == AppTheme.Dark;
+
 		var palette = LinkPalette.For(
 			Style,
 			apple: DeviceInfo.Platform == DevicePlatform.iOS || DeviceInfo.Platform == DevicePlatform.MacCatalyst,
-			dark: app.RequestedTheme == AppTheme.Dark);
+			dark: dark);
 
 		foreach (var (role, hex) in palette.Roles())
 		{
@@ -78,5 +80,36 @@ public sealed class ThemeChoice : IThemeChoice
 			app.Resources[role] = colour;
 			app.Resources[role + "Brush"] = new SolidColorBrush(colour);
 		}
+
+		InkTheSystemBars(dark);
+	}
+
+	/// <summary>
+	/// Dark icons in the status and navigation bars on a light page, light
+	/// icons on a dark one.
+	///
+	/// <para><b>Android draws the page behind the bars</b> (see
+	/// MainActivity), so the bars have no colour of their own and the icons
+	/// sit straight on the page. Left to the platform they stayed white,
+	/// and on a light page the clock and battery vanished. iOS picks the
+	/// status bar's ink from the appearance by itself, so this is
+	/// Android's alone.</para>
+	///
+	/// <para>Does nothing before there is an activity: the first
+	/// <see cref="Apply"/>, from the App constructor, runs before Android
+	/// has created one, so MainActivity calls this again once it has.</para>
+	/// </summary>
+	private static void InkTheSystemBars(bool dark)
+	{
+#if ANDROID
+		if (Platform.CurrentActivity?.Window is not { } window)
+		{
+			return;
+		}
+
+		var bars = AndroidX.Core.View.WindowCompat.GetInsetsController(window, window.DecorView);
+		bars.AppearanceLightStatusBars = !dark;
+		bars.AppearanceLightNavigationBars = !dark;
+#endif
 	}
 }

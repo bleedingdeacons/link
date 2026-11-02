@@ -23,6 +23,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly IRecipientListing _listing;
 	private readonly ILoggingSource _config;
 	private readonly IThemeChoice _theme;
+	private readonly IPullToRefresh _pull;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -33,7 +34,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		IArrivalSound sound,
 		IRecipientListing listing,
 		ILoggingSource config,
-		IThemeChoice theme)
+		IThemeChoice theme,
+		IPullToRefresh pull)
 	{
 		_auth = auth;
 		_sessions = sessions;
@@ -47,6 +49,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 		_config = config;
 		_theme = theme;
 		_style = theme.Style;
+		_pull = pull;
+		_pullToRefresh = pull.Enabled;
 
 		// The recovery is hidden until there is something to recover
 		// from. It asks a member to sign in again, which is a great deal
@@ -133,6 +137,16 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private bool _onlyRegistered;
 
 	partial void OnOnlyRegisteredChanged(bool value) => _listing.OnlyRegistered = value;
+
+	/// <summary>
+	/// Whether pulling the message list down checks for new messages. Read
+	/// once and written straight through, as <see cref="SoundOn"/> is; the
+	/// list picks it up when it is next shown. See <see cref="IPullToRefresh"/>.
+	/// </summary>
+	[ObservableProperty]
+	private bool _pullToRefresh;
+
+	partial void OnPullToRefreshChanged(bool value) => _pull.Enabled = value;
 
 	/// <summary>
 	/// Which of the two styles the app is drawn in. Read once and written
