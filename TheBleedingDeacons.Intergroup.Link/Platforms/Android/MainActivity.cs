@@ -37,6 +37,11 @@ public sealed class MainActivity : MauiAppCompatActivity
 		}
 
 		KeepContentClearOfTheSystemBars();
+
+		// Again, now there is a window: the App constructor applied the
+		// palette before this activity existed, and the status bar's ink
+		// needs one. See ThemeChoice.InkTheSystemBars.
+		IPlatformApplication.Current?.Services.GetService<Services.ThemeChoice>()?.Apply();
 	}
 
 	/// <summary>

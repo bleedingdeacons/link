@@ -84,6 +84,22 @@
 				        VerticalOptions="Center" />
 			</Grid>
 
+			<!--
+				The pull on the message list. Off by default: the list checks
+				each time it is shown and push brings messages in while it is
+				open, and the pull went off whenever somebody scrolled back to
+				the top too hard. See IPullToRefresh.
+			-->
+			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+				<Label Grid.Column="0"
+				       FontSize="13"
+				       VerticalOptions="Center"
+				       Text="Pull down the message list to check for new messages" />
+				<Switch Grid.Column="1"
+				        IsToggled="{Binding PullToRefresh}"
+				        VerticalOptions="Center" />
+			</Grid>
+
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
 			<!--

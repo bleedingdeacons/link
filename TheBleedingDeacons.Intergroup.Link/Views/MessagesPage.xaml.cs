@@ -29,6 +29,8 @@ public partial class MessagesPage : ContentPage
 	{
 		base.OnAppearing();
 
+		_viewModel.ReadPreferences();
+
 		await _viewModel.RefreshAsync();
 	}
 

@@ -138,8 +138,21 @@
 		       Padding="12,0,12,8"
 		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
 
+		<!--
+			The pull is a setting, off unless turned on. See IPullToRefresh.
+
+			IsRefreshEnabled rather than IsEnabled. IsEnabled is inherited:
+			false on the RefreshView disables the list inside it too, and
+			with it every row's tap and long press. IsRefreshEnabled turns
+			off only the pull.
+
+			The spinner is bound one way to PullSpinning, not to Busy, so the
+			check made each time the list is shown does not drop a spinner
+			down a list that cannot be pulled.
+		-->
 		<RefreshView Grid.Row="3"
-		             IsRefreshing="{Binding Busy}"
+		             IsRefreshEnabled="{Binding CanPull}"
+		             IsRefreshing="{Binding PullSpinning, Mode=OneWay}"
 		             Command="{Binding RefreshCommand}">
 
 			<CollectionView ItemsSource="{Binding Conversations}"
@@ -171,6 +184,12 @@
 						       HorizontalOptions="Center"
 						       Opacity="0.55" />
 						<Label Text="Pull down to check for new ones."
+						       IsVisible="{Binding CanPull}"
+						       FontSize="14"
+						       HorizontalTextAlignment="Center"
+						       Opacity="0.55" />
+						<Label Text="New messages appear here as they arrive."
+						       IsVisible="{Binding CannotPull}"
 						       FontSize="14"
 						       HorizontalTextAlignment="Center"
 						       Opacity="0.55" />
