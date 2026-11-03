@@ -17,8 +17,8 @@
 	<ScrollView>
 		<VerticalStackLayout Padding="20" Spacing="16">
 
-			<Label Text="Signed in as" FontSize="13" Opacity="0.6" />
-			<Label Text="{Binding MemberName}" FontSize="18" FontAttributes="Bold" />
+			<Label Text="Signed in as" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.6" />
+			<Label Text="{Binding MemberName}" FontSize="{StaticResource SectionFontSize}" FontAttributes="Bold" />
 
 			<!--
 				Whether push is available in this build and enabled on this
@@ -41,9 +41,9 @@
 				         CornerRadius="6"
 				         VerticalOptions="Center"
 				         BackgroundColor="{Binding PushIndicatorColour}" />
-				<Label Text="{Binding PushHeadline}" FontSize="13" VerticalOptions="Center" />
+				<Label Text="{Binding PushHeadline}" FontSize="{StaticResource FootnoteFontSize}" VerticalOptions="Center" />
 			</HorizontalStackLayout>
-			<Label Text="{Binding PushDetail}" FontSize="12" Opacity="0.6" />
+			<Label Text="{Binding PushDetail}" FontSize="{StaticResource CaptionFontSize}" Opacity="0.6" />
 
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
@@ -59,7 +59,7 @@
 			-->
 			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
 				<Label Grid.Column="0"
-				       FontSize="13"
+				       FontSize="{StaticResource FootnoteFontSize}"
 				       VerticalOptions="Center"
 				       Text="Play a sound when a message arrives while Link is open" />
 				<Switch Grid.Column="1"
@@ -76,7 +76,7 @@
 			-->
 			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
 				<Label Grid.Column="0"
-				       FontSize="13"
+				       FontSize="{StaticResource FootnoteFontSize}"
 				       VerticalOptions="Center"
 				       Text="Only list members who have Link when writing a message" />
 				<Switch Grid.Column="1"
@@ -92,7 +92,7 @@
 			-->
 			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
 				<Label Grid.Column="0"
-				       FontSize="13"
+				       FontSize="{StaticResource FootnoteFontSize}"
 				       VerticalOptions="Center"
 				       Text="Pull down the message list to check for new messages" />
 				<Switch Grid.Column="1"
@@ -114,25 +114,25 @@
 				Radio buttons rather than a picker: there are three, and all
 				the names should be readable without opening anything.
 			-->
-			<Label Text="Style" FontSize="13" Opacity="0.6" />
+			<Label Text="Style" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.6" />
 			<VerticalStackLayout RadioButtonGroup.GroupName="style"
 			                     RadioButtonGroup.SelectedValue="{Binding Style}"
 			                     Spacing="0">
 				<RadioButton Content="Link blue"
-				             FontSize="15"
+				             FontSize="{StaticResource SecondaryFontSize}"
 				             Value="{x:Static models:LinkStyle.LinkBlue}" />
 				<RadioButton Content="Intergroup green"
-				             FontSize="15"
+				             FontSize="{StaticResource SecondaryFontSize}"
 				             Value="{x:Static models:LinkStyle.IntergroupGreen}" />
 				<RadioButton Content="Starship console"
-				             FontSize="15"
+				             FontSize="{StaticResource SecondaryFontSize}"
 				             Value="{x:Static models:LinkStyle.StarshipConsole}" />
 			</VerticalStackLayout>
 
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
-			<Label Text="Messages on this phone" FontSize="13" Opacity="0.6" />
-			<Label FontSize="15"
+			<Label Text="Messages on this phone" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.6" />
+			<Label FontSize="{StaticResource SecondaryFontSize}"
 			       Text="{Binding Held, StringFormat='{0} kept on this handset, encrypted.'}" />
 			<!--
 				The wording matters. "Clear history" reads to most people as
@@ -145,9 +145,9 @@
 			-->
 			<Button Text="Clear messages on this phone"
 			        HeightRequest="48"
-			        FontSize="14"
+			        FontSize="{StaticResource SecondaryFontSize}"
 			        Command="{Binding ClearHistoryCommand}" />
-			<Label FontSize="12"
+			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       Text="Removes only this phone's copies. Nothing is unsent, and the intergroup keeps its own record." />
 
@@ -171,17 +171,17 @@
 					<VerticalStackLayout Spacing="6">
 						<Label Text="Messages will not open?"
 						       TextColor="#663C00"
-						       FontSize="14"
+						       FontSize="{StaticResource SecondaryFontSize}"
 						       FontAttributes="Bold" />
 						<Label TextColor="#663C00"
-						       FontSize="13"
+						       FontSize="{StaticResource FootnoteFontSize}"
 						       Text="This usually happens after the screen lock changes, or after a phone is restored or transferred. Getting a new key fixes it, and your messages arrive again on the next sync." />
 					</VerticalStackLayout>
 				</Border>
 
 				<Button Text="Fix messages that will not open"
 				        HeightRequest="48"
-				        FontSize="14"
+				        FontSize="{StaticResource SecondaryFontSize}"
 				        IsVisible="{Binding NotReplacingKey}"
 				        Command="{Binding StartKeyReplacementCommand}" />
 
@@ -193,7 +193,7 @@
 					every message it still holds re-sealed to it.
 				-->
 				<VerticalStackLayout Spacing="12" IsVisible="{Binding ReplacingKey}">
-					<Label FontSize="13"
+					<Label FontSize="{StaticResource FootnoteFontSize}"
 					       Opacity="0.7"
 					       Text="Sign in again to prove this phone is yours." />
 
@@ -211,7 +211,7 @@
 					        Command="{Binding ReplaceKeyWithAppleCommand}" />
 
 					<Label Text="or with a password"
-					       FontSize="13"
+					       FontSize="{StaticResource FootnoteFontSize}"
 					       Opacity="0.6"
 					       HorizontalOptions="Center"
 					       Margin="0,8,0,0" />
@@ -238,7 +238,7 @@
 
 			<Label Text="{Binding Notice}"
 			       IsVisible="{Binding HasNotice}"
-			       FontSize="13"
+			       FontSize="{StaticResource FootnoteFontSize}"
 			       Opacity="0.8" />
 
 			<!--
@@ -250,10 +250,10 @@
 			        BackgroundColor="{StaticResource Warning}"
 			        TextColor="White"
 			        HeightRequest="48"
-			        FontSize="14"
+			        FontSize="{StaticResource SecondaryFontSize}"
 			        Command="{Binding SignOutCommand}" />
 
-			<Label FontSize="12"
+			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       TextColor="#663C00"
 			       Text="This phone stops receiving messages, and the messages held on it are deleted." />
@@ -265,7 +265,7 @@
 			-->
 			<Label Text="{Binding Build}"
 			       Margin="0,16,0,0"
-			       FontSize="11"
+			       FontSize="{StaticResource SmallestFontSize}"
 			       Opacity="0.5"
 			       HorizontalOptions="Center" />
 
@@ -275,7 +275,7 @@
 				arrives on the next start, so the question is when that was.
 			-->
 			<Label Text="{Binding ConfigRetrieved}"
-			       FontSize="11"
+			       FontSize="{StaticResource SmallestFontSize}"
 			       Opacity="0.5"
 			       HorizontalOptions="Center" />
 

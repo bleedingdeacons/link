@@ -17,7 +17,7 @@
 		<VerticalStackLayout Padding="16" Spacing="14">
 
 			<Label IsVisible="{Binding IsReply}"
-			       FontSize="13"
+			       FontSize="{StaticResource FootnoteFontSize}"
 			       Opacity="0.6"
 			       Text="{Binding ReplyToSubject, StringFormat='Replying to: {0}'}" />
 
@@ -26,7 +26,7 @@
 				is being passed on and nothing about answering it.
 			-->
 			<Label IsVisible="{Binding IsForward}"
-			       FontSize="13"
+			       FontSize="{StaticResource FootnoteFontSize}"
 			       Opacity="0.6"
 			       Text="{Binding ForwardingSubject, StringFormat='Forwarding: {0}'}" />
 
@@ -76,7 +76,7 @@
 								<TapGestureRecognizer Tapped="OnDropTapped" />
 							</Border.GestureRecognizers>
 							<HorizontalStackLayout Spacing="6" VerticalOptions="Center">
-								<Label Text="{Binding Name}" FontSize="14" VerticalOptions="Center" />
+								<Label Text="{Binding Name}" FontSize="{StaticResource SecondaryFontSize}" VerticalOptions="Center" />
 								<!--
 									A Label rather than a Button, and that is not a
 									style preference. A transparent Button keeps the
@@ -168,7 +168,7 @@
 				                MaximumHeightRequest="190">
 					<CollectionView.EmptyView>
 						<Label Padding="12,10"
-						       FontSize="13"
+						       FontSize="{StaticResource FootnoteFontSize}"
 						       Opacity="0.6"
 						       Text="Nobody matches. If nobody shows at all, pull the message list down to reconnect." />
 					</CollectionView.EmptyView>
@@ -198,14 +198,14 @@
 										<Setter Property="Opacity" Value="0.45" />
 									</DataTrigger>
 								</VerticalStackLayout.Triggers>
-								<Label Text="{Binding Name}" FontSize="16" />
+								<Label Text="{Binding Name}" FontSize="{StaticResource BodyFontSize}" />
 								<Label Text="{Binding Detail}"
 								       IsVisible="{Binding HasDetail}"
-								       FontSize="12"
+								       FontSize="{StaticResource CaptionFontSize}"
 								       Opacity="0.6" />
 								<Label Text="No device registered, so they can't be sent to"
 								       IsVisible="{Binding HasNoDevice}"
-								       FontSize="12"
+								       FontSize="{StaticResource CaptionFontSize}"
 								       FontAttributes="Italic" />
 							</VerticalStackLayout>
 						</DataTemplate>
@@ -213,7 +213,7 @@
 				</CollectionView>
 			</Border>
 
-			<Label FontSize="12"
+			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       Text="A committee includes its sub-committees." />
 
@@ -227,14 +227,14 @@
 			        AutoSize="TextChanges"
 			        HeightRequest="160" />
 
-			<Label FontSize="12"
+			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       Text="Messages are encrypted before they leave your phone and are not shown in notifications." />
 
 			<Label Text="{Binding Error}"
 			       IsVisible="{Binding HasError}"
 			       TextColor="{StaticResource Warning}"
-			       FontSize="14" />
+			       FontSize="{StaticResource SecondaryFontSize}" />
 
 			<ActivityIndicator IsRunning="{Binding Busy}" IsVisible="{Binding Busy}" />
 
