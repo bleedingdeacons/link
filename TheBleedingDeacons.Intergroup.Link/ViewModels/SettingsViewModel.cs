@@ -149,7 +149,7 @@ public sealed partial class SettingsViewModel : ObservableObject
 	partial void OnPullToRefreshChanged(bool value) => _pull.Enabled = value;
 
 	/// <summary>
-	/// Which of the two styles the app is drawn in. Read once and written
+	/// Which of the styles the app is drawn in. Read once and written
 	/// straight through, as <see cref="SoundOn"/> is; writing it repaints
 	/// this page and everything under it there and then. See
 	/// <see cref="IThemeChoice"/>.

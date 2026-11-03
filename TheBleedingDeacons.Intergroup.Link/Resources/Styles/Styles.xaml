@@ -91,6 +91,22 @@
         <On Platform="iOS" Value="11" />
     </OnPlatform>
 
+    <!--
+        The corner of a button drawn by the two button styles below. A
+        DynamicResource like the colours, because a style can change it:
+        ThemeChoice republishes it from LinkStyles.ButtonCornerRadius, and
+        the starship console's buttons are pills. This is only the value
+        before the first publish.
+    -->
+    <x:Int32 x:Key="ButtonCornerRadius">8</x:Int32>
+
+    <!--
+        The font every text control below is set in, published the same
+        way from LinkStyles.BodyFontFamily: Open Sans, or Antonio for the
+        starship console.
+    -->
+    <x:String x:Key="BodyFontFamily">OpenSansRegular</x:String>
+
 
     <Style TargetType="ActivityIndicator">
         <Setter Property="Color" Value="{DynamicResource Primary}" />
@@ -114,10 +130,10 @@
     <Style TargetType="Button">
         <Setter Property="TextColor" Value="{DynamicResource OnPrimary}" />
         <Setter Property="BackgroundColor" Value="{DynamicResource Primary}" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}"/>
         <Setter Property="BorderWidth" Value="0"/>
-        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource ButtonCornerRadius}"/>
         <Setter Property="Padding" Value="14,10"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -158,7 +174,7 @@
     <Style TargetType="DatePicker">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -191,7 +207,7 @@
     <Style TargetType="Editor">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="PlaceholderColor" Value="{DynamicResource TextSecondary}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -213,7 +229,7 @@
     <Style TargetType="Entry">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="PlaceholderColor" Value="{DynamicResource TextSecondary}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
@@ -257,7 +273,7 @@
     <Style TargetType="Label">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}" />
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -291,7 +307,7 @@
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="TitleColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -329,7 +345,7 @@
     <Style TargetType="RadioButton">
         <Setter Property="BackgroundColor" Value="Transparent"/>
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -356,7 +372,7 @@
         <Setter Property="PlaceholderColor" Value="{DynamicResource TextSecondary}" />
         <Setter Property="CancelButtonColor" Value="{DynamicResource TextSecondary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}" />
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -379,7 +395,7 @@
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="PlaceholderColor" Value="{DynamicResource TextSecondary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}" />
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}" />
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -459,7 +475,7 @@
     <Style TargetType="TimePicker">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="Transparent"/>
-        <Setter Property="FontFamily" Value="OpenSansRegular"/>
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}"/>
         <Setter Property="FontSize" Value="{StaticResource BodyFontSize}"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="44"/>
@@ -561,9 +577,9 @@
         <Setter Property="TextColor" Value="{DynamicResource Primary}" />
         <Setter Property="BorderColor" Value="{DynamicResource Separator}" />
         <Setter Property="BorderWidth" Value="1" />
-        <Setter Property="FontFamily" Value="OpenSansRegular" />
+        <Setter Property="FontFamily" Value="{DynamicResource BodyFontFamily}" />
         <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="{DynamicResource ButtonCornerRadius}" />
         <Setter Property="Padding" Value="14,10" />
         <Setter Property="HeightRequest" Value="44" />
     </Style>
