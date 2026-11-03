@@ -17,22 +17,79 @@
     -->
 
     <!--
-        The app's body text size, in one place.
+        The type scale: every text size in the app, named for what it is,
+        and taken from each platform's own scale rather than invented.
 
-        <b>16, and it is 16sp on Android.</b> MAUI sizes text in
-        device-independent units and leaves FontAutoScalingEnabled on by
-        default for every text control, so this follows the font scale the
-        member has set in their own Android settings rather than fighting
-        it. A phone set to "large" gets large text.
+        <b>iPhone uses Apple's text styles</b> at their default (Large)
+        sizes: Large Title 34, Title 1 28, Title 3 20, Headline and Body
+        17, Subheadline 15, Footnote 13, Caption 1 12, Caption 2 11.
+        <b>Android uses Material 3's</b>: Headline Large 32, Headline
+        Small 24, Title Large 22, Title Medium and Body Large 16, Body
+        Medium 14, Body Small 12, Label Small 11.
 
-        The template shipped 14 everywhere, which is Material's caption
-        size rather than its body size, and it reads small on a handset
-        held at arm's length, which is how a good deal of this is read.
+        <b>These are the sizes at the phone's default text size, not
+        fixed sizes.</b> MAUI leaves FontAutoScalingEnabled on for every
+        text control, and nothing in Link turns it off. On Android the
+        number is in sp, so it follows Settings > Display > Font size; on
+        iPhone MAUI scales it through UIFontMetrics, so it follows Dynamic
+        Type, including the larger accessibility sizes. A phone set to
+        large text gets large text, in the same proportions as the
+        platform's own apps.
 
-        Named rather than repeated: it was eleven literal 14s across this
-        file, and eleven places for the next change to miss one.
+        The pages used to carry their own literal sizes - eleven of them,
+        13 on its own twenty-three times - which matched neither platform
+        and drifted apart page by page. A page now asks for a role.
+
+        Glyphs used as icons (the ⋮ menu, a recipient's ×) keep literal
+        sizes: they are drawings, sized to their touch targets, not text.
     -->
-    <x:Double x:Key="BodyFontSize">16</x:Double>
+    <OnPlatform x:Key="DisplayFontSize" x:TypeArguments="x:Double" Default="32">
+        <On Platform="iOS" Value="34" />
+    </OnPlatform>
+
+    <!-- A page's own title: iOS's Large Title, Material's top app bar. -->
+    <OnPlatform x:Key="TitleFontSize" x:TypeArguments="x:Double" Default="22">
+        <On Platform="iOS" Value="34" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="HeadlineFontSize" x:TypeArguments="x:Double" Default="24">
+        <On Platform="iOS" Value="28" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="SectionFontSize" x:TypeArguments="x:Double" Default="22">
+        <On Platform="iOS" Value="20" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="SubheadFontSize" x:TypeArguments="x:Double" Default="16">
+        <On Platform="iOS" Value="17" />
+    </OnPlatform>
+
+    <!-- Body text, and the size every implicit style below starts from. -->
+    <OnPlatform x:Key="BodyFontSize" x:TypeArguments="x:Double" Default="16">
+        <On Platform="iOS" Value="17" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="SecondaryFontSize" x:TypeArguments="x:Double" Default="14">
+        <On Platform="iOS" Value="15" />
+    </OnPlatform>
+
+    <!--
+        Supporting text: labels over a setting, the line under a switch.
+        Body Medium on Android rather than Body Small, which is what
+        Material sets supporting text in, and 12 is too small for text a
+        member has to read rather than glance at.
+    -->
+    <OnPlatform x:Key="FootnoteFontSize" x:TypeArguments="x:Double" Default="14">
+        <On Platform="iOS" Value="13" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="CaptionFontSize" x:TypeArguments="x:Double" Default="12">
+        <On Platform="iOS" Value="12" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="SmallestFontSize" x:TypeArguments="x:Double" Default="11">
+        <On Platform="iOS" Value="11" />
+    </OnPlatform>
 
 
     <Style TargetType="ActivityIndicator">
@@ -218,14 +275,14 @@
 
     <Style TargetType="Label" x:Key="Headline">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
-        <Setter Property="FontSize" Value="32" />
+        <Setter Property="FontSize" Value="{StaticResource DisplayFontSize}" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
     </Style>
 
     <Style TargetType="Label" x:Key="SubHeadline">
         <Setter Property="TextColor" Value="{DynamicResource TextPrimary}" />
-        <Setter Property="FontSize" Value="24" />
+        <Setter Property="FontSize" Value="{StaticResource HeadlineFontSize}" />
         <Setter Property="HorizontalOptions" Value="Center" />
         <Setter Property="HorizontalTextAlignment" Value="Center" />
     </Style>
@@ -505,7 +562,7 @@
         <Setter Property="BorderColor" Value="{DynamicResource Separator}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansRegular" />
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="{StaticResource SecondaryFontSize}" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="14,10" />
         <Setter Property="HeightRequest" Value="44" />

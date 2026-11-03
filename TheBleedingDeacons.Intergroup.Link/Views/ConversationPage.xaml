@@ -31,7 +31,7 @@
 		-->
 		<Label IsVisible="{Binding Missing}"
 		       Padding="20"
-		       FontSize="14"
+		       FontSize="{StaticResource SecondaryFontSize}"
 		       Opacity="0.7"
 		       Text="This conversation is no longer on this phone. It may have been cleared from history, or removed by the intergroup after its retention period." />
 
@@ -56,12 +56,12 @@
 					<VerticalStackLayout Padding="20,16,20,4" Spacing="14">
 
 						<Label Text="{Binding Subject}"
-						       FontSize="24"
+						       FontSize="{StaticResource HeadlineFontSize}"
 						       FontAttributes="Bold"
 						       IsVisible="{Binding IsRoot}" />
 
 						<Label Text="{Binding Subject}"
-						       FontSize="17"
+						       FontSize="{StaticResource SubheadFontSize}"
 						       FontAttributes="Bold"
 						       IsVisible="{Binding IsReply}" />
 
@@ -71,8 +71,8 @@
 							with it.
 						-->
 						<VerticalStackLayout Spacing="2">
-							<Label Text="{Binding Entry.Counterpart}" FontSize="15" />
-							<Label Text="{Binding Sent}" FontSize="13" Opacity="0.6" />
+							<Label Text="{Binding Entry.Counterpart}" FontSize="{StaticResource SecondaryFontSize}" />
+							<Label Text="{Binding Sent}" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.6" />
 
 							<!--
 								On a sent message, the ticks and the same thing in
@@ -83,7 +83,7 @@
 							                       Margin="0,4,0,0"
 							                       IsVisible="{Binding Entry.IsSent}">
 								<views:ReceiptTicks State="{Binding Entry.Receipt}" VerticalOptions="Center" />
-								<Label Text="{Binding Entry.ReceiptSummary}" FontSize="13" Opacity="0.75" VerticalOptions="Center" />
+								<Label Text="{Binding Entry.ReceiptSummary}" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.75" VerticalOptions="Center" />
 							</HorizontalStackLayout>
 
 							<!--
@@ -94,7 +94,7 @@
 							-->
 							<Label Text="{Binding Replied}"
 							       IsVisible="{Binding HasReplied}"
-							       FontSize="13"
+							       FontSize="{StaticResource FootnoteFontSize}"
 							       Opacity="0.75"
 							       Margin="0,4,0,0" />
 						</VerticalStackLayout>
@@ -113,7 +113,7 @@
 							looks like a field somebody is meant to type in.
 						-->
 						<Label Text="{Binding Entry.Body}"
-						       FontSize="16"
+						       FontSize="{StaticResource BodyFontSize}"
 						       LineHeight="1.35" />
 
 						<!--

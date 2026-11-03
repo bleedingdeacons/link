@@ -44,7 +44,7 @@
 		      ColumnSpacing="6">
 			<Label Grid.Column="0"
 			       Text="Messages"
-			       FontSize="{OnPlatform Default=22, iOS=34}"
+			       FontSize="{StaticResource TitleFontSize}"
 			       FontAttributes="{OnPlatform Default=None, iOS=Bold}"
 			       VerticalOptions="Center" />
 
@@ -107,7 +107,7 @@
 				<RoundRectangle CornerRadius="14" />
 			</Border.StrokeShape>
 			<Label TextColor="White"
-			       FontSize="14"
+			       FontSize="{StaticResource SecondaryFontSize}"
 			       Text="Some messages could not be opened on this phone. Go to Settings and choose 'Fix messages that will not open'." />
 		</Border>
 
@@ -127,13 +127,13 @@
 				<RoundRectangle CornerRadius="14" />
 			</Border.StrokeShape>
 			<Label TextColor="White"
-			       FontSize="14"
+			       FontSize="{StaticResource SecondaryFontSize}"
 			       Text="{Binding SignedOutReason}" />
 		</Border>
 
 		<Label Grid.Row="2"
 		       IsVisible="{Binding Offline}"
-		       FontSize="13"
+		       FontSize="{StaticResource FootnoteFontSize}"
 		       Opacity="0.6"
 		       Padding="12,0,12,8"
 		       Text="Showing messages saved on this phone — the intergroup could not be reached." />
@@ -180,17 +180,17 @@
 					                     Spacing="10"
 					                     Padding="32">
 						<Label Text="No messages"
-						       FontSize="32"
+						       FontSize="{StaticResource DisplayFontSize}"
 						       HorizontalOptions="Center"
 						       Opacity="0.55" />
 						<Label Text="Pull down to check for new ones."
 						       IsVisible="{Binding CanPull}"
-						       FontSize="14"
+						       FontSize="{StaticResource SecondaryFontSize}"
 						       HorizontalTextAlignment="Center"
 						       Opacity="0.55" />
 						<Label Text="New messages appear here as they arrive."
 						       IsVisible="{Binding CannotPull}"
-						       FontSize="14"
+						       FontSize="{StaticResource SecondaryFontSize}"
 						       HorizontalTextAlignment="Center"
 						       Opacity="0.55" />
 					</VerticalStackLayout>
@@ -316,7 +316,7 @@
 								</Border.StrokeShape>
 								<Label Text="{Binding Conversation.Initial}"
 								       TextColor="{DynamicResource OnFab}"
-								       FontSize="16"
+								       FontSize="{StaticResource BodyFontSize}"
 								       FontAttributes="Bold"
 								       HorizontalOptions="Center"
 								       VerticalOptions="Center" />
@@ -328,7 +328,7 @@
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
 									       Text="{Binding Conversation.Summary}"
-									       FontSize="16"
+									       FontSize="{StaticResource BodyFontSize}"
 									       LineBreakMode="TailTruncation">
 										<Label.Triggers>
 											<DataTrigger TargetType="Label" Binding="{Binding Conversation.HasUnread}" Value="True">
@@ -338,7 +338,7 @@
 									</Label>
 
 									<Label Grid.Column="1"
-									       FontSize="13"
+									       FontSize="{StaticResource FootnoteFontSize}"
 									       TextColor="{DynamicResource TextSecondary}"
 									       VerticalOptions="Center"
 									       Text="{Binding Conversation.LatestLocal, StringFormat='{0:d MMM, HH:mm}'}">
@@ -353,7 +353,7 @@
 								<Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
 									<Label Grid.Column="0"
 									       Text="{Binding Conversation.Root.Subject}"
-									       FontSize="15"
+									       FontSize="{StaticResource SecondaryFontSize}"
 									       LineBreakMode="TailTruncation" />
 
 									<views:ReceiptTicks Grid.Column="1"
@@ -367,7 +367,7 @@
 									conversation page has all of it.
 								-->
 								<Label Text="{Binding Conversation.Latest.Body}"
-								       FontSize="14"
+								       FontSize="{StaticResource SecondaryFontSize}"
 								       TextColor="{DynamicResource TextSecondary}"
 								       MaxLines="1"
 								       LineBreakMode="TailTruncation" />
@@ -543,7 +543,7 @@
 					<Grid.GestureRecognizers>
 						<TapGestureRecognizer Tapped="OnSettingsTapped" />
 					</Grid.GestureRecognizers>
-					<Label Text="Settings" FontSize="16" VerticalOptions="Center" />
+					<Label Text="Settings" FontSize="{StaticResource BodyFontSize}" VerticalOptions="Center" />
 				</Grid>
 			</VerticalStackLayout>
 		</Border>

@@ -25,12 +25,12 @@
 		<VerticalStackLayout Padding="24,40" Spacing="16">
 
 			<Label Text="Link"
-			       FontSize="34"
+			       FontSize="{StaticResource DisplayFontSize}"
 			       FontAttributes="Bold"
 			       HorizontalOptions="Center" />
 
 			<Label Text="Messages from your intergroup, and to the members and committees in it."
-			       FontSize="14"
+			       FontSize="{StaticResource SecondaryFontSize}"
 			       Opacity="0.7"
 			       HorizontalTextAlignment="Center"
 			       HorizontalOptions="Center"
@@ -49,7 +49,7 @@
 					<RoundRectangle CornerRadius="10" />
 				</Border.StrokeShape>
 				<Label TextColor="#663C00"
-				       FontSize="13"
+				       FontSize="{StaticResource FootnoteFontSize}"
 				       Text="This copy of Link has not been set up with an intergroup address. Ask whoever gave it to you for a configured build." />
 			</Border>
 
@@ -61,7 +61,7 @@
 				to discover.
 			-->
 			<Label Text="Sign in with the email address your intergroup has for you."
-			       FontSize="13"
+			       FontSize="{StaticResource FootnoteFontSize}"
 			       Opacity="0.6"
 			       HorizontalTextAlignment="Center"
 			       IsVisible="{Binding IsConfigured}" />
@@ -88,13 +88,13 @@
 
 				<Label Text="{Binding Notice}"
 				       IsVisible="{Binding HasNotice}"
-				       FontSize="14"
+				       FontSize="{StaticResource SecondaryFontSize}"
 				       HorizontalTextAlignment="Center" />
 
 				<Label Text="{Binding Error}"
 				       IsVisible="{Binding HasError}"
 				       TextColor="{StaticResource Warning}"
-				       FontSize="14"
+				       FontSize="{StaticResource SecondaryFontSize}"
 				       HorizontalTextAlignment="Center" />
 
 			</VerticalStackLayout>
@@ -153,7 +153,7 @@
 				otherwise have no way in.
 			-->
 			<Label Text="or sign in with a password"
-			       FontSize="13"
+			       FontSize="{StaticResource FootnoteFontSize}"
 			       Opacity="0.6"
 			       HorizontalOptions="Center"
 			       Margin="0,12,0,0"
@@ -195,7 +195,7 @@
 			-->
 			<VerticalStackLayout Spacing="12" IsVisible="{Binding SettingPassword}">
 
-				<Label FontSize="13"
+				<Label FontSize="{StaticResource FootnoteFontSize}"
 				       Opacity="0.7"
 				       Text="Enter your email address above, then ask for a code. It arrives by email and lasts an hour." />
 
@@ -210,7 +210,7 @@
 				       IsPassword="True"
 				       Text="{Binding NewPassword}" />
 
-				<Label FontSize="12"
+				<Label FontSize="{StaticResource CaptionFontSize}"
 				       Opacity="0.6"
 				       Text="At least 14 characters. A few random words make a strong password that is easy to remember." />
 
@@ -228,14 +228,14 @@
 			-->
 			<Label Text="{Binding Build}"
 			       Margin="0,24,0,0"
-			       FontSize="11"
+			       FontSize="{StaticResource SmallestFontSize}"
 			       Opacity="0.5"
 			       HorizontalTextAlignment="Center"
 			       HorizontalOptions="Center" />
 
 			<Label Text="{Binding Server}"
 			       IsVisible="{Binding IsConfigured}"
-			       FontSize="11"
+			       FontSize="{StaticResource SmallestFontSize}"
 			       Opacity="0.5"
 			       HorizontalTextAlignment="Center"
 			       HorizontalOptions="Center" />
