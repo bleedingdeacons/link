@@ -373,6 +373,13 @@
 		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData.Core.Ktx" Version="2.11.0.1" />
 
 		<!--
+			Fingerprint sign-in - see FingerprintReader. The AndroidX prompt
+			rather than the framework's, because it draws the same sheet from
+			API 24, this app's floor.
+		-->
+		<PackageReference Include="Xamarin.AndroidX.Biometric" Version="1.1.0.33" />
+
+		<!--
 			The Firebase project this build registers with.
 
 			<b>Conditional on its own existence, deliberately.</b> The file

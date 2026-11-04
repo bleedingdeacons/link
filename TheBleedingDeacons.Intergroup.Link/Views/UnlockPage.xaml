@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             x:Class="TheBleedingDeacons.Intergroup.Link.Views.UnlockPage"
+             x:DataType="vm:UnlockViewModel"
+             Title="Sign in">
+
+	<!--
+		The sign-in page's proportions, with one way in instead of five.
+		The fingerprint sheet is raised as the page appears, so the button
+		is for a second try after the sheet was closed. The sheet itself
+		offers the phone's screen-lock code when a finger is not taken; the
+		way out below is for a member who can give neither.
+	-->
+	<ScrollView>
+		<VerticalStackLayout Padding="24,40" Spacing="16">
+
+			<Label Text="Link"
+			       FontSize="{StaticResource DisplayFontSize}"
+			       FontAttributes="Bold"
+			       HorizontalOptions="Center" />
+
+			<Label Text="{Binding MemberName, StringFormat='Signed out as {0}.'}"
+			       FontSize="{StaticResource SecondaryFontSize}"
+			       Opacity="0.7"
+			       HorizontalTextAlignment="Center"
+			       HorizontalOptions="Center" />
+
+			<Label Text="Use your fingerprint, or your phone's screen lock, to see your messages. This phone is still on the intergroup's list, so nothing has been missed."
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.6"
+			       HorizontalTextAlignment="Center"
+			       Margin="0,0,0,12" />
+
+			<ActivityIndicator IsRunning="{Binding Busy}"
+			                   IsVisible="{Binding Busy}"
+			                   HorizontalOptions="Center" />
+
+			<Label Text="{Binding Notice}"
+			       IsVisible="{Binding HasNotice}"
+			       TextColor="{StaticResource Warning}"
+			       FontSize="{StaticResource SecondaryFontSize}"
+			       HorizontalTextAlignment="Center" />
+
+			<Button Text="Use fingerprint"
+			        HeightRequest="50"
+			        Command="{Binding UnlockCommand}" />
+
+			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
+
+			<Button Text="Sign in another way"
+			        HeightRequest="48"
+			        FontSize="{StaticResource SecondaryFontSize}"
+			        BackgroundColor="Transparent"
+			        TextColor="{StaticResource Warning}"
+			        BorderColor="{StaticResource Warning}"
+			        BorderWidth="1"
+			        Command="{Binding SignInAnotherWayCommand}" />
+
+			<Label FontSize="{StaticResource CaptionFontSize}"
+			       Opacity="0.6"
+			       HorizontalTextAlignment="Center"
+			       Text="Removes this phone from the intergroup's list and deletes the messages held on it, then shows the usual sign-in." />
+
+		</VerticalStackLayout>
+	</ScrollView>
+</ContentPage>

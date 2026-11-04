@@ -72,6 +72,10 @@ internal static class HeadlessMessages
 			// because a second JsonMessageHistory over the same file would
 			// have a write lock of its own — see that class.
 			LinkServices.History,
+			// Nor this: only a sign-out touches it, and nothing signs out
+			// from here. Both halves are stateless over Preferences, so a
+			// fresh pair agrees with the app's about everything.
+			new FingerprintSignIn(new FingerprintReader(), new FingerprintState()),
 			LinkServices.Configuration);
 
 		return auth.RegisterPushTokenAsync(token);

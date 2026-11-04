@@ -37,17 +37,37 @@ public partial class AppShell : Shell
 	}
 
 	/// <summary>
-	/// Show the message list or the sign-in page, depending on whether
-	/// this handset is enrolled.
+	/// Show the message list, the fingerprint page or the sign-in page,
+	/// depending on whether this handset is enrolled and whether the
+	/// member signed out behind a fingerprint.
 	/// </summary>
 	public async Task RefreshAsync()
 	{
 		var session = await LinkServices.Sessions.LoadAsync().ConfigureAwait(false);
 		var signedIn = session is not null && session.IsSignedIn;
+		var fingerprint = IPlatformApplication.Current?.Services.GetService<FingerprintSignIn>();
+
+		if (!signedIn)
+		{
+			// No enrolment left to lock — signed out the whole way, or the
+			// intergroup refused this handset. A lock that outlived it would
+			// put a stale fingerprint between the next member and their own
+			// sign-in.
+			fingerprint?.Forget();
+		}
+
+		var locked = signedIn && fingerprint is { IsLocked: true };
 
 		// The one line that says what state sign-in left the handset in, at
 		// launch and after every sign-in and sign-out.
-		if (signedIn)
+		if (locked)
+		{
+			Log.Information(
+				"Signed out behind a fingerprint as device {DeviceId} for member {MemberId}; asking for it",
+				session!.DeviceId,
+				session.MemberId);
+		}
+		else if (signedIn)
 		{
 			Log.Information(
 				"Signed in as device {DeviceId} for member {MemberId}; showing the messages",
@@ -64,7 +84,14 @@ public partial class AppShell : Shell
 		// setting CurrentItem does not. An absolute route also clears that
 		// pushed page off the stack, so a signed-out member cannot back
 		// into it.
-		Dispatcher.Dispatch(() => _ = GoToAsync(signedIn ? "//messages" : "//signin"));
+		var route = (signedIn, locked) switch
+		{
+			(true, true) => "//unlock",
+			(true, false) => "//messages",
+			_ => "//signin",
+		};
+
+		Dispatcher.Dispatch(() => _ = GoToAsync(route));
 
 		// The same moments decide where logs go: asked for once signed in,
 		// forgotten once not. Not awaited, so nobody waits on a logging

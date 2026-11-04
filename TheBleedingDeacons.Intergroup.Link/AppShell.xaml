@@ -7,7 +7,8 @@
        Title="Link">
 
 	<!--
-		Two top-level routes and nothing else, which is Hand's shape.
+		Top-level routes and nothing else, which is Hand's shape: sign-in
+		and the message list, and the fingerprint page between them.
 
 		There used to be a tab bar here - Messages and Settings - and it
 		was the most visible thing that made Link look like a different
@@ -19,7 +20,7 @@
 
 		With no tab bar and the flyout disabled there is nothing on screen
 		that could offer the page a member is not meant to be on, so
-		neither route needs hiding. Which one is showing is decided by
+		no route needs hiding. Which one is showing is decided by
 		AppShell.RefreshAsync.
 	-->
 	<ShellContent Route="signin"
@@ -28,6 +29,15 @@
 
 	<ShellContent Route="messages"
 	              ContentTemplate="{DataTemplate views:MessagesPage}"
+	              Shell.NavBarIsVisible="False" />
+
+	<!--
+		Where a member who signed out behind a fingerprint comes back in.
+		Top-level rather than pushed over the message list, so back cannot
+		uncover the list behind it. See FingerprintSignIn.
+	-->
+	<ShellContent Route="unlock"
+	              ContentTemplate="{DataTemplate views:UnlockPage}"
 	              Shell.NavBarIsVisible="False" />
 
 </Shell>

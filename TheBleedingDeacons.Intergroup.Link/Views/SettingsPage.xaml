@@ -100,6 +100,23 @@
 				        VerticalOptions="Center" />
 			</Grid>
 
+			<!--
+				Fingerprint sign-in. Set up at the first sign-in; here for the
+				member who closed that sheet, and for turning it off. Hidden on
+				a phone with no fingerprint to read. Turning it on raises the
+				sheet, and it stays on only for a finger that matched. See
+				FingerprintSignIn.
+			-->
+			<Grid ColumnDefinitions="*,Auto" ColumnSpacing="10" IsVisible="{Binding FingerprintAvailable}">
+				<Label Grid.Column="0"
+				       FontSize="{StaticResource FootnoteFontSize}"
+				       VerticalOptions="Center"
+				       Text="Sign back in with your fingerprint after signing out" />
+				<Switch Grid.Column="1"
+				        IsToggled="{Binding FingerprintOn}"
+				        VerticalOptions="Center" />
+			</Grid>
+
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />
 
 			<!--
@@ -246,9 +263,13 @@
 			       Opacity="0.8" />
 
 			<!--
-				The one control here that cannot be undone, so it is red and
-				last, exactly as Hand's is. It was the ordinary blue button,
-				the same colour as Clear messages directly above it.
+				Red and last, exactly as Hand's is. It was the ordinary blue
+				button, the same colour as Clear messages directly above it.
+
+				With fingerprint sign-in set up it locks rather than removes,
+				and can be undone with a finger; the line under it says which
+				it is. Remove this phone, below it, is then the one control
+				here that cannot be undone.
 			-->
 			<Button Text="Sign out"
 			        BackgroundColor="{StaticResource Warning}"
@@ -260,7 +281,23 @@
 			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       TextColor="#663C00"
-			       Text="This phone stops receiving messages, and the messages held on it are deleted." />
+			       Text="{Binding SignOutDetail}" />
+
+			<VerticalStackLayout Spacing="16" IsVisible="{Binding SignOutLocks}">
+				<Button Text="Remove this phone"
+				        BackgroundColor="Transparent"
+				        TextColor="{StaticResource Warning}"
+				        BorderColor="{StaticResource Warning}"
+				        BorderWidth="1"
+				        HeightRequest="48"
+				        FontSize="{StaticResource SecondaryFontSize}"
+				        Command="{Binding RemovePhoneCommand}" />
+
+				<Label FontSize="{StaticResource CaptionFontSize}"
+				       Opacity="0.6"
+				       TextColor="#663C00"
+				       Text="For a phone you are handing on. It stops receiving messages, the messages held on it are deleted, and fingerprint sign-in is turned off." />
+			</VerticalStackLayout>
 
 			<!--
 				The build, last and quiet, exactly as Hand shows it. It is the
