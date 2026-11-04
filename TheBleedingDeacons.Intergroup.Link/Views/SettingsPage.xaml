@@ -107,11 +107,12 @@
 				version - which of those shows is the phone's own setting -
 				and each drawn in the platform's own manner, so this is the
 				same choice on an iPhone and on Android and looks native on
-				both. The third, the starship console, is a look of its own:
-				always dark, and the same on both. Changing it repaints this
-				page straight away; that is the preview.
+				both. The other two, the starship console and the silo
+				terminal, are looks of their own: always dark, and the same
+				on both. Changing it repaints this page straight away; that
+				is the preview.
 
-				Radio buttons rather than a picker: there are three, and all
+				Radio buttons rather than a picker: there are four, and all
 				the names should be readable without opening anything.
 			-->
 			<Label Text="Style" FontSize="{StaticResource FootnoteFontSize}" Opacity="0.6" />
@@ -127,6 +128,9 @@
 				<RadioButton Content="Starship console"
 				             FontSize="{StaticResource SecondaryFontSize}"
 				             Value="{x:Static models:LinkStyle.StarshipConsole}" />
+				<RadioButton Content="Silo terminal"
+				             FontSize="{StaticResource SecondaryFontSize}"
+				             Value="{x:Static models:LinkStyle.SiloTerminal}" />
 			</VerticalStackLayout>
 
 			<BoxView Margin="0,8" HeightRequest="1" Opacity="0.15" />

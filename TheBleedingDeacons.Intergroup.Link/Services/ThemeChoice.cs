@@ -23,8 +23,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 ///
 /// <para>Two resources are not colours: <c>ButtonCornerRadius</c> and
 /// <c>BodyFontFamily</c>, from <see cref="LinkStyles"/>, so the console
-/// style's buttons can be pills and its text can be set in its own
-/// lettering.</para>
+/// style's buttons can be pills, the terminal's square, and each can set
+/// its text in its own lettering.</para>
 ///
 /// <para>Kept in <see cref="Preferences"/>, as <see cref="RecipientListing"/>
 /// is: it is a choice about the screen with nothing to protect.</para>

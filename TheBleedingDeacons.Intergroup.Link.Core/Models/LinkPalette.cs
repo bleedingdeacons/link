@@ -54,8 +54,9 @@ public sealed record LinkPalette(
 	/// those two, and a Windows build used for debugging is better off
 	/// looking like the Android one than like nothing in particular.</para>
 	///
-	/// <para><b>Starship console:</b> neither. The same black palette on
-	/// every platform in either appearance.</para>
+	/// <para><b>Starship console</b> and <b>silo terminal:</b> neither.
+	/// Each has one black palette for every platform in either
+	/// appearance.</para>
 	/// </summary>
 	public static LinkPalette For(LinkStyle style, bool apple, bool dark) => (style, apple, dark) switch
 	{
@@ -176,6 +177,25 @@ public sealed record LinkPalette(
 			Primary: "#FF9900",
 			OnPrimary: "#000000",
 			Fab: "#CC99CC",
+			OnFab: "#000000"),
+
+		// One palette for both platforms and both appearances, as for the
+		// console. A green-screen monitor has one colour, so everything is
+		// phosphor at some brightness on a black with a trace of green in
+		// it: full for reading, half for quieter text, dim for the rules,
+		// and the buttons lit solid with black lettering cut out of them -
+		// inverse video. The compose button is the palest, the glow at the
+		// heart of a bright character.
+		(LinkStyle.SiloTerminal, _, _) => new(
+			PageBackground: "#050A06",
+			Surface: "#0C1F10",
+			Row: "#050A06",
+			Separator: "#1D5E2B",
+			TextPrimary: "#33FF66",
+			TextSecondary: "#24B34A",
+			Primary: "#4DFF7A",
+			OnPrimary: "#000000",
+			Fab: "#B3FFC6",
 			OnFab: "#000000"),
 
 		_ => throw new ArgumentOutOfRangeException(nameof(style), style, "No palette for this style."),

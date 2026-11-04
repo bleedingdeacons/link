@@ -95,15 +95,15 @@
         The corner of a button drawn by the two button styles below. A
         DynamicResource like the colours, because a style can change it:
         ThemeChoice republishes it from LinkStyles.ButtonCornerRadius, and
-        the starship console's buttons are pills. This is only the value
-        before the first publish.
+        the starship console's buttons are pills and the silo terminal's
+        square. This is only the value before the first publish.
     -->
     <x:Int32 x:Key="ButtonCornerRadius">8</x:Int32>
 
     <!--
         The font every text control below is set in, published the same
-        way from LinkStyles.BodyFontFamily: Open Sans, or Antonio for the
-        starship console.
+        way from LinkStyles.BodyFontFamily: Open Sans, Antonio for the
+        starship console, or IBM Plex Mono for the silo terminal.
     -->
     <x:String x:Key="BodyFontFamily">OpenSansRegular</x:String>
 

@@ -11,10 +11,10 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// without either looking like the other platform. See
 /// <see cref="LinkPalette"/>.</para>
 ///
-/// <para>Except <see cref="StarshipConsole"/>, which is neither: it is a
-/// look of its own rather than a colour for the platform's look, so it
-/// is the same on both, and it is always dark. See
-/// <see cref="LinkStyles"/>.</para>
+/// <para>Except <see cref="StarshipConsole"/> and <see cref="SiloTerminal"/>,
+/// which are neither: each is a look of its own rather than a colour for
+/// the platform's look, so it is the same on both, and it is always dark.
+/// See <see cref="LinkStyles"/>.</para>
 /// </summary>
 public enum LinkStyle
 {
@@ -40,6 +40,18 @@ public enum LinkStyle
 	/// nobody's.</para>
 	/// </summary>
 	StarshipConsole,
+
+	/// <summary>
+	/// The computer terminal of an underground silo: phosphor green on a
+	/// black screen, square buttons lit in inverse video, and fixed-width
+	/// lettering, after the green-screen machines of the television
+	/// series set in one.
+	///
+	/// <para>Appended rather than placed beside the console, because the
+	/// choice is kept as this number and a member on the console must
+	/// stay on it.</para>
+	/// </summary>
+	SiloTerminal,
 }
 
 /// <summary>
@@ -54,19 +66,34 @@ public static class LinkStyles
 	/// the system's own sheets and pickers match the page rather than
 	/// the phone.
 	/// </summary>
-	public static bool AlwaysDark(this LinkStyle style) => style == LinkStyle.StarshipConsole;
+	public static bool AlwaysDark(this LinkStyle style) => style is LinkStyle.StarshipConsole or LinkStyle.SiloTerminal;
 
 	/// <summary>
 	/// The corner radius of a button drawn by the app's own button
 	/// styles. 22 is half the 44 they are at least as tall as, so the
-	/// console's buttons come out as pills.
+	/// console's buttons come out as pills. The terminal's are square: a
+	/// block of lit screen, like a highlighted menu item.
 	/// </summary>
-	public static int ButtonCornerRadius(this LinkStyle style) => style == LinkStyle.StarshipConsole ? 22 : 8;
+	public static int ButtonCornerRadius(this LinkStyle style) => style switch
+	{
+		LinkStyle.StarshipConsole => 22,
+		LinkStyle.SiloTerminal => 0,
+		_ => 8,
+	};
 
 	/// <summary>
 	/// The alias, as MauiProgram registers it, of the font the app's
 	/// text is set in. The console's is Antonio, the nearest free face
-	/// to the tall, narrow lettering on the screens it is drawn from.
+	/// to the tall, narrow lettering on the screens it is drawn from. The
+	/// terminal's is IBM Plex Mono: fixed-width like a character screen,
+	/// but at ordinary proportions, so it comes out as large as Open Sans
+	/// at the same size and the type scale holds. A pixel face would look
+	/// closer and read a size smaller.
 	/// </summary>
-	public static string BodyFontFamily(this LinkStyle style) => style == LinkStyle.StarshipConsole ? "AntonioRegular" : "OpenSansRegular";
+	public static string BodyFontFamily(this LinkStyle style) => style switch
+	{
+		LinkStyle.StarshipConsole => "AntonioRegular",
+		LinkStyle.SiloTerminal => "IBMPlexMonoRegular",
+		_ => "OpenSansRegular",
+	};
 }

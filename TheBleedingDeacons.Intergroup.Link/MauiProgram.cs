@@ -86,6 +86,10 @@ public static class MauiProgram
 				// only, because bold here is FontAttributes, which Android
 				// draws from the regular face whatever else is registered.
 				fonts.AddFont("Antonio-Regular.ttf", "AntonioRegular");
+
+				// The silo terminal's: fixed-width, under the same licence,
+				// and regular only for the same reason.
+				fonts.AddFont("IBMPlexMono-Regular.ttf", "IBMPlexMonoRegular");
 			});
 
 		// ── Logging ───────────────────────────────────────────────────
