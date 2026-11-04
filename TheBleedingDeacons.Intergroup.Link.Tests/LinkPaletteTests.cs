@@ -115,19 +115,41 @@ public class LinkPaletteTests
 	}
 
 	[Fact]
-	public void Only_the_console_changes_the_buttons()
+	public void Only_the_console_and_the_terminal_change_the_buttons()
 	{
 		Assert.Equal(8, LinkStyle.LinkBlue.ButtonCornerRadius());
 		Assert.Equal(8, LinkStyle.IntergroupGreen.ButtonCornerRadius());
 		Assert.Equal(22, LinkStyle.StarshipConsole.ButtonCornerRadius());
+		Assert.Equal(0, LinkStyle.SiloTerminal.ButtonCornerRadius());
 	}
 
 	[Fact]
-	public void Only_the_console_changes_the_lettering()
+	public void Only_the_console_and_the_terminal_change_the_lettering()
 	{
 		Assert.Equal("OpenSansRegular", LinkStyle.LinkBlue.BodyFontFamily());
 		Assert.Equal("OpenSansRegular", LinkStyle.IntergroupGreen.BodyFontFamily());
 		Assert.Equal("AntonioRegular", LinkStyle.StarshipConsole.BodyFontFamily());
+		Assert.Equal("IBMPlexMonoRegular", LinkStyle.SiloTerminal.BodyFontFamily());
+	}
+
+	[Fact]
+	public void Only_the_console_and_the_terminal_are_always_dark()
+	{
+		Assert.Equal(
+			new[] { LinkStyle.StarshipConsole, LinkStyle.SiloTerminal },
+			Enum.GetValues<LinkStyle>().Where(style => style.AlwaysDark()));
+	}
+
+	[Fact]
+	public void A_saved_choice_keeps_its_number()
+	{
+		// ThemeChoice keeps the style in Preferences as this number, so a
+		// new style inserted anywhere but the end would move everybody
+		// on the ones after it.
+		Assert.Equal(0, (int)LinkStyle.LinkBlue);
+		Assert.Equal(1, (int)LinkStyle.IntergroupGreen);
+		Assert.Equal(2, (int)LinkStyle.StarshipConsole);
+		Assert.Equal(3, (int)LinkStyle.SiloTerminal);
 	}
 
 	private static void AtLeast(double ratio, string foreground, string background)
