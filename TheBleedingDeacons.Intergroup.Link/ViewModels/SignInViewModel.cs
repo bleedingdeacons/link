@@ -26,11 +26,13 @@ public sealed partial class SignInViewModel : ObservableObject
 {
 	private readonly DeviceAuthService _auth;
 	private readonly FellowshipConfiguration _configuration;
+	private readonly FingerprintSignIn _fingerprint;
 
-	public SignInViewModel(DeviceAuthService auth, FellowshipConfiguration configuration)
+	public SignInViewModel(DeviceAuthService auth, FellowshipConfiguration configuration, FingerprintSignIn fingerprint)
 	{
 		_auth = auth;
 		_configuration = configuration;
+		_fingerprint = fingerprint;
 	}
 
 	[ObservableProperty]
@@ -311,6 +313,14 @@ public sealed partial class SignInViewModel : ObservableObject
 
 			if (result.Succeeded)
 			{
+				// The phone is on the list now, and whoever is holding it has
+				// just proved who they are — the moment to set up the finger
+				// that gets them back in after signing out. A phone with no
+				// fingerprint is not asked, and a closed sheet leaves it off;
+				// Settings can turn it on later. Either way the member goes
+				// on to their messages.
+				await _fingerprint.SetUpAsync().ConfigureAwait(true);
+
 				if (Shell.Current is AppShell shell)
 				{
 					await shell.RefreshAsync().ConfigureAwait(true);

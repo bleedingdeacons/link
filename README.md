@@ -191,8 +191,39 @@ A file that will not decrypt reads as *no history*, never as an error. A
 messaging app that will not start because its cache will not decrypt is a
 far worse outcome than one that has lost its cache.
 
-Signing out clears the history too, and that is not optional: signing out
-on a handed-on phone has to mean the messages are gone from it.
+Removing the phone clears the history too, and that is not optional:
+taking a handed-on phone off the list has to mean the messages are gone
+from it. Without fingerprint sign-in, that is what Sign out does.
+
+## Fingerprint sign-in
+
+Once the first sign-in has enrolled the phone, Link raises the phone's own
+fingerprint sheet (Face ID or Touch ID on an iPhone) to set fingerprint
+sign-in up. A phone with no fingerprint set up is never asked, and a member
+who closes the sheet can turn it on later in Settings.
+
+With it on, **Sign out locks rather than removes.** The enrolment, the
+keypair and the history all stay, messages keep arriving (the tray still
+shows only the sender and "New message"), and the next time Link opens it
+shows a fingerprint page instead of the message list. A matched finger is
+the whole way back in. Settings then offers **Remove this phone** as well,
+which is the old sign-out: the device row is revoked, the key and the
+history go, and fingerprint sign-in is turned off.
+
+What the fingerprint guards is this app's screens, against somebody who
+picks up a phone its member has signed out of. It unlocks no key and proves
+nothing to Fellowship, and the device token sits in SecureStorage either
+way. It is set up only on a phone that reads a strong biometric, and when
+the finger is not taken the same sheet falls back to **the phone's own
+screen lock** (PIN, pattern, password or passcode). That fallback also lets
+a member in whose fingerprints have been deleted since. On Android 9 and 10
+the sheet accepts weak biometrics too, because Android cannot offer a strong
+biometric and the code together there. A member who can give neither uses
+**Sign in another way**, which removes the phone first and then shows the
+usual sign-in, so one phone never has two live rows. `FingerprintSignIn` in Link.Core holds the rules and
+`FingerprintSignInTests` covers them. The sheet itself is
+`FingerprintReader`, with one half per head, and `OnDevice.feature` lists
+what can only be checked on a phone.
 
 ## When a handset loses its key
 

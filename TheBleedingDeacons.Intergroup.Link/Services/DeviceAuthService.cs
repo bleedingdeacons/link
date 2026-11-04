@@ -31,6 +31,7 @@ public sealed class DeviceAuthService
 	private readonly IMessageHistory _history;
 	private readonly IAppleSignIn _apple;
 	private readonly INativeGoogleSignIn _nativeGoogle;
+	private readonly FingerprintSignIn _fingerprint;
 	private readonly FellowshipConfiguration _configuration;
 
 	public DeviceAuthService(
@@ -41,8 +42,10 @@ public sealed class DeviceAuthService
 		IAppleSignIn apple,
 		INativeGoogleSignIn nativeGoogle,
 		IMessageHistory history,
+		FingerprintSignIn fingerprint,
 		FellowshipConfiguration configuration)
 	{
+		_fingerprint = fingerprint;
 		_apple = apple;
 		_nativeGoogle = nativeGoogle;
 		_client = client;
@@ -733,7 +736,14 @@ public sealed class DeviceAuthService
 	public bool IsAppleAvailable => _apple.IsAvailable;
 
 	/// <summary>
-	/// Sign out: tell the server, then forget everything.
+	/// Sign out the whole way: tell the server, then forget everything.
+	///
+	/// <para>This is "Remove this phone" once fingerprint sign-in is set
+	/// up, and plain "Sign out" until it is. Signing out behind a
+	/// fingerprint is <see cref="FingerprintSignIn.Lock"/> instead, and
+	/// touches none of this. The fingerprint is forgotten here too: the
+	/// phone is off the list, and whoever signs in next sets up their
+	/// own.</para>
 	///
 	/// <para>In that order, but the second half happens either way. A
 	/// member who taps sign out on a phone with no signal is signed out on
@@ -758,6 +768,7 @@ public sealed class DeviceAuthService
 
 			await _sessions.ClearAsync().ConfigureAwait(false);
 			await _keys.ClearAsync().ConfigureAwait(false);
+			_fingerprint.Forget();
 
 			// The registration belonged to the device row that has just been
 			// revoked. Leaving it standing would have the next sign-in screen

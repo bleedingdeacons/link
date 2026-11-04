@@ -24,6 +24,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly ILoggingSource _config;
 	private readonly IThemeChoice _theme;
 	private readonly IPullToRefresh _pull;
+	private readonly FingerprintSignIn _fingerprint;
+
+	/// <summary>
+	/// True while <see cref="LoadAsync"/> is putting the switch where the
+	/// stored state says, so that doing so does not raise the sheet.
+	/// </summary>
+	private bool _readingFingerprint;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -35,8 +42,10 @@ public sealed partial class SettingsViewModel : ObservableObject
 		IRecipientListing listing,
 		ILoggingSource config,
 		IThemeChoice theme,
-		IPullToRefresh pull)
+		IPullToRefresh pull,
+		FingerprintSignIn fingerprint)
 	{
+		_fingerprint = fingerprint;
 		_auth = auth;
 		_sessions = sessions;
 		_history = history;
@@ -159,6 +168,51 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 	partial void OnStyleChanged(LinkStyle value) => _theme.Style = value;
 
+	/// <summary>
+	/// Whether this phone reads fingerprints at all. The switch is hidden
+	/// on one that does not, rather than shown and refusing.
+	/// </summary>
+	[ObservableProperty]
+	private bool _fingerprintAvailable;
+
+	/// <summary>
+	/// Whether fingerprint sign-in is on. Turning it on raises the sheet,
+	/// and only a matched finger leaves it on. See <see cref="FingerprintSignIn"/>.
+	/// </summary>
+	[ObservableProperty]
+	private bool _fingerprintOn;
+
+	partial void OnFingerprintOnChanged(bool value)
+	{
+		if (_readingFingerprint || value == _fingerprint.IsEnabled)
+		{
+			return;
+		}
+
+		if (value)
+		{
+			_ = TurnFingerprintOnAsync();
+		}
+		else
+		{
+			_fingerprint.Forget();
+			RefreshSignOut();
+		}
+	}
+
+	/// <summary>
+	/// Whether Sign out locks, leaving the phone on the list, or removes it.
+	/// Drives which buttons show and what they say.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(SignOutDetail))]
+	private bool _signOutLocks;
+
+	/// <summary>What Sign out does, under the button, in the words of whichever it is.</summary>
+	public string SignOutDetail => SignOutLocks
+		? "This phone stays on the intergroup's list and messages keep arriving. Your fingerprint gets you back in."
+		: "This phone stops receiving messages, and the messages held on it are deleted.";
+
 	[ObservableProperty]
 	private string _memberName = string.Empty;
 
@@ -243,7 +297,46 @@ public sealed partial class SettingsViewModel : ObservableObject
 		var retrieved = await _config.LastRetrievedAsync().ConfigureAwait(true);
 		ConfigRetrieved = LastRetrieved.Describe(retrieved?.ToLocalTime());
 
+		RefreshSignOut();
+
 		await RefreshPushAsync().ConfigureAwait(true);
+	}
+
+	/// <summary>
+	/// Put the fingerprint switch and the sign-out buttons where the stored
+	/// state and the phone say. Asked on every visit: fingerprints can be
+	/// added or deleted in the phone's settings while Link is away.
+	/// </summary>
+	private void RefreshSignOut()
+	{
+		_readingFingerprint = true;
+
+		try
+		{
+			FingerprintAvailable = _fingerprint.IsAvailable;
+			FingerprintOn = _fingerprint.IsEnabled;
+			SignOutLocks = _fingerprint.CanLock;
+		}
+		finally
+		{
+			_readingFingerprint = false;
+		}
+	}
+
+	private async Task TurnFingerprintOnAsync()
+	{
+		Notice = string.Empty;
+
+		var result = await _fingerprint.SetUpAsync().ConfigureAwait(true);
+
+		if (!result.Confirmed && result.Outcome != FingerprintOutcome.Cancelled)
+		{
+			Notice = string.IsNullOrEmpty(result.Detail)
+				? "Fingerprint sign-in could not be set up on this phone."
+				: result.Detail;
+		}
+
+		RefreshSignOut();
 	}
 
 	/// <summary>
@@ -418,16 +511,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 	}
 
 	/// <summary>
-	/// Sign out, and take the local copies with it.
+	/// Sign out: behind the fingerprint if it is set up, the whole way if
+	/// it is not.
 	///
-	/// <para>The history goes too, and that is not optional. Signing out
-	/// on a shared or handed-on phone has to mean the messages are gone
-	/// from it; leaving them behind for whoever signs in next would make
-	/// this button worse than useless.</para>
+	/// <para>Behind a fingerprint nothing leaves the phone. The enrolment,
+	/// the keypair and the history stay, messages keep arriving, and the
+	/// next way in is the finger. See <see cref="FingerprintSignIn"/>.
+	/// Without one there is nothing to come back in with but a full
+	/// sign-in, so it is <see cref="RemovePhoneAsync"/>, as it always
+	/// was.</para>
 	/// </summary>
 	[RelayCommand]
 	private async Task SignOutAsync()
 	{
+		if (!_fingerprint.CanLock)
+		{
+			await RemovePhoneAsync().ConfigureAwait(true);
+			return;
+		}
+
 		var page = Application.Current?.Windows.FirstOrDefault()?.Page;
 		if (page is null)
 		{
@@ -436,8 +538,48 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 		var confirmed = await page.DisplayAlertAsync(
 			"Sign out?",
-			"This phone will stop receiving messages, and the messages held on it will be deleted.",
+			"Your fingerprint gets you back in. This phone stays on the intergroup's list, so messages keep arriving "
+				+ "and stay on it. To take it off the list, use Remove this phone instead.",
 			"Sign out",
+			"Cancel").ConfigureAwait(true);
+
+		if (!confirmed || !_fingerprint.Lock())
+		{
+			return;
+		}
+
+		if (Shell.Current is AppShell shell)
+		{
+			await shell.RefreshAsync().ConfigureAwait(true);
+		}
+	}
+
+	/// <summary>
+	/// Take this phone off the intergroup's list, and the local copies
+	/// with it.
+	///
+	/// <para>The history goes too, and that is not optional. Removing a
+	/// shared or handed-on phone has to mean the messages are gone from
+	/// it; leaving them behind for whoever signs in next would make this
+	/// button worse than useless. It is what Sign out does when no
+	/// fingerprint is set up, and what is left for a phone that is being
+	/// handed on when one is.</para>
+	/// </summary>
+	[RelayCommand]
+	private async Task RemovePhoneAsync()
+	{
+		var page = Application.Current?.Windows.FirstOrDefault()?.Page;
+		if (page is null)
+		{
+			return;
+		}
+
+		var locks = _fingerprint.CanLock;
+		var confirmed = await page.DisplayAlertAsync(
+			locks ? "Remove this phone?" : "Sign out?",
+			"This phone will stop receiving messages, and the messages held on it will be deleted."
+				+ (locks ? " Fingerprint sign-in is turned off, and you will need to sign in again the usual way." : string.Empty),
+			locks ? "Remove" : "Sign out",
 			"Cancel").ConfigureAwait(true);
 
 		if (!confirmed)

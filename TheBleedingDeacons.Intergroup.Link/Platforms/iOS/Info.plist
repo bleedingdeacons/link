@@ -75,6 +75,15 @@
 	</array>
 
 	<!--
+		Fingerprint sign-in, on a phone where that is Face ID. iOS ends the
+		app outright the first time it asks for Face ID without this line,
+		so it is here even though nothing is signed to need it. See
+		FingerprintReader.
+	-->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Link uses Face ID to let you back in after you sign out, without signing in again.</string>
+
+	<!--
 		App Transport Security: deliberately left at its defaults, and
 		deliberately not pinned.
 

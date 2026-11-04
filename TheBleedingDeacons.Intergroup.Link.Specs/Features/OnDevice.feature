@@ -169,3 +169,69 @@ Feature: What only a phone can answer
       And re-signing in place keeps the handset's key and its messages
       # Deleting it to reinstall does not — see the uninstall scenario
       # above. Anything past a demonstration wants the paid account.
+
+  Rule: Signing out behind a fingerprint keeps the phone on the list
+
+    Once the first sign-in has enrolled a phone that reads fingerprints,
+    the sheet is raised to set fingerprint sign-in up. From then on Sign
+    out locks rather than removes: the enrolment, the key and the history
+    stay, and the finger is the way back in. FingerprintSignInTests covers
+    the rules; these are the sheet and the screens.
+
+    Scenario: The first sign-in sets the fingerprint up
+      Given a phone with a fingerprint set up in its own settings
+      When the member signs in for the first time
+      Then the fingerprint sheet is raised once the phone is enrolled
+      And a matched finger goes on to the message list
+      And Settings shows fingerprint sign-in switched on
+
+    Scenario: A phone with no fingerprint is never asked
+      Given a phone with no fingerprint set up
+      When the member signs in
+      Then no fingerprint sheet is raised
+      And Settings has no fingerprint switch
+      And Sign out removes the phone, as it always did
+
+    Scenario: Signing out needs only the finger to get back in
+      Given a member who set up fingerprint sign-in
+      When they sign out from Settings
+      Then the fingerprint page is shown, and the sheet raised
+      And a matched finger shows the message list with every message still there
+      And closing and reopening Link while signed out shows the fingerprint page again
+
+    Scenario: Messages keep arriving while signed out behind a fingerprint
+      Given a member signed out behind a fingerprint
+      When a message is sent to them
+      Then the tray shows the sender's name and "New message"
+      And the message is in the list once the finger has been given
+
+    Scenario: A finger the phone does not know does not get in
+      Given a member signed out behind a fingerprint
+      When somebody else's finger is tried until the phone stops asking
+      Then the fingerprint page says why and stays where it is
+
+    Scenario: The phone's own code gets in when the finger does not
+      Given a member signed out behind a fingerprint
+      When they choose the sheet's "Use PIN" (or the phone's passcode on an iPhone)
+      And enter the code they unlock the phone with
+      Then the message list is shown with every message still there
+
+    Scenario: Deleting every fingerprint still leaves the code
+      Given a member signed out behind a fingerprint
+      When every fingerprint is deleted in the phone's own settings
+      And Link is opened
+      Then the sheet asks for the phone's code
+      And the code gets them in
+
+    Scenario: Signing in another way removes the phone first
+      Given a member signed out behind a fingerprint
+      When they choose Sign in another way and confirm
+      Then the phone is revoked on the intergroup's Devices screen
+      And the sign-in page is shown
+
+    Scenario: Removing the phone is still the whole way out
+      Given a member who set up fingerprint sign-in
+      When they choose Remove this phone in Settings and confirm
+      Then the phone is revoked on the intergroup's Devices screen
+      And the messages held on it are deleted
+      And the next sign-in offers to set the fingerprint up again

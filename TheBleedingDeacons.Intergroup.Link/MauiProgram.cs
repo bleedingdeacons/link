@@ -172,6 +172,12 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IPullToRefresh, PullToRefresh>();
 		builder.Services.AddSingleton<IAppleSignIn, AppleSignIn>();
 		builder.Services.AddSingleton<INativeGoogleSignIn, NativeGoogleSignIn>();
+		// Fingerprint sign-in. Not in LinkServices either: the push service
+		// goes on delivering to a phone signed out behind a finger, and has
+		// no screen to guard. See FingerprintSignIn.
+		builder.Services.AddSingleton<IFingerprintReader, FingerprintReader>();
+		builder.Services.AddSingleton<IFingerprintState, FingerprintState>();
+		builder.Services.AddSingleton<FingerprintSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
 
 		// Where the log shipper's settings come from. See RemoteLogging.
@@ -216,9 +222,11 @@ public static class MauiProgram
 		// only way to be sure it does.
 		builder.Services.AddTransient<ComposeViewModel>();
 		builder.Services.AddSingleton<SettingsViewModel>();
+		builder.Services.AddSingleton<UnlockViewModel>();
 
 		builder.Services.AddSingleton<SignInPage>();
 		builder.Services.AddSingleton<MessagesPage>();
+		builder.Services.AddSingleton<UnlockPage>();
 		// Transient for the same reason its view model is.
 		builder.Services.AddTransient<ConversationPage>();
 		builder.Services.AddTransient<ComposePage>();
