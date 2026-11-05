@@ -115,6 +115,29 @@ public sealed class World : IDisposable
 	public MessageService Handset =>
 		_handset ??= new MessageService(Fellowship, History, Keys, Sessions);
 
+	/// <summary>The style and the switches, which a backup carries.</summary>
+	public FakeScreenChoices Choices { get; } = new();
+
+	public MessageBackup Backup => new(Sessions, History, Choices, Choices, Choices, Choices);
+
+	/// <summary>
+	/// The history is gone and the member is holding a different phone: a lost
+	/// phone, or a reinstall. The scenario's backup is all that carries over,
+	/// and the next sign-in is the scenario's to make.
+	/// </summary>
+	public void NewPhone()
+	{
+		_history?.Dispose();
+		_history = null;
+		_handset = null;
+
+		var file = Path.Combine(_directory, "messages.bin");
+		if (File.Exists(file))
+		{
+			File.Delete(file);
+		}
+	}
+
 	/// <summary>
 	/// Kill the app and open it again, keeping only what was written down.
 	///

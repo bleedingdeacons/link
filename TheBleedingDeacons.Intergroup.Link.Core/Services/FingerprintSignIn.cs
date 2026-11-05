@@ -40,6 +40,12 @@ public sealed class FingerprintSignIn
 	/// <summary>Under the heading, when it is raised to get back in.</summary>
 	public const string UnlockPrompt = "Touch the sensor, or use your phone's screen lock, to see your messages.";
 
+	/// <summary>What the sheet is headed when it is raised before a backup.</summary>
+	public const string BackupTitle = "Back up your messages";
+
+	/// <summary>Under that heading.</summary>
+	public const string BackupPrompt = "Touch the sensor, or use your phone's screen lock, to make a copy of your messages.";
+
 	private readonly IFingerprintReader _reader;
 	private readonly IFingerprintState _state;
 
@@ -152,6 +158,38 @@ public sealed class FingerprintSignIn
 		{
 			_state.Locked = false;
 		}
+
+		return result;
+	}
+
+	/// <summary>
+	/// Ask for the finger before a copy of the messages leaves Link, if
+	/// fingerprint sign-in is on. With it off this answers confirmed without
+	/// raising anything.
+	///
+	/// <para>A phone that cannot ask any more answers
+	/// <see cref="FingerprintOutcome.Unavailable"/> rather than letting the
+	/// backup through. Turning the switch off in Settings is the member's way
+	/// on from there.</para>
+	/// </summary>
+	public async Task<FingerprintResult> ConfirmBackupAsync(CancellationToken cancellationToken = default)
+	{
+		if (!_state.Enabled)
+		{
+			return new FingerprintResult(FingerprintOutcome.Confirmed);
+		}
+
+		if (!_reader.CanConfirm)
+		{
+			Log.Warning("Asked to back up with fingerprint sign-in on, and this phone has neither a fingerprint nor a screen lock now");
+
+			return FingerprintResult.Unavailable(
+				"This phone has no fingerprint or screen lock set up any more, so it cannot confirm it is you. Set one up, or turn fingerprint sign-in off above.");
+		}
+
+		var result = await _reader.ConfirmAsync(BackupTitle, BackupPrompt, cancellationToken).ConfigureAwait(false);
+
+		Log.Information("The fingerprint sheet before a backup answered {FingerprintOutcome}", result.Outcome);
 
 		return result;
 	}

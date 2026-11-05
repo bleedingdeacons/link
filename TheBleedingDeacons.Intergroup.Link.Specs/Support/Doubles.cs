@@ -338,6 +338,34 @@ public sealed record ServerMessage(long Id, Dictionary<string, object> Payload);
 /// <summary>One recipient's row for a sent message: whether their phone said it had it, and whether they read it.</summary>
 public sealed record RecipientRow(bool Received, bool Read);
 
+/// <summary>The style and the switches, held in memory rather than in Preferences.</summary>
+public sealed class FakeScreenChoices : IThemeChoice, IArrivalSound, IRecipientListing, IPullToRefresh
+{
+	public LinkStyle Style { get; set; }
+
+	public bool Sound { get; set; } = true;
+
+	public bool OnlyRegistered { get; set; } = true;
+
+	public bool Pull { get; set; }
+
+	bool IArrivalSound.Enabled
+	{
+		get => Sound;
+		set => Sound = value;
+	}
+
+	bool IPullToRefresh.Enabled
+	{
+		get => Pull;
+		set => Pull = value;
+	}
+
+	public void Play()
+	{
+	}
+}
+
 /// <summary>The device token, held in memory rather than in a keychain.</summary>
 public sealed class FakeSessionStore : ISessionStore
 {

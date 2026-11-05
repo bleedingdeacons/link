@@ -179,6 +179,10 @@ public static class MauiProgram
 		builder.Services.AddSingleton<IFingerprintState, FingerprintState>();
 		builder.Services.AddSingleton<FingerprintSignIn>();
 		builder.Services.AddSingleton<DeviceAuthService>();
+		// Backing up and restoring. Not in LinkServices: the push service has
+		// no screen to offer it on. See MessageBackup.
+		builder.Services.AddSingleton<IBackupFiles, BackupFiles>();
+		builder.Services.AddSingleton<MessageBackup>();
 
 		// Where the log shipper's settings come from. See RemoteLogging.
 		// SecureStorage under the key Link has always used, so a handset

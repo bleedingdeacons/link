@@ -158,4 +158,29 @@ public interface IMessageHistory
 	/// </summary>
 	/// <param name="memberId">The Unity member id now signed in.</param>
 	Task AdoptAsync(long memberId, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Everything held, to go into a backup, or null if this store belongs
+	/// to somebody other than <paramref name="memberId"/>.
+	/// </summary>
+	Task<HistorySnapshot?> SnapshotAsync(long memberId, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Take a backup's history in alongside what is held, for
+	/// <paramref name="memberId"/>.
+	///
+	/// <para><b>It merges rather than replaces, and what a member removed
+	/// stays removed.</b> Messages join by id. Anything deleted or cleared on
+	/// either side is gone from the result, so restoring cannot bring back
+	/// what the member chose to be rid of, whichever came first, the backup
+	/// or the removal. Each side's clear applies only to the other side's
+	/// messages: a message the backup holds above its own mark, or below it
+	/// because it arrived late, survived that clear and still counts.</para>
+	///
+	/// <para>A store with no owner recorded becomes this member's. The
+	/// caller has already checked that against the session, and a phone
+	/// signed in since before owners were recorded has nothing else to go
+	/// on. A store with a different owner is left untouched.</para>
+	/// </summary>
+	Task<HistoryMerge> MergeAsync(long memberId, HistorySnapshot incoming, CancellationToken cancellationToken = default);
 }

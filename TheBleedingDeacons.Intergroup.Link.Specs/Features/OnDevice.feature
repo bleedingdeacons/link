@@ -235,3 +235,49 @@ Feature: What only a phone can answer
       Then the phone is revoked on the intergroup's Devices screen
       And the messages held on it are deleted
       And the next sign-in offers to set the fingerprint up again
+
+  Rule: A backup goes through the phone's own sheet and picker
+
+    What the file holds and when it restores is in Backup.feature. What is
+    left here is the part only a phone can do.
+
+    Scenario: A backup asks for the finger first
+      Given a member who set up fingerprint sign-in
+      When they tap Back up messages in Settings
+      Then the fingerprint sheet is raised before any passphrase is asked for
+      And closing the sheet makes no backup and says nothing
+
+    Scenario: With fingerprint sign-in off, a backup goes straight to the passphrase
+      Given a member who has not set up fingerprint sign-in
+      When they tap Back up messages in Settings
+      Then the passphrase is asked for, twice, under the warning about forgetting it
+
+    Scenario: A backup can be saved to Drive and to Files
+      Given a member who has made a backup with a passphrase
+      When they save it through the share sheet to Drive, and again to Files
+      Then each holds a file named link-backup-<date>.linkbackup
+      And Settings says when the last backup was made
+
+    Scenario: A backup comes back from Drive and from Files
+      Given a backup saved to Drive and to Files
+      When the member chooses each with Restore from a backup and types its passphrase
+      Then its messages are on this phone, and its style and switches are back
+
+    Scenario: Clearing and then restoring brings nothing back
+      Given a member who has made a backup
+      When they clear the messages on this phone and restore that backup
+      Then the messages stay cleared, and Link says so
+
+    Scenario: A passphrase is gone once the page is
+      Given a member who has typed a passphrase and not used it
+      When they leave Settings and come back
+      Then the passphrase boxes are closed and empty
+
+    Scenario: A restored phone still has to sign in
+      Given a phone that has never held this member's sign-in
+      When Link is opened
+      Then there is no way to restore a backup until the member has signed in
+
+    Scenario: Android's own backup stays off
+      When the APK's manifest is read
+      Then android:allowBackup is false

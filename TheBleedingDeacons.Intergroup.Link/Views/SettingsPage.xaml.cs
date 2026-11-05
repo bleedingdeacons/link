@@ -20,4 +20,13 @@ public partial class SettingsPage : ContentPage
 
 		await _viewModel.LoadAsync();
 	}
+
+	protected override void OnDisappearing()
+	{
+		base.OnDisappearing();
+
+		// Neither the share sheet nor the picker takes this page off screen,
+		// and both come before or after a passphrase is on it, not during.
+		_viewModel.CancelBackup();
+	}
 }

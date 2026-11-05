@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
@@ -380,13 +381,23 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			// already empty must not un-clear the one cleared before it.
 			var mark = Math.Max(Math.Max(highest, deleted), held.ClearedUpTo);
 
+			// Sent copies get a mark of their own, for a backup made before
+			// this clear to be held to. Not folded into the one above: that
+			// one is where the next poll starts, and a sent id can sit above
+			// messages to this member that no poll has collected yet.
+			var sent = held.Sent.Count == 0 ? 0 : held.Sent.Keys.Max();
+
 			// The owner is carried across. Clearing is a member emptying
 			// their own inbox, not handing the phone on — and a store that
 			// forgot whose it was would be adopted by the next sign-in as
 			// though it were nobody's. So is the poll mark, which says
 			// nothing about any message.
 			await WriteUnguardedAsync(
-				new Held([], mark, held.MemberId) { PolledUpTo = held.PolledUpTo },
+				new Held([], mark, held.MemberId)
+				{
+					PolledUpTo = held.PolledUpTo,
+					SentClearedUpTo = Math.Max(sent, held.SentClearedUpTo),
+				},
 				cancellationToken).ConfigureAwait(false);
 		}
 		finally
@@ -420,10 +431,10 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		{
 			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
 
-			if (held.MemberId > 0 && (held.ClearedUpTo > 0 || held.Deleted.Count > 0))
+			if (held.MemberId > 0 && (held.ClearedUpTo > 0 || held.SentClearedUpTo > 0 || held.Deleted.Count > 0))
 			{
 				await WriteUnguardedAsync(
-					new Held([], held.ClearedUpTo, held.MemberId) { Deleted = held.Deleted },
+					new Held([], held.ClearedUpTo, held.MemberId) { Deleted = held.Deleted, SentClearedUpTo = held.SentClearedUpTo },
 					cancellationToken).ConfigureAwait(false);
 			}
 			else if (File.Exists(_path))
@@ -472,7 +483,212 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		}
 	}
 
+	/// <inheritdoc />
+	public async Task<HistorySnapshot?> SnapshotAsync(long memberId, CancellationToken cancellationToken = default)
+	{
+		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+		if (!BelongsTo(held, memberId))
+		{
+			return null;
+		}
+
+		return new HistorySnapshot
+		{
+			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
+			Sent = held.Sent.Values.OrderByDescending(m => m.Id).ToList(),
+			Deleted = held.Deleted.OrderByDescending(d => d.Key).Select(d => new DeletedMessage(d.Key, d.Value)).ToList(),
+			ClearedUpTo = held.ClearedUpTo,
+			SentClearedUpTo = held.SentClearedUpTo,
+			PolledUpTo = held.PolledUpTo,
+		};
+	}
+
+	/// <inheritdoc />
+	public async Task<HistoryMerge> MergeAsync(long memberId, HistorySnapshot incoming, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(incoming);
+
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			if (!BelongsTo(held, memberId))
+			{
+				return new HistoryMerge(HistoryMergeOutcome.OtherMember);
+			}
+
+			var merged = Merged(memberId, held, incoming, out var added, out var stayedGone);
+
+			return await WriteUnguardedAsync(merged, cancellationToken).ConfigureAwait(false)
+				? new HistoryMerge(HistoryMergeOutcome.Merged, added, stayedGone)
+				: new HistoryMerge(HistoryMergeOutcome.NotWritten);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
 	public void Dispose() => _gate.Dispose();
+
+	/// <summary>
+	/// Whether this store can answer for this member. No owner recorded
+	/// counts as yes: see <see cref="IMessageHistory.MergeAsync"/>.
+	/// </summary>
+	private static bool BelongsTo(Held held, long memberId) =>
+		memberId > 0 && (held.MemberId == 0 || held.MemberId == memberId);
+
+	/// <summary>
+	/// The two sides as one store. See <see cref="IMessageHistory.MergeAsync"/>.
+	///
+	/// <para><b>A sent copy answers to both marks, and a received message
+	/// only to its own.</b> A clear from before sent copies had a mark left
+	/// only the received one behind, and it reached past anything sent before
+	/// it. A received message can sit between the two marks without having
+	/// been cleared, because a poll goes on collecting above the received
+	/// mark, so holding it to the sent mark would lose it.</para>
+	///
+	/// <para><b>The poll mark takes the higher of the two.</b> Whatever the
+	/// backup's phone had collected below its mark is in the backup, or was
+	/// removed by the member, and a poll fetching it again here would only
+	/// repeat the work. The deleted ids are kept from both sides, including
+	/// those a mark already covers: they are two numbers each, and they mean
+	/// a late copy of the message is still refused.</para>
+	/// </summary>
+	private static Held Merged(long memberId, Held held, HistorySnapshot incoming, out int added, out int stayedGone)
+	{
+		var deleted = new Dictionary<long, long>(held.Deleted);
+
+		foreach (var record in incoming.Deleted.Where(d => d is { Id: > 0 }))
+		{
+			// The pointer is what a conversation is walked through, so a
+			// record with one beats a record without.
+			if (!deleted.TryGetValue(record.Id, out var pointer) || pointer == 0)
+			{
+				deleted[record.Id] = record.ReplyToId;
+			}
+		}
+
+		var gone = new HashSet<long>();
+
+		var messages = new Dictionary<long, LinkMessage>();
+		var sent = new Dictionary<long, SentMessage>();
+
+		foreach (var message in held.Messages.Values)
+		{
+			if (deleted.ContainsKey(message.Id) || message.Id <= incoming.ClearedUpTo)
+			{
+				gone.Add(message.Id);
+			}
+			else
+			{
+				messages[message.Id] = message;
+			}
+		}
+
+		var sentMarkOfBackup = Math.Max(incoming.ClearedUpTo, incoming.SentClearedUpTo);
+
+		foreach (var message in held.Sent.Values)
+		{
+			if (deleted.ContainsKey(message.Id) || message.Id <= sentMarkOfBackup)
+			{
+				gone.Add(message.Id);
+			}
+			else
+			{
+				sent[message.Id] = message;
+			}
+		}
+
+		var known = new HashSet<long>(held.Messages.Keys);
+		known.UnionWith(held.Sent.Keys);
+
+		var fresh = new HashSet<long>();
+
+		foreach (var message in incoming.Messages.Where(m => m is { Id: > 0 }))
+		{
+			if (deleted.ContainsKey(message.Id) || message.Id <= held.ClearedUpTo)
+			{
+				gone.Add(message.Id);
+				continue;
+			}
+
+			gone.Remove(message.Id);
+
+			messages[message.Id] = messages.TryGetValue(message.Id, out var existing)
+				? Joined(existing, message)
+				: message;
+
+			if (!known.Contains(message.Id))
+			{
+				fresh.Add(message.Id);
+			}
+		}
+
+		var sentMarkHere = Math.Max(held.ClearedUpTo, held.SentClearedUpTo);
+
+		foreach (var message in incoming.Sent.Where(m => m is { Id: > 0 }))
+		{
+			if (deleted.ContainsKey(message.Id) || message.Id <= sentMarkHere)
+			{
+				gone.Add(message.Id);
+				continue;
+			}
+
+			gone.Remove(message.Id);
+
+			sent[message.Id] = sent.TryGetValue(message.Id, out var existing)
+				? Joined(existing, message)
+				: message;
+
+			if (!known.Contains(message.Id))
+			{
+				fresh.Add(message.Id);
+			}
+		}
+
+		// One id held as both a sent and a received copy can lose one and
+		// keep the other: a mark for received messages does not take the
+		// sent copy. Only an id with nothing left counts as having gone.
+		gone.ExceptWith(messages.Keys);
+		gone.ExceptWith(sent.Keys);
+
+		added = fresh.Count;
+		stayedGone = gone.Count;
+
+		return new Held(messages, Math.Max(held.ClearedUpTo, Math.Max(0, incoming.ClearedUpTo)), memberId)
+		{
+			SentClearedUpTo = Math.Max(held.SentClearedUpTo, Math.Max(0, incoming.SentClearedUpTo)),
+			PolledUpTo = Math.Max(held.PolledUpTo, Math.Max(0, incoming.PolledUpTo)),
+			Sent = sent,
+			Deleted = deleted,
+		};
+	}
+
+	/// <summary>
+	/// One message held on both sides: this phone's copy, knowing what either
+	/// side knows. Read on either is read, and an acknowledgement either side
+	/// had accepted does not need making again.
+	/// </summary>
+	private static LinkMessage Joined(LinkMessage existing, LinkMessage incoming) => existing with
+	{
+		ReadAt = existing.IsRead ? existing.ReadAt : incoming.ReadAt,
+		Acknowledged = existing.Acknowledged || incoming.Acknowledged,
+	};
+
+	/// <summary>
+	/// One sent copy held on both sides. The counts only ever rise, as
+	/// <see cref="SentMessage.With"/> has it, whichever side saw them last.
+	/// </summary>
+	private static SentMessage Joined(SentMessage existing, SentMessage incoming)
+	{
+		var counted = existing.With(new MessageReceipt(incoming.Id, incoming.Recipients, incoming.Received, incoming.Read));
+
+		return existing.ReplyToId != 0 ? counted : counted with { ReplyToId = incoming.ReplyToId };
+	}
 
 	private async Task<Held> ReadAsync(CancellationToken cancellationToken)
 	{
@@ -579,16 +795,23 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 				Math.Max(0, stored.MemberId))
 			{
 				PolledUpTo = Math.Max(0, stored.PolledUpTo),
+				SentClearedUpTo = Math.Max(0, stored.SentClearedUpTo),
 				Sent = stored.Sent.Where(m => m.Id > 0).ToDictionary(m => m.Id),
 				Deleted = stored.Deleted.Where(d => d.Id > 0).ToDictionary(d => d.Id, d => d.ReplyToId),
 			};
 	}
 
-	private async Task WriteUnguardedAsync(Held held, CancellationToken cancellationToken)
+	/// <summary>
+	/// Write the file. Answers whether it was written, which only a merge
+	/// asks: a member told their backup was restored has to be able to
+	/// believe it.
+	/// </summary>
+	private async Task<bool> WriteUnguardedAsync(Held held, CancellationToken cancellationToken)
 	{
 		var stored = new StoredHistory
 		{
 			ClearedUpTo = held.ClearedUpTo,
+			SentClearedUpTo = held.SentClearedUpTo,
 			PolledUpTo = held.PolledUpTo,
 			MemberId = held.MemberId,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
@@ -630,12 +853,15 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 			await File.WriteAllBytesAsync(temporary, packed, cancellationToken).ConfigureAwait(false);
 			File.Move(temporary, _path, overwrite: true);
+
+			return true;
 		}
 		catch (Exception e) when (e is IOException or UnauthorizedAccessException)
 		{
 			// The history is a convenience, not the record. Losing a write
 			// costs the member a message that the next poll will fetch
 			// again; throwing here would take a push handler down with it.
+			return false;
 		}
 	}
 
@@ -693,6 +919,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		public long PolledUpTo { get; init; }
 
 		/// <summary>
+		/// How far a clear reached among sent copies. 0 on every Held built
+		/// without saying otherwise, so an adoption takes it with the rest.
+		/// A reset carries it, as it carries the clear mark.
+		/// </summary>
+		public long SentClearedUpTo { get; init; }
+
+		/// <summary>
 		/// What this member has sent. Empty on every Held built without
 		/// saying otherwise, which is what makes a clear, a reset and an
 		/// adoption take the sent copies with the inbox.
@@ -723,6 +956,16 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	private sealed class StoredHistory
 	{
 		public long ClearedUpTo { get; set; }
+
+		/// <summary>
+		/// How far a clear reached among sent copies. Absent from every file
+		/// written before backups, which reads as 0. Nothing can have been
+		/// backed up before then, so no backup can bring back what those
+		/// clears removed. Left out while it is 0, so a cleared file stays
+		/// as small as it was.
+		/// </summary>
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+		public long SentClearedUpTo { get; set; }
 
 		/// <summary>
 		/// The highest id a poll has collected. Absent from every file
