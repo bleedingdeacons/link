@@ -249,12 +249,16 @@ jobs:
       # intermediate alongside it, and uploading both would leave whoever
       # downloads them to guess.
       - name: Upload the APK
+        # Three days, because a private repository on the Free plan stores 500 MB
+        # of artifacts. An APK is about 20 MB on every run, and the release job
+        # rebuilds its own, so a full quota must not fail the build either.
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: link-apk
           path: TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-android/*-Signed.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   ios:
     name: Build & archive (net10.0-ios)
