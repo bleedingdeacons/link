@@ -630,7 +630,8 @@ first time.
 
 ### What CI produces
 
-`link-apk` on every run, kept for 30 days.
+`link-apk` on every run, kept for 3 days. The storage is why: a private
+repository on the Free plan gets 500 MB. Releases do not expire.
 
 **`link-ipa-unsigned` only when asked for**, from 2026-09-30: dispatch the
 workflow with `ios` ticked, or put the `ios` label on a pull request.
