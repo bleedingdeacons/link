@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:models="clr-namespace:TheBleedingDeacons.Intergroup.Link.Models;assembly=TheBleedingDeacons.Intergroup.Link.Core"
+             xmlns:services="clr-namespace:TheBleedingDeacons.Intergroup.Link.Services;assembly=TheBleedingDeacons.Intergroup.Link.Core"
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.SettingsPage"
              x:DataType="vm:SettingsViewModel"
@@ -171,6 +172,74 @@
 			<Label FontSize="{StaticResource CaptionFontSize}"
 			       Opacity="0.6"
 			       Text="Removes only this phone's copies. Nothing is unsent, and the intergroup keeps its own record." />
+
+			<!--
+				A backup, and getting one back. What a backup is stays on the
+				page the whole time rather than waiting in a dialog, because it
+				is what a member needs to know before deciding to make one: it
+				leaves Link, and nothing here or at the intergroup can reach it
+				afterwards. The wording is MessageBackup's.
+
+				The passphrase is asked for here rather than in a dialog so it
+				can be typed twice with its warning in view. See MessageBackup.
+			-->
+			<Label FontSize="{StaticResource SecondaryFontSize}"
+			       Margin="0,8,0,0"
+			       Text="{Binding LastBackup}" />
+
+			<VerticalStackLayout Spacing="16" IsVisible="{Binding NoBackupOpen}">
+				<Button Text="Back up messages"
+				        HeightRequest="48"
+				        FontSize="{StaticResource SecondaryFontSize}"
+				        Command="{Binding StartBackupCommand}" />
+				<Button Text="Restore from a backup"
+				        HeightRequest="48"
+				        FontSize="{StaticResource SecondaryFontSize}"
+				        Command="{Binding StartRestoreCommand}" />
+			</VerticalStackLayout>
+
+			<Label FontSize="{StaticResource CaptionFontSize}"
+			       Opacity="0.6"
+			       Text="{x:Static services:MessageBackup.OutsideLink}" />
+
+			<VerticalStackLayout Spacing="12" IsVisible="{Binding BackingUp}">
+				<Label FontSize="{StaticResource FootnoteFontSize}"
+				       FontAttributes="Bold"
+				       Text="{x:Static services:MessageBackup.ForgottenPassphrase}" />
+				<Entry Placeholder="A passphrase of at least 12 characters"
+				       IsPassword="True"
+				       Text="{Binding BackupPassphrase}" />
+				<Entry Placeholder="The same passphrase again"
+				       IsPassword="True"
+				       Text="{Binding BackupPassphraseAgain}" />
+				<Button Text="Make the backup"
+				        HeightRequest="48"
+				        FontSize="{StaticResource SecondaryFontSize}"
+				        Command="{Binding MakeBackupCommand}" />
+				<Button Text="Cancel"
+				        Style="{StaticResource Quiet}"
+				        Command="{Binding CancelBackupCommand}" />
+			</VerticalStackLayout>
+
+			<VerticalStackLayout Spacing="12" IsVisible="{Binding Restoring}">
+				<Label FontSize="{StaticResource FootnoteFontSize}"
+				       Text="This adds the backup's messages to this phone and brings back its style and switches. Anything you deleted or cleared stays gone." />
+				<Entry Placeholder="The passphrase this backup was made with"
+				       IsPassword="True"
+				       Text="{Binding RestorePassphrase}" />
+				<Button Text="Restore this backup"
+				        HeightRequest="48"
+				        FontSize="{StaticResource SecondaryFontSize}"
+				        Command="{Binding RestoreBackupCommand}" />
+				<Button Text="Cancel"
+				        Style="{StaticResource Quiet}"
+				        Command="{Binding CancelBackupCommand}" />
+			</VerticalStackLayout>
+
+			<Label Text="{Binding BackupNotice}"
+			       IsVisible="{Binding HasBackupNotice}"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.8" />
 
 			<!--
 				Shown only while there is a fault to fix. The recovery asks

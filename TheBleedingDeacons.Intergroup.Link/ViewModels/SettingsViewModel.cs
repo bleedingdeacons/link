@@ -25,12 +25,20 @@ public sealed partial class SettingsViewModel : ObservableObject
 	private readonly IThemeChoice _theme;
 	private readonly IPullToRefresh _pull;
 	private readonly FingerprintSignIn _fingerprint;
+	private readonly MessageBackup _backup;
+	private readonly IBackupFiles _backupFiles;
 
 	/// <summary>
 	/// True while <see cref="LoadAsync"/> is putting the switch where the
 	/// stored state says, so that doing so does not raise the sheet.
 	/// </summary>
 	private bool _readingFingerprint;
+
+	/// <summary>Who is signed in, for the date of their last backup.</summary>
+	private long _memberId;
+
+	/// <summary>The backup chosen in the picker, while its passphrase is being asked for.</summary>
+	private byte[]? _chosenBackup;
 
 	public SettingsViewModel(
 		DeviceAuthService auth,
@@ -43,9 +51,13 @@ public sealed partial class SettingsViewModel : ObservableObject
 		ILoggingSource config,
 		IThemeChoice theme,
 		IPullToRefresh pull,
-		FingerprintSignIn fingerprint)
+		FingerprintSignIn fingerprint,
+		MessageBackup backup,
+		IBackupFiles backupFiles)
 	{
 		_fingerprint = fingerprint;
+		_backup = backup;
+		_backupFiles = backupFiles;
 		_auth = auth;
 		_sessions = sessions;
 		_history = history;
@@ -254,6 +266,49 @@ public sealed partial class SettingsViewModel : ObservableObject
 
 	public bool HasNotice => !string.IsNullOrEmpty(Notice);
 
+	/// <summary>When the last backup was, on the line under the buttons. See <see cref="Support.LastBackup"/>.</summary>
+	[ObservableProperty]
+	private string _lastBackup = string.Empty;
+
+	/// <summary>Whether a passphrase for a new backup is being asked for.</summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(NoBackupOpen))]
+	private bool _backingUp;
+
+	/// <summary>Whether the passphrase of a chosen backup is being asked for.</summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(NoBackupOpen))]
+	private bool _restoring;
+
+	/// <summary>Whether the two buttons that start these should show.</summary>
+	public bool NoBackupOpen => !BackingUp && !Restoring;
+
+	/// <summary>
+	/// The passphrase for a new backup. Never stored, and cleared the moment
+	/// it has been used, as a password is on the sign-in screen.
+	/// </summary>
+	[ObservableProperty]
+	private string _backupPassphrase = string.Empty;
+
+	/// <summary>The same, typed a second time.</summary>
+	[ObservableProperty]
+	private string _backupPassphraseAgain = string.Empty;
+
+	/// <summary>The passphrase of the backup being restored, held no longer than the others.</summary>
+	[ObservableProperty]
+	private string _restorePassphrase = string.Empty;
+
+	/// <summary>
+	/// What came of a backup or a restore, beside the buttons. Separate from
+	/// <see cref="Notice"/>, which sits at the far end of a long page, because
+	/// "the passphrase may be wrong" has to be seen by whoever just typed it.
+	/// </summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(HasBackupNotice))]
+	private string _backupNotice = string.Empty;
+
+	public bool HasBackupNotice => !string.IsNullOrEmpty(BackupNotice);
+
 	/// <summary>
 	/// Which build is running, in Hand's words and Hand's order: version,
 	/// build number, when it was made, which runtime.
@@ -290,9 +345,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 	{
 		var session = await _sessions.LoadAsync().ConfigureAwait(true);
 		MemberName = session?.MemberName ?? string.Empty;
+		_memberId = session?.MemberId ?? 0;
 
 		var held = await _history.AllAsync().ConfigureAwait(true);
 		Held = held.Count;
+
+		LastBackup = Support.LastBackup.Describe(_backupFiles.LastBackup(_memberId)?.ToLocalTime());
 
 		var retrieved = await _config.LastRetrievedAsync().ConfigureAwait(true);
 		ConfigRetrieved = LastRetrieved.Describe(retrieved?.ToLocalTime());
@@ -408,6 +466,171 @@ public sealed partial class SettingsViewModel : ObservableObject
 		await LoadAsync().ConfigureAwait(true);
 
 		Notice = "The messages held on this phone have been cleared.";
+	}
+
+	/// <summary>
+	/// Start a backup: the finger first if fingerprint sign-in is on, then
+	/// the passphrase. A copy of the messages is about to leave Link, so
+	/// whoever is holding an unlocked phone does not get to make one unasked.
+	/// </summary>
+	[RelayCommand]
+	private async Task StartBackupAsync()
+	{
+		BackupNotice = string.Empty;
+
+		var confirmed = await _fingerprint.ConfirmBackupAsync().ConfigureAwait(true);
+
+		if (!confirmed.Confirmed)
+		{
+			// A closed sheet is the member's own doing, and they know.
+			if (confirmed.Outcome != FingerprintOutcome.Cancelled)
+			{
+				BackupNotice = string.IsNullOrEmpty(confirmed.Detail)
+					? "This phone could not confirm it is you, so no backup was made."
+					: confirmed.Detail;
+			}
+
+			return;
+		}
+
+		BackingUp = true;
+	}
+
+	/// <summary>
+	/// Seal the backup and hand it to the share sheet.
+	///
+	/// <para>The date is written once the sheet has been raised, which is as
+	/// much as this phone can ever know. See <see cref="IBackupFiles"/>.</para>
+	/// </summary>
+	[RelayCommand]
+	private async Task MakeBackupAsync()
+	{
+		var problem = BackupFile.PassphraseProblem(BackupPassphrase, BackupPassphraseAgain);
+		if (problem is not null)
+		{
+			BackupNotice = problem;
+			return;
+		}
+
+		Busy = true;
+		BackupNotice = string.Empty;
+
+		try
+		{
+			var made = await _backup.MakeAsync(BackupPassphrase).ConfigureAwait(true);
+
+			BackupPassphrase = string.Empty;
+			BackupPassphraseAgain = string.Empty;
+
+			if (made is null)
+			{
+				BackupNotice = "A backup could not be made. Sign out and back in, then try again.";
+				return;
+			}
+
+			if (!await _backupFiles.ShareAsync(made.FileName, made.File).ConfigureAwait(true))
+			{
+				BackupNotice = "This phone would not open somewhere to save the backup, so none was saved.";
+				return;
+			}
+
+			_backupFiles.RememberBackup(made.MemberId, made.At);
+			LastBackup = Support.LastBackup.Describe(_backupFiles.LastBackup(made.MemberId)?.ToLocalTime());
+
+			BackingUp = false;
+			BackupNotice = "Your backup is ready to save. Put it somewhere you will be able to find it.";
+		}
+		finally
+		{
+			Busy = false;
+		}
+	}
+
+	/// <summary>Choose a backup. The passphrase is asked for once there is one to open.</summary>
+	[RelayCommand]
+	private async Task StartRestoreAsync()
+	{
+		BackupNotice = string.Empty;
+
+		_chosenBackup = await _backupFiles.PickAsync().ConfigureAwait(true);
+
+		Restoring = _chosenBackup is not null;
+	}
+
+	/// <summary>
+	/// Open the chosen backup and take it in.
+	///
+	/// <para>A wrong passphrase leaves the question open, so the member can
+	/// try again without choosing the file a second time. Every other answer
+	/// ends it.</para>
+	/// </summary>
+	[RelayCommand]
+	private async Task RestoreBackupAsync()
+	{
+		if (_chosenBackup is not { } file)
+		{
+			return;
+		}
+
+		Busy = true;
+		BackupNotice = string.Empty;
+
+		try
+		{
+			var result = await _backup.RestoreAsync(file, RestorePassphrase).ConfigureAwait(true);
+
+			RestorePassphrase = string.Empty;
+			BackupNotice = result.Message;
+
+			if (result.Outcome == BackupRestoreOutcome.CouldNotOpen)
+			{
+				return;
+			}
+
+			_chosenBackup = null;
+			Restoring = false;
+
+			if (!result.Succeeded)
+			{
+				return;
+			}
+
+			// Back on the main thread here, which a style needs. Each of these
+			// also moves the switch on the screen in front of the member.
+			_backup.ApplySettings(result.Settings);
+			Style = _theme.Style;
+			SoundOn = _sound.Enabled;
+			OnlyRegistered = _listing.OnlyRegistered;
+			PullToRefresh = _pull.Enabled;
+
+			if (result.MadeAt is { } madeAt)
+			{
+				_backupFiles.RememberBackup(_memberId, madeAt);
+			}
+
+			await LoadAsync().ConfigureAwait(true);
+		}
+		finally
+		{
+			Busy = false;
+		}
+	}
+
+	/// <summary>
+	/// Fold a backup or a restore away and forget what was typed for it. The
+	/// Cancel buttons, and the page going off screen: this view model outlives
+	/// the page, and a passphrase must not sit in it until the next visit.
+	/// </summary>
+	[RelayCommand]
+	public void CancelBackup()
+	{
+		BackingUp = false;
+		Restoring = false;
+		BackupPassphrase = string.Empty;
+		BackupPassphraseAgain = string.Empty;
+		RestorePassphrase = string.Empty;
+		BackupNotice = string.Empty;
+		_chosenBackup = null;
 	}
 
 	/// <summary>

@@ -6,3 +6,7 @@
 # Scoped to *.sh deliberately: a repo-wide `* text=auto`, as Register has,
 # would renormalise every file in the repo in one unrelated commit.
 *.sh text eol=lf
+
+# The committed backup fixture is sealed bytes, and has to stay byte for byte
+# what it was: a line-ending conversion would stop it opening.
+*.linkbackup binary

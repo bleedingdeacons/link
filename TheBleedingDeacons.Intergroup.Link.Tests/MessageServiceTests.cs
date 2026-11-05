@@ -751,6 +751,13 @@ public sealed class MessageServiceTests
 
 			return Task.CompletedTask;
 		}
+
+		// A sync never backs anything up or restores it.
+		public Task<HistorySnapshot?> SnapshotAsync(long memberId, CancellationToken cancellationToken = default) =>
+			Task.FromResult<HistorySnapshot?>(null);
+
+		public Task<HistoryMerge> MergeAsync(long memberId, HistorySnapshot incoming, CancellationToken cancellationToken = default) =>
+			Task.FromResult(new HistoryMerge(HistoryMergeOutcome.NotWritten));
 	}
 
 	private sealed class FakeKeys(string privateKey) : IDeviceKeyStore

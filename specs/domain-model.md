@@ -52,7 +52,12 @@ one row rather than two.
 - **Recipient** — one thing a message can be addressed to: a member id or a
   committee slug. Never an address.
 - **Cleared up to** — the mark a clear leaves behind, so what was cleared
-  stays cleared.
+  stays cleared. Sent copies have a mark of their own, because this one is
+  also where the next poll starts.
+- **Backup** — one passphrase-encrypted file holding a member's history and
+  screen choices, which the member keeps outside Link. It holds nothing that
+  signs in. Restoring **merges**: messages join by id, and anything deleted or
+  cleared on either side stays gone.
 - **Acknowledged** — this phone has told Fellowship it has a message, so the
   sender can be shown it arrived. Retried every sync until accepted.
 - **Sent message** — one send, as this phone kept it at the moment of

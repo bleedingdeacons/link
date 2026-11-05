@@ -208,6 +208,67 @@ public class FingerprintSignInTests
 		Assert.False(_state.Locked);
 	}
 
+	[Fact]
+	public async Task With_fingerprint_sign_in_off_a_backup_raises_no_sheet()
+	{
+		var result = await Subject.ConfirmBackupAsync();
+
+		Assert.True(result.Confirmed);
+		Assert.Equal(0, _reader.Asked);
+	}
+
+	[Fact]
+	public async Task With_fingerprint_sign_in_on_a_backup_asks_first()
+	{
+		_state.Enabled = true;
+
+		var result = await Subject.ConfirmBackupAsync();
+
+		Assert.True(result.Confirmed);
+		Assert.Equal(1, _reader.Asked);
+		Assert.Equal(FingerprintSignIn.BackupPrompt, _reader.LastSubtitle);
+	}
+
+	[Theory]
+	[InlineData(FingerprintOutcome.Cancelled)]
+	[InlineData(FingerprintOutcome.Failed)]
+	[InlineData(FingerprintOutcome.Unavailable)]
+	public async Task Anything_but_a_match_stops_a_backup(FingerprintOutcome answer)
+	{
+		_state.Enabled = true;
+		_reader.Answer = new FingerprintResult(answer);
+
+		var result = await Subject.ConfirmBackupAsync();
+
+		Assert.False(result.Confirmed);
+	}
+
+	[Fact]
+	public async Task A_phone_that_cannot_ask_any_more_does_not_let_a_backup_through()
+	{
+		_state.Enabled = true;
+		_reader.Available = false;
+		_reader.HasCode = false;
+
+		var result = await Subject.ConfirmBackupAsync();
+
+		Assert.False(result.Confirmed);
+		Assert.Equal(FingerprintOutcome.Unavailable, result.Outcome);
+		Assert.Equal(0, _reader.Asked);
+		Assert.Contains("turn fingerprint sign-in off", result.Detail, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task Asking_before_a_backup_leaves_the_lock_alone()
+	{
+		_state.Enabled = true;
+
+		await Subject.ConfirmBackupAsync();
+
+		Assert.False(_state.Locked);
+		Assert.True(_state.Enabled);
+	}
+
 	private sealed class StubReader : IFingerprintReader
 	{
 		public bool Available { get; set; } = true;

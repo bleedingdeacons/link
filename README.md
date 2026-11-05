@@ -195,6 +195,107 @@ Removing the phone clears the history too, and that is not optional:
 taking a handed-on phone off the list has to mean the messages are gone
 from it. Without fingerprint sign-in, that is what Sign out does.
 
+## Backup and restore
+
+Settings has two actions under *Messages on this phone*: **Back up messages**
+and **Restore from a backup**. A backup is one file,
+`link-backup-<date>.linkbackup`, saved through the phone's share sheet and
+chosen again with its file picker. It holds the history (messages, sent copies,
+deleted ids, and the clear and poll marks) and the style and switches.
+
+**What the member is told, because each of these is easy to get wrong.** A
+backup is a copy of their messages outside Link. Clearing messages, signing out
+and *Remove this phone* do not touch it. The intergroup cannot delete it either,
+so an erasure request cannot reach it. A forgotten passphrase means the backup
+cannot be opened, and nobody can recover it. Settings says all of this before a
+file is made, in `MessageBackup`'s words.
+
+**Nothing in it signs in.** No device token, no private key. A backup restores
+messages onto a phone a member has already signed in to and enrols nothing, so
+`android:allowBackup="false"` stays, for the reason written in the manifest. A
+test holds the file's property names to an exact list, so a new one goes in on
+purpose or not at all. Fingerprint sign-in is left out too: only a finger this
+phone has matched turns it on.
+
+### The file
+
+AES-256-GCM over gzipped JSON, using only what .NET provides. All numbers are
+big-endian:
+
+| Offset | Size | What |
+| --- | --- | --- |
+| 0 | 4 | `LKBK` |
+| 4 | 2 | Format version, 1 |
+| 6 | 4 | PBKDF2-SHA256 iterations, 600,000 |
+| 10 | 16 | Salt, random |
+| 26 | 12 | Nonce, random |
+| 38 | 16 | GCM tag |
+| 54 | n | Ciphertext |
+
+The first 38 bytes are the header, and the header is GCM's additional
+authenticated data, so changing any of it stops the file opening. The iteration
+count is read before anything can be authenticated, so a file asking for fewer
+than this build writes, or for more than 10 million, is refused without deriving
+a key. The passphrase is at least 12 characters, typed twice and never stored.
+It is trimmed, because a phone keyboard adds a space after a suggested word, and
+composed to NFC, because iOS and Android can spell the same accented letter as
+different bytes.
+
+**A wrong passphrase and a damaged file get one message**, because GCM cannot
+tell them apart. A backup from a later version of Link gets it too, and the
+message says so.
+
+`BackupFile` is the format and takes bytes and a passphrase. `MessageBackup` is
+the rules. Both are in Link.Core and tested there. `IBackupFiles` is the app's
+seam over the sheet and the picker, with a half per head. `BackupFileTests` reads
+the layout again without calling the shipping code, and
+`Fixtures/backup-v1.linkbackup` is a version 1 file committed so that every later
+version has to go on restoring it. The sealer has no fixture because one would
+have to carry a private key. This one holds test messages and no key.
+
+### Restoring merges
+
+Restoring needs a sign-in, and **a backup from another member is refused**. The
+session is checked first and the store's own owner after it, and a refusal
+changes nothing. Then the two sides are joined:
+
+- **Messages join by id.** Read on either side is read, and a sent copy keeps the
+  higher receipt counts.
+- **Anything deleted on either side stays gone.** The deleted ids of both are
+  kept, so a later copy is refused too.
+- **Anything cleared on either side stays gone.** Each side's clear mark applies
+  to the other side's messages. It does not apply to its own: a message that side
+  holds below its own mark arrived late, by push, and survived that clear.
+- **The poll mark takes the higher of the two.** Everything below it on the
+  backup's phone is either in the backup or was removed by the member.
+
+So **clearing a phone and then restoring brings nothing back**, and Link says so.
+What signing out took does come back, because the member did not choose that.
+
+**Sent copies have a clear mark of their own**, `SentClearedUpTo`. The other mark
+is where the next poll starts, and stops at the highest message *received* on
+purpose: a sent id can sit above messages to this member that no poll has
+collected yet, and raising the poll past them would lose them. Without a second
+mark, a clear left nothing to say a sent copy above it had been cleared, and a
+backup from before the clear brought it straight back.
+
+### What Link cannot know
+
+**Whether the file was saved.** Neither platform's share sheet says what happened
+after it opened, and on Android the call returns as soon as it has. So Settings
+says "Last backup **made** on", and a member who closes the sheet has no backup
+and a date that suggests otherwise. There are no scheduled reminders.
+
+**The sealed file stays in the app's private cache until the next backup**, or
+until the phone clears its cache, because Android's sheet returns before the
+receiving app has read it. *Remove this phone* does not reach it. It is the same
+ciphertext as the member's own copy, and it needs the same passphrase.
+
+**The finger guards the screen, not the file.** Fingerprint sign-in is asked for
+before a backup, against somebody picking up an unlocked phone, but the switch
+can be turned off in Settings without a finger. Nothing about the file depends on
+it: that is the passphrase.
+
 ## Fingerprint sign-in
 
 Once the first sign-in has enrolled the phone, Link raises the phone's own
