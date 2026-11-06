@@ -3,6 +3,7 @@ using Foundation;
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
+using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 using UIKit;
 using UserNotifications;
 
