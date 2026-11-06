@@ -363,21 +363,21 @@ public sealed class FirebaseFellowshipClientTests
 		_google.SignedIn();
 		_google.Routes["documents:runQuery"] = _ => FakeGoogle.Json($$$$$$"""
 			[
-				{"document":{"name":"projects/p/databases/(default)/documents/messages/100","fields":{"recipientCount":{"integerValue":"3"},"receivedCount":{"integerValue":"2"},"readCount":{"integerValue":"1"}}}},
-				{"document":{"name":"projects/p/databases/(default)/documents/messages/101","fields":{"recipientCount":{"integerValue":"9"}}}}
+				{"document":{"name":"projects/p/databases/(default)/documents/messages/{{{{{{MessageId}}}}}}","fields":{"recipientCount":{"integerValue":"3"},"receivedCount":{"integerValue":"2"},"readCount":{"integerValue":"1"}}}},
+				{"document":{"name":"projects/p/databases/(default)/documents/messages/{{{{{{MessageId + 1}}}}}}","fields":{"recipientCount":{"integerValue":"9"}}}}
 			]
 			""");
 
-		var receipts = await Client().FetchReceiptsAsync(RefreshToken, [100, 102]);
+		var receipts = await Client().FetchReceiptsAsync(RefreshToken, [MessageId, MessageId + 2]);
 
-		Assert.Equal(new MessageReceipt(100, 3, 2, 1), Assert.Single(receipts!));
+		Assert.Equal(new MessageReceipt(MessageId, 3, 2, 1), Assert.Single(receipts!));
 
 		var filters = JsonDocument.Parse(_google.Only("documents:runQuery").Body).RootElement
 			.GetProperty("structuredQuery").GetProperty("where").GetProperty("compositeFilter").GetProperty("filters");
 
 		Assert.Equal("senderMemberId", filters[0].GetProperty("fieldFilter").GetProperty("field").GetProperty("fieldPath").GetString());
 		Assert.Equal("7", filters[0].GetProperty("fieldFilter").GetProperty("value").GetProperty("integerValue").GetString());
-		Assert.EndsWith("/documents/messages/100", filters[1].GetProperty("fieldFilter").GetProperty("value").GetProperty("referenceValue").GetString(), StringComparison.Ordinal);
+		Assert.EndsWith($"/documents/messages/{MessageId}", filters[1].GetProperty("fieldFilter").GetProperty("value").GetProperty("referenceValue").GetString(), StringComparison.Ordinal);
 	}
 
 	[Fact]
@@ -386,7 +386,36 @@ public sealed class FirebaseFellowshipClientTests
 		_google.SignedIn();
 		_google.Routes["documents:runQuery"] = _ => new FakeReply(HttpStatusCode.ServiceUnavailable, "{}");
 
-		Assert.Null(await Client().FetchReceiptsAsync(RefreshToken, [100]));
+		Assert.Null(await Client().FetchReceiptsAsync(RefreshToken, [MessageId]));
+	}
+
+	[Fact]
+	public async Task MessagesSentThroughFellowshipAreLeftOutOfTheReceiptsQuery()
+	{
+		// As text 999 sorts after 1835…, so starting from it would miss every
+		// message actually held here.
+		_google.SignedIn();
+		_google.Routes["documents:runQuery"] = _ => FakeGoogle.Json($$$$$$"""
+			[{"document":{"name":"x/messages/{{{{{{MessageId}}}}}}","fields":{"recipientCount":{"integerValue":"1"}}}}]
+			""");
+
+		var receipts = await Client().FetchReceiptsAsync(RefreshToken, [999, MessageId]);
+
+		Assert.Equal(MessageId, Assert.Single(receipts!).Id);
+
+		var filters = JsonDocument.Parse(_google.Only("documents:runQuery").Body).RootElement
+			.GetProperty("structuredQuery").GetProperty("where").GetProperty("compositeFilter").GetProperty("filters");
+
+		Assert.EndsWith($"/documents/messages/{MessageId}", filters[1].GetProperty("fieldFilter").GetProperty("value").GetProperty("referenceValue").GetString(), StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task OnlyFellowshipsMessagesMeansNothingToAsk()
+	{
+		var receipts = await Client().FetchReceiptsAsync(RefreshToken, [999, 1000]);
+
+		Assert.Empty(receipts!);
+		Assert.Empty(_google.Requests);
 	}
 
 	[Fact]

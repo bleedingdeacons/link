@@ -26,6 +26,11 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// now; one place to set them, per application, beats a Fellowship setting
 /// that only Link could read.</para>
 /// </summary>
+/// <remarks>
+/// On Firebase the session's token is a refresh token, which lasts until revoked and
+/// is never handed to anything else, Freedom included. Freedom will take the device's
+/// short-lived ID token once it has been taught to.
+/// </remarks>
 public sealed class FreedomLoggingSource : ILoggingSource
 {
 	public const string EndpointKey = "betterstack.endpoint";
@@ -54,6 +59,12 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		// and so does the logger.
 		if (sync.Status is SyncStatus.NotEnrolled or SyncStatus.Revoked)
 		{
+			if (session.Backend == LinkBackend.Firebase)
+			{
+				Log.Information("Freedom can't take a Firebase session yet; carrying on without its settings");
+				return null;
+			}
+
 			// Freedom's sign-in, done with Link's: the second half of every
 			// first launch after a sign-in, so worth a line either way.
 			Log.Information("Handing device {DeviceId}'s Link session to Freedom ({Status})", session.DeviceId, sync.Status);
@@ -69,7 +80,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 			_handover.MarkCurrent();
 			sync = enrolled.Sync ?? await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
 		}
-		else if (IsAnswer(sync.Status) && !_handover.IsCurrent)
+		else if (IsAnswer(sync.Status) && !_handover.IsCurrent && session.Backend == LinkBackend.Fellowship)
 		{
 			// Signed in already, but not since Link was updated: hand over
 			// once more so Freedom has this build's name, model and version.

@@ -294,7 +294,12 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	{
 		ArgumentNullException.ThrowIfNull(messageIds);
 
-		if (messageIds.Count == 0)
+		// A phone that moved here still holds messages it sent through Fellowship.
+		// Firestore has never heard of those, and they would break the query below,
+		// because it sorts ids as text and a short id sorts after a long one.
+		var ours = messageIds.Where(id => id >= LinkMessageIds.FirstFirebaseId).ToList();
+
+		if (ours.Count == 0)
 		{
 			return [];
 		}
@@ -311,7 +316,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 		var (rows, _) = await RunQueryAsync(
 			$"{_firebase.Documents}:runQuery",
 			user,
-			SentSinceQuery(user.MemberId, messageIds.Min()),
+			SentSinceQuery(user.MemberId, ours.Min()),
 			cancellationToken).ConfigureAwait(false);
 
 		if (rows is null)
@@ -319,7 +324,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 			return null;
 		}
 
-		var asked = messageIds.ToHashSet();
+		var asked = ours.ToHashSet();
 		var receipts = new List<MessageReceipt>();
 
 		foreach (var fields in rows)

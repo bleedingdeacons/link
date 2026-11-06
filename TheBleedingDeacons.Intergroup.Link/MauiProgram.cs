@@ -155,6 +155,7 @@ public static class MauiProgram
 		// is per-instance.
 		builder.Services.AddSingleton(LinkServices.Configuration);
 		builder.Services.AddSingleton(LinkServices.Client);
+		builder.Services.AddSingleton(LinkServices.Backend);
 		builder.Services.AddSingleton(LinkServices.Sessions);
 		builder.Services.AddSingleton(LinkServices.Keys);
 		builder.Services.AddSingleton(LinkServices.History);

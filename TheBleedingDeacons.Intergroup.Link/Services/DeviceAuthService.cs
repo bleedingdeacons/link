@@ -33,6 +33,7 @@ public sealed class DeviceAuthService
 	private readonly INativeGoogleSignIn _nativeGoogle;
 	private readonly FingerprintSignIn _fingerprint;
 	private readonly FellowshipConfiguration _configuration;
+	private readonly BackendSwitch _backend;
 
 	public DeviceAuthService(
 		IFellowshipClient client,
@@ -43,8 +44,10 @@ public sealed class DeviceAuthService
 		INativeGoogleSignIn nativeGoogle,
 		IMessageHistory history,
 		FingerprintSignIn fingerprint,
-		FellowshipConfiguration configuration)
+		FellowshipConfiguration configuration,
+		BackendSwitch backend)
 	{
+		_backend = backend;
 		_fingerprint = fingerprint;
 		_apple = apple;
 		_nativeGoogle = nativeGoogle;
@@ -90,6 +93,8 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task<bool> RestoreAsync(CancellationToken cancellationToken = default)
 	{
+		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
+
 		var session = await _sessions.LoadAsync().ConfigureAwait(false);
 		if (session is null || !session.IsSignedIn)
 		{
@@ -107,6 +112,26 @@ public sealed class DeviceAuthService
 		}
 
 		return await RegisterPushTokenAsync(pushToken, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Ask the site which back end to use, and move if it has changed.
+	///
+	/// <para>Before a sign-in and at each launch or return to the app. Never a reason
+	/// for either to fail: a phone that can't ask stays where it was.</para>
+	/// </summary>
+	public async Task FollowBackendAsync(CancellationToken cancellationToken = default)
+	{
+		try
+		{
+			await _backend.RefreshAsync(cancellationToken).ConfigureAwait(false);
+		}
+#pragma warning disable CA1031 // Deliberately broad: see the remarks.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Log.Warning(ex, "Could not check which back end to use; staying on {Backend}", _backend.Current);
+		}
 	}
 
 	/// <summary>
@@ -189,6 +214,8 @@ public sealed class DeviceAuthService
 		string provider,
 		CancellationToken cancellationToken)
 	{
+		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
+
 		if (provider == GoogleProvider)
 		{
 			if (_nativeGoogle.IsAvailable)
@@ -595,6 +622,9 @@ public sealed class DeviceAuthService
 			return EnrolmentResult.Failed("This device cannot sign in with Apple.");
 		}
 
+		// Before the nonce, which the two back ends make differently.
+		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
+
 		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
 		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
 		{
@@ -653,6 +683,8 @@ public sealed class DeviceAuthService
 			// it is the same address failing every time is the first
 			// question about a refused password. Never the password.
 			Log.Information("Password sign-in for {Email}", email.Trim());
+
+			await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
 
 			return attempt.Finished(await EnrolAsync(new EnrolmentRequest
 			{

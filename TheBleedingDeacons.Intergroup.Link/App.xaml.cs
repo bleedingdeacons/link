@@ -5,7 +5,11 @@ namespace TheBleedingDeacons.Intergroup.Link;
 
 public partial class App : Application
 {
+	/// <summary>How often coming back to the app asks the site which back end to use.</summary>
+	private const long BackendCheckMilliseconds = 15 * 60 * 1000;
+
 	private readonly DeviceAuthService _auth;
+	private long _backendCheckedAt;
 
 	public App(DeviceAuthService auth, ThemeChoice theme)
 	{
@@ -42,6 +46,8 @@ public partial class App : Application
 	{
 		base.OnStart();
 
+		_backendCheckedAt = Environment.TickCount64;
+
 		_ = Task.Run(async () =>
 		{
 			try
@@ -55,5 +61,24 @@ public partial class App : Application
 				Log.Warning(ex, "Push token could not be re-registered at launch");
 			}
 		});
+	}
+
+	/// <summary>
+	/// A phone can stay open for days, so coming back to it also checks which back
+	/// end to use. Now and then rather than every time, because it is a request to
+	/// the site that is almost always answered the same way.
+	/// </summary>
+	protected override void OnResume()
+	{
+		base.OnResume();
+
+		if (Environment.TickCount64 - _backendCheckedAt < BackendCheckMilliseconds)
+		{
+			return;
+		}
+
+		_backendCheckedAt = Environment.TickCount64;
+
+		_ = Task.Run(() => _auth.FollowBackendAsync());
 	}
 }

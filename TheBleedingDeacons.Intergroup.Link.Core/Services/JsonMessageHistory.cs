@@ -484,6 +484,40 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	}
 
 	/// <inheritdoc />
+	public async Task ReturnToFellowshipAsync(CancellationToken cancellationToken = default)
+	{
+		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
+
+			if (held.PolledUpTo < LinkMessageIds.FirstFirebaseId && held.ClearedUpTo < LinkMessageIds.FirstFirebaseId)
+			{
+				return;
+			}
+
+			var highest = held.Messages.Keys
+				.Concat(held.Deleted.Keys)
+				.Where(id => id < LinkMessageIds.FirstFirebaseId)
+				.DefaultIfEmpty(0)
+				.Max();
+
+			await WriteUnguardedAsync(
+				held with
+				{
+					PolledUpTo = Math.Min(held.PolledUpTo, highest),
+					ClearedUpTo = held.ClearedUpTo < LinkMessageIds.FirstFirebaseId ? held.ClearedUpTo : 0,
+				},
+				cancellationToken).ConfigureAwait(false);
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	/// <inheritdoc />
 	public async Task<HistorySnapshot?> SnapshotAsync(long memberId, CancellationToken cancellationToken = default)
 	{
 		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);

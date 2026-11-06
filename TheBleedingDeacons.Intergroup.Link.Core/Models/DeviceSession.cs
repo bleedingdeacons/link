@@ -27,6 +27,9 @@ public sealed record DeviceSession
 	/// </summary>
 	public string FirebaseDeviceId { get; init; } = string.Empty;
 
+	/// <summary>The back end this session's token belongs to.</summary>
+	public LinkBackend Backend => string.IsNullOrEmpty(FirebaseDeviceId) ? LinkBackend.Fellowship : LinkBackend.Firebase;
+
 	public long MemberId { get; init; }
 
 	public string MemberName { get; init; } = string.Empty;
