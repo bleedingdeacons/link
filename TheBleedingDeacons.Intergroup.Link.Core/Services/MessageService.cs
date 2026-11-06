@@ -115,10 +115,27 @@ public sealed class MessageService : IMessageService
 			{
 				fetched++;
 
+				// Firebase's poll looks back over what it has already fetched, so
+				// it can't miss a late arrival. Those aren't opened again, which
+				// saves the work and can't disturb what the phone knows about them.
+				if (envelope.SenderMemberId is not null && known.Contains(envelope.Id))
+				{
+					reached = Math.Max(reached, envelope.Id);
+					continue;
+				}
+
 				var message = Open(envelope, privateKey);
 				if (message is null)
 				{
 					unopened++;
+					continue;
+				}
+
+				if (IsForged(envelope, message))
+				{
+					// Not a key fault: the key worked. Stepped over like any other
+					// bad envelope, and kept away from this member's history.
+					reached = Math.Max(reached, envelope.Id);
 					continue;
 				}
 
@@ -193,16 +210,19 @@ public sealed class MessageService : IMessageService
 		};
 	}
 
-	public async Task<LinkMessage?> ReceivePushAsync(
+	public Task<LinkMessage?> ReceivePushAsync(
 		string wrappedKey,
 		string sealedPayload,
-		CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default) =>
+		ReceivePushAsync(SealedMessage.FromPush(wrappedKey, sealedPayload, id: null, sender: null), cancellationToken);
+
+	public async Task<LinkMessage?> ReceivePushAsync(SealedMessage envelope, CancellationToken cancellationToken = default)
 	{
+		ArgumentNullException.ThrowIfNull(envelope);
+
 		var privateKey = await _keys.PrivateKeyAsync().ConfigureAwait(false);
 
-		var message = Open(
-			new SealedMessage { Id = 1, WrappedKey = wrappedKey, Payload = sealedPayload },
-			privateKey);
+		var message = Open(envelope, privateKey);
 		if (message is null)
 		{
 			// Quiet on screen, not quiet in the log — those are different
@@ -217,6 +237,11 @@ public sealed class MessageService : IMessageService
 				"A pushed message could not be opened{Detail}",
 				string.IsNullOrEmpty(privateKey) ? "; this handset holds no private key" : string.Empty);
 
+			return null;
+		}
+
+		if (IsForged(envelope, message))
+		{
 			return null;
 		}
 
@@ -399,6 +424,34 @@ public sealed class MessageService : IMessageService
 		_ =>
 			"This phone has been signed out. Sign in again to carry on receiving messages.",
 	};
+
+	/// <summary>
+	/// Whether what is sealed disagrees with what the server recorded.
+	///
+	/// <para>Only on Firebase, where a sender's phone does the sealing. So a member
+	/// with a tampered app can seal any sender id, but the server sets the outer
+	/// one from their sign-in, and this is what stops them passing as someone else:
+	/// a reply goes to the id, so it would otherwise go to the wrong person.</para>
+	///
+	/// <para><b>The name is still their word.</b> <see cref="LinkMessage.Sender"/>
+	/// can say anything, with the right id behind it.</para>
+	/// </summary>
+	private static bool IsForged(SealedMessage envelope, LinkMessage message)
+	{
+		if (envelope.SenderMemberId is not { } sender || (message.Id == envelope.Id && message.SenderId == sender))
+		{
+			return false;
+		}
+
+		Log.Warning(
+			"Refused message {Id}: sealed as {SealedId} from member {SealedSender}, but sent by member {Sender}",
+			envelope.Id,
+			message.Id,
+			message.SenderId,
+			sender);
+
+		return true;
+	}
 
 	/// <summary>
 	/// One envelope in, one message out — or null, which the callers

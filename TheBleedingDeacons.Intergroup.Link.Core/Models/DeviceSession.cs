@@ -20,6 +20,13 @@ public sealed record DeviceSession
 
 	public long DeviceId { get; init; }
 
+	/// <summary>
+	/// This device on Firebase, where ids are strings, or empty for a session
+	/// with Fellowship's own device list. <see cref="Token"/> is then a Firebase
+	/// refresh token.
+	/// </summary>
+	public string FirebaseDeviceId { get; init; } = string.Empty;
+
 	public long MemberId { get; init; }
 
 	public string MemberName { get; init; } = string.Empty;

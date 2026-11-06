@@ -28,6 +28,12 @@ public interface IMessageService
 	/// </summary>
 	Task<LinkMessage?> ReceivePushAsync(string wrappedKey, string sealedPayload, CancellationToken cancellationToken = default);
 
+	/// <summary>
+	/// The same, for an envelope that says who sent it. See
+	/// <see cref="SealedMessage.FromPush"/>.
+	/// </summary>
+	Task<LinkMessage?> ReceivePushAsync(SealedMessage envelope, CancellationToken cancellationToken = default);
+
 	/// <summary>Mark read here and, if it can be reached, on the server.</summary>
 	Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default);
 
