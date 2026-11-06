@@ -502,6 +502,99 @@ public sealed class MessageServiceTests
 	/// each carrying its own id — for the tests that need a page of
 	/// several messages one key opens.
 	/// </summary>
+	[Fact]
+	public async Task OnFirebaseAMessageFromWhoItSaysOpens()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] } };
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Equal(1, result.Received);
+		Assert.Equal(500, history.Held.Single().Id);
+		Assert.Equal(500, history.PollFrom);
+	}
+
+	[Theory]
+	[InlineData(500, 9)]
+	[InlineData(501, 8)]
+	public async Task OnFirebaseAMessageSealedAsSomeoneElseIsRefusedWithoutBlamingTheKey(long sealedId, long sealedSender)
+	{
+		var sealed_ = SealedFrom(sealedId, sealedSender);
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] } };
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Empty(history.Held);
+		Assert.False(result.KeyFault);
+		Assert.Equal(0, client.KeyFaultsReported);
+		Assert.Equal(500, history.PollFrom);
+	}
+
+	[Fact]
+	public async Task OnFirebaseWhatThePhoneAlreadyHoldsIsNotOpenedAgain()
+	{
+		// The poll looks back over what it has fetched. Opening those again would
+		// be wasted work, and something unopenable there would blame the key.
+		var history = new FakeHistory();
+		await history.SaveAsync([new LinkMessage { Id = 500, Subject = "Held" }]);
+
+		var client = new FakeClient
+		{
+			Inbox = new InboxPage
+			{
+				Messages = [new SealedMessage { Id = 500, WrappedKey = "garbage", Payload = "garbage", SenderMemberId = 8 }],
+			},
+		};
+
+		var result = await Service(client, history, Sealing.StrangersPrivateKey()).SyncAsync();
+
+		Assert.False(result.KeyFault);
+		Assert.Equal(0, result.Received);
+		Assert.Equal("Held", history.Held.Single().Subject);
+		Assert.Equal(500, history.PollFrom);
+	}
+
+	[Fact]
+	public async Task APushFromFirebaseIsCheckedTheSameWay()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var history = new FakeHistory();
+		var service = Service(new FakeClient(), history, sealed_.PrivateKeyPem);
+
+		Assert.Null(await service.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, "500", "9")));
+		Assert.Null(await service.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, "501", "8")));
+		Assert.Null(await service.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, "500", "nonsense")));
+		Assert.Empty(history.Held);
+
+		Assert.NotNull(await service.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, "500", "8")));
+		Assert.Single(history.Held);
+	}
+
+	[Fact]
+	public async Task APushFromFellowshipHasNoSenderToCheck()
+	{
+		var sealed_ = Sealing.Seal();
+		var history = new FakeHistory();
+
+		var message = await Service(new FakeClient(), history, sealed_.PrivateKeyPem)
+			.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, id: "4242", sender: null));
+
+		Assert.NotNull(message);
+		Assert.Equal(Sealing.ExpectedId, message.Id);
+	}
+
+	private static Sealing.Sealed SealedFrom(long id, long senderId)
+	{
+		var payload = Sealing.Payload();
+		payload["id"] = id;
+		payload["sender_id"] = senderId;
+
+		return Sealing.Seal(payload);
+	}
+
 	private sealed class Mailbox : IDisposable
 	{
 		private readonly RSA _rsa = RSA.Create(Sealing.KeyBits);

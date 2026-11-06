@@ -1,3 +1,4 @@
+using System.Globalization;
 using TheBleedingDeacons.Intergroup.Link.Models;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
@@ -347,6 +348,42 @@ public sealed record SealedMessage
 	/// lets a handset page its poll without opening anything.</para>
 	/// </summary>
 	public required string Payload { get; init; }
+
+	/// <summary>
+	/// Who the server says sent it, on Firebase, or null from Fellowship.
+	///
+	/// <para>On Firebase the sender's phone writes the sealed payload, so what is
+	/// inside is only their word. The server sets this from the sender's sign-in,
+	/// and a message that disagrees with it does not open.</para>
+	/// </summary>
+	public long? SenderMemberId { get; init; }
+
+	/// <summary>
+	/// The envelope a push carried.
+	///
+	/// <para>A push from Fellowship has no <c>s</c>, and its id is left unread
+	/// because that one has always come from inside the payload. One from Firebase
+	/// has both, and they are checked against what is sealed.</para>
+	/// </summary>
+	/// <param name="wrappedKey">The <c>k</c> field.</param>
+	/// <param name="payload">The <c>p</c> field.</param>
+	/// <param name="id">The <c>id</c> field, if the push had one.</param>
+	/// <param name="sender">The <c>s</c> field, if the push had one.</param>
+	public static SealedMessage FromPush(string wrappedKey, string payload, string? id, string? sender)
+	{
+		if (string.IsNullOrEmpty(sender))
+		{
+			return new SealedMessage { Id = 1, WrappedKey = wrappedKey, Payload = payload };
+		}
+
+		return new SealedMessage
+		{
+			Id = long.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedId) ? parsedId : 0,
+			WrappedKey = wrappedKey,
+			Payload = payload,
+			SenderMemberId = long.TryParse(sender, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSender) ? parsedSender : -1,
+		};
+	}
 }
 
 /// <summary>One page of the inbox.</summary>
@@ -466,6 +503,16 @@ public sealed record SendResult
 	public long MessageId { get; init; }
 
 	public int Recipients { get; init; }
+
+	/// <summary>
+	/// How many members it was addressed to, on Firebase, or 0 from Fellowship.
+	///
+	/// <para>A member with no device when a message is sent never gets it, because
+	/// there is no key to seal it to. So this can be more than
+	/// <see cref="Recipients"/>, and the difference is worth telling the
+	/// sender.</para>
+	/// </summary>
+	public int Addressed { get; init; }
 
 	/// <summary>Unix seconds, as the server recorded the send, or 0 if it did not say.</summary>
 	public long CreatedAt { get; init; }

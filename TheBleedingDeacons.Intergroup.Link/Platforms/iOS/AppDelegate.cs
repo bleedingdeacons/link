@@ -3,6 +3,7 @@ using Foundation;
 using Serilog;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
+using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 using UIKit;
 using UserNotifications;
 
@@ -139,6 +140,8 @@ public class AppDelegate : MauiUIApplicationDelegate
 
 		var wrappedKey = StringFrom(userInfo, "k");
 		var payload = StringFrom(userInfo, "p");
+		var id = StringFrom(userInfo, "id");
+		var sender = StringFrom(userInfo, "s");
 
 		if (wrappedKey.Length == 0 || payload.Length == 0)
 		{
@@ -167,7 +170,7 @@ public class AppDelegate : MauiUIApplicationDelegate
 				}
 
 				var stored = await LinkServices.Messages
-					.ReceivePushAsync(wrappedKey, payload)
+					.ReceivePushAsync(SealedMessage.FromPush(wrappedKey, payload, id, sender))
 					.WaitAsync(DeliveryBudget)
 					.ConfigureAwait(false);
 

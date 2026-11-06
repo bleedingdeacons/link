@@ -94,7 +94,10 @@ public sealed class LinkFirebaseMessagingService : FirebaseMessagingService
 				return;
 			}
 
-			var stored = service.ReceivePushAsync(wrappedKey, payload)
+			data.TryGetValue("id", out var id);
+			data.TryGetValue("s", out var sender);
+
+			var stored = service.ReceivePushAsync(SealedMessage.FromPush(wrappedKey, payload, id, sender))
 				.WaitAsync(DeliveryBudget)
 				.GetAwaiter()
 				.GetResult();
