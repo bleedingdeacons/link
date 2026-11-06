@@ -824,6 +824,8 @@ public sealed class MessageServiceTests
 
 		public long Owner { get; private set; }
 
+		public Task ReturnToFellowshipAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
 		public Task AdoptAsync(long memberId, CancellationToken cancellationToken = default)
 		{
 			if (Owner != memberId || memberId <= 0)

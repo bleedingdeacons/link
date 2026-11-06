@@ -404,6 +404,12 @@ public sealed partial class ComposeViewModel : ObservableObject, IQueryAttributa
 				return;
 			}
 
+			// Worth stopping for: a member with no phone never gets this message.
+			if (result.Shortfall.Length > 0)
+			{
+				await Shell.Current.DisplayAlertAsync("Message sent", result.Shortfall, "OK").ConfigureAwait(true);
+			}
+
 			await Shell.Current.GoToAsync("..").ConfigureAwait(true);
 		}
 		finally

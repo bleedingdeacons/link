@@ -521,5 +521,21 @@ public sealed record SendResult
 
 	public bool Succeeded => MessageId > 0;
 
+	/// <summary>
+	/// What to tell the sender about members this didn't reach, or empty when it
+	/// reached everyone. They had no phone to seal it to, and it won't wait for them.
+	/// </summary>
+	public string Shortfall
+	{
+		get
+		{
+			var missed = Addressed - Recipients;
+
+			return missed <= 0
+				? string.Empty
+				: $"Sent to {Recipients} of {Addressed} members. {(missed == 1 ? "The other member doesn't" : $"The other {missed} members don't")} have Link yet, so they won't get this message.";
+		}
+	}
+
 	public static SendResult Failed(string error) => new() { Error = error };
 }

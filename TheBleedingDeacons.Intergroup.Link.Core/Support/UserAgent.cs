@@ -26,11 +26,14 @@ namespace TheBleedingDeacons.Intergroup.Link.Support;
 /// Hand rather than Link, but the two apps poll the same host in the same
 /// shape.</para>
 ///
-/// <para>This is not a defence against that happening again, and must not
-/// be mistaken for one: the same host fingerprints the TLS handshake
-/// (JA4), which no header changes. The fix for a challenged API is the
-/// server exempting it. This is here so the traffic is attributable, and
-/// so it is not sitting in the anonymous bucket to start with.</para>
+/// <para>This is not a guarantee against that happening again: the same
+/// host fingerprints the TLS handshake (JA4), which no header changes. But
+/// it matters more than this note once said. On 2026-11-06 Fellowship's
+/// Cloud Functions, which sent no <c>User-Agent</c> of their own, were
+/// challenged on every call. Sending this shape and <c>Accept:
+/// application/json</c> stopped it, with old and new versions compared side
+/// by side. So check how a client identifies itself first. They now send
+/// <c>Fellowship-Functions (rest@aa-bristol.org; …)</c>.</para>
 ///
 /// <para><b>The shape is Fellowship's own, deliberately.</b> Fellowship
 /// and Reach build the same string in their <c>Core\UserAgent</c> for the

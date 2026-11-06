@@ -26,7 +26,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// record" is the whole of what somebody needs to know at that moment —
 /// and the second is not, because it will fix itself.</para>
 /// </summary>
-public sealed class FellowshipClient : IFellowshipClient
+public sealed class FellowshipClient : IFellowshipClient, IBackendSource
 {
 	private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -41,6 +41,26 @@ public sealed class FellowshipClient : IFellowshipClient
 	{
 		_http = http ?? throw new ArgumentNullException(nameof(http));
 		_configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+	}
+
+	/// <summary>
+	/// Which back end the site says to use, or null when it didn't clearly say.
+	///
+	/// <para>Exact names only. A route that is missing, an outage or something else's
+	/// page must never move a phone.</para>
+	/// </summary>
+	public async Task<LinkBackend?> FetchBackendAsync(CancellationToken cancellationToken = default)
+	{
+		var (json, _) = await GetWithFailureAsync(_configuration.Route("backend"), token: null, cancellationToken).ConfigureAwait(false);
+
+		return json is { ValueKind: JsonValueKind.Object } answer
+			? Text(answer, "backend") switch
+			{
+				"firebase" => LinkBackend.Firebase,
+				"fellowship" => LinkBackend.Fellowship,
+				_ => null,
+			}
+			: null;
 	}
 
 	public async Task<SignInStart?> StartSignInAsync(string provider, CancellationToken cancellationToken = default)

@@ -160,6 +160,20 @@ public interface IMessageHistory
 	Task AdoptAsync(long memberId, CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Put the poll back where Fellowship can answer it, after a time on Firebase.
+	///
+	/// <para>Firebase's ids are far above any of Fellowship's, so a mark left among
+	/// them would ask Fellowship for nothing, for ever. It goes back to the highest
+	/// of Fellowship's ids this phone knows of. Messages stay, and anything deleted
+	/// stays deleted.</para>
+	///
+	/// <para><b>One limit.</b> A clear made while on Firebase can't say how far it
+	/// reached among Fellowship's ids, so messages it removed can come back from
+	/// Fellowship if they are still inside its retention.</para>
+	/// </summary>
+	Task ReturnToFellowshipAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Everything held, to go into a backup, or null if this store belongs
 	/// to somebody other than <paramref name="memberId"/>.
 	/// </summary>

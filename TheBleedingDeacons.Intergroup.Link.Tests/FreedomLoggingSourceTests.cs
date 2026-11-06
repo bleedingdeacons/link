@@ -64,6 +64,32 @@ public sealed class FreedomLoggingSourceTests
 		Assert.True(config!.IsValid());
 	}
 
+	[Theory]
+	[InlineData(SyncStatus.NotEnrolled)]
+	[InlineData(SyncStatus.Revoked)]
+	public async Task AFirebaseRefreshTokenIsNeverHandedToFreedom(SyncStatus status)
+	{
+		_freedom.Syncs.Enqueue(status);
+
+		var config = await Source().FetchAsync(Session with { Token = "firebase-refresh-token", FirebaseDeviceId = "d_abc" });
+
+		Assert.Null(_freedom.HandedOver);
+		Assert.Null(config);
+	}
+
+	[Fact]
+	public async Task NorIsItHandedOverToRefreshAnOlderBuild()
+	{
+		_handover.IsCurrent = false;
+		_freedom.Values[FreedomLoggingSource.EndpointKey] = "s1.betterstackdata.com";
+		_freedom.Values[FreedomLoggingSource.SourceTokenKey] = "src-token";
+
+		var config = await Source().FetchAsync(Session with { Token = "firebase-refresh-token", FirebaseDeviceId = "d_abc" });
+
+		Assert.Null(_freedom.HandedOver);
+		Assert.True(config!.IsValid());
+	}
+
 	[Fact]
 	public async Task AHandoverIsRecordedAsCurrent()
 	{
