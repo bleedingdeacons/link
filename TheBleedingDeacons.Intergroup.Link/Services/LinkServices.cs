@@ -39,8 +39,7 @@ public static class LinkServices
 	private static HttpClient? _http;
 #pragma warning restore S1450
 	private static IFellowshipClient? _client;
-	private static BackendSwitch? _backend;
-	private static ISessionStore? _sessions;
+	private static FirebaseSessionsOnly? _sessions;
 	private static IDeviceKeyStore? _keys;
 	private static IMessageHistory? _history;
 	private static IMessageService? _messages;
@@ -77,13 +76,13 @@ public static class LinkServices
 		}
 	}
 
-	public static ISessionStore Sessions
+	public static FirebaseSessionsOnly Sessions
 	{
 		get
 		{
 			lock (Gate)
 			{
-				return _sessions ??= new SessionStore();
+				return _sessions ??= new FirebaseSessionsOnly(new SessionStore(), Keys);
 			}
 		}
 	}
@@ -154,40 +153,13 @@ public static class LinkServices
 					Timeout = TimeSpan.FromSeconds(20),
 				};
 
-				var http = _http;
-				var site = new FellowshipClient(http, Configuration);
-
-				_backend = new BackendSwitch(
-					site,
-					new BackendChoice(),
-					Sessions,
-					Keys,
-					() => History,
-					static () => FirebaseApiKey.Read().Length > 0);
-
-				_client = new SwitchingFellowshipClient(
-					_backend,
-					site,
-					() => new FirebaseFellowshipClient(
-						http,
-						new FirebaseConfiguration { ApiKey = FirebaseApiKey.Read() },
-						Configuration,
-						site));
+				_client = new FirebaseFellowshipClient(
+					_http,
+					new FirebaseConfiguration { ApiKeySource = FirebaseApiKey.Read },
+					Configuration,
+					new SiteClient(_http, Configuration));
 
 				return _client;
-			}
-		}
-	}
-
-	/// <summary>Which back end this phone uses. See <see cref="BackendSwitch"/>.</summary>
-	public static BackendSwitch Backend
-	{
-		get
-		{
-			lock (Gate)
-			{
-				_ = Client;
-				return _backend!;
 			}
 		}
 	}

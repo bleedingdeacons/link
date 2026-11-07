@@ -187,10 +187,8 @@ jobs:
       # actual rule, because appsettings.json is where a credential naturally
       # gets typed and Hand published a Better Stack token exactly that way.
       #
-      # Only BaseUrl is written. CallbackUrl defaults to link://auth in
-      # FellowshipConfiguration and PollSeconds to 120, so naming them here
-      # would add a fifth place for the callback scheme to disagree with
-      # itself -- see README.md, "The four places link://auth is written".
+      # Only BaseUrl is written. PollSeconds defaults to 120 in
+      # FellowshipConfiguration.
       #
       # Unset is not a failure. A fork, or this repo before the variable
       # existed, builds exactly as it did before and produces an artifact
@@ -368,10 +366,8 @@ jobs:
       # actual rule, because appsettings.json is where a credential naturally
       # gets typed and Hand published a Better Stack token exactly that way.
       #
-      # Only BaseUrl is written. CallbackUrl defaults to link://auth in
-      # FellowshipConfiguration and PollSeconds to 120, so naming them here
-      # would add a fifth place for the callback scheme to disagree with
-      # itself -- see README.md, "The four places link://auth is written".
+      # Only BaseUrl is written. PollSeconds defaults to 120 in
+      # FellowshipConfiguration.
       #
       # Unset is not a failure. A fork, or this repo before the variable
       # existed, builds exactly as it did before and produces an artifact

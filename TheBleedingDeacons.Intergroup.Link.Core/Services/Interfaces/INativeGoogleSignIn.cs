@@ -7,20 +7,20 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// <para><b>Why a seam.</b> Android does it with Credential Manager and
 /// iOS with GoogleSignIn, and both hand the Google credential to Firebase
 /// Auth. The interface keeps <c>DeviceAuthService</c> from knowing which
-/// head it is on, and lets it fall back to the browser wherever this says
-/// no. Shaped like <see cref="IAppleSignIn"/> for the same reason.</para>
+/// head it is on, and it tells the member to use their password wherever
+/// this says no. Shaped like <see cref="IAppleSignIn"/> for the same
+/// reason.</para>
 ///
-/// <para><b>Firebase is only a go-between.</b> The Firebase session is
-/// signed out the moment the ID token is in hand. Fellowship mints the
-/// credential this handset actually keeps, exactly as on the browser path,
-/// so nothing about enrolment, revocation or the keypair changes.</para>
+/// <para><b>This session is only a go-between.</b> The Firebase session is
+/// signed out the moment the ID token is in hand. Enrolment swaps that token
+/// for the device's own identity, which is what this handset keeps.</para>
 /// </summary>
 public interface INativeGoogleSignIn
 {
 	/// <summary>
 	/// Whether this build can try at all: a mobile head with a Firebase
-	/// configuration that carries the Google OAuth client. False sends the
-	/// member to the browser instead, with no error shown.
+	/// configuration that carries the Google OAuth client. False means the
+	/// member is told to use their password instead.
 	/// </summary>
 	bool IsAvailable { get; }
 
@@ -42,7 +42,7 @@ public enum NativeGoogleSignInOutcome
 
 	/// <summary>
 	/// This handset could not do it — no Play Services, no Google account
-	/// support, a configuration Google refuses. The browser still can.
+	/// support, a configuration Google refuses. A password still works.
 	/// </summary>
 	Unavailable,
 }

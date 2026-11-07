@@ -70,7 +70,7 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 	public HashSet<long> Tampered { get; } = [];
 
 	public SignInStart? SignIn { get; set; } =
-		new() { State = "state-1", AuthorizationUrl = "https://aa-bristol.org/oauth/start" };
+		new() { State = "state-1", Nonce = "nonce-1" };
 
 	public EnrolmentResult Enrolment { get; set; } =
 		EnrolmentResult.Ok(new DeviceSession { Token = "device-token", MemberId = 7, MemberName = "Dave B" });
@@ -251,7 +251,7 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 		// A credential is required since Fellowship 1.7, and the double
 		// enforces it so a scenario cannot prove a rotation the server
 		// would refuse.
-		var proven = request.Code.Length > 0
+		var proven = request.FirebaseToken.Length > 0
 			|| request.IdToken.Length > 0
 			|| (request.Email.Length > 0 && request.Password.Length > 0);
 
@@ -266,6 +266,9 @@ public sealed class FakeFellowshipClient : IFellowshipClient
 
 		return Task.FromResult(true);
 	}
+
+	public Task<string> SessionProofAsync(string token, CancellationToken cancellationToken) =>
+		Task.FromResult("id-token");
 
 	public Task<bool> SignOutAsync(string token, CancellationToken cancellationToken)
 	{

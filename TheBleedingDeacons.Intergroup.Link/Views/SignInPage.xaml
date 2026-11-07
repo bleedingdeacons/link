@@ -99,33 +99,14 @@
 
 			</VerticalStackLayout>
 
-			<!--
-				One command with a parameter, three buttons. The provider
-				name goes straight to Fellowship, which is the side that
-				knows how each of them works and refuses one it does not.
-			-->
 			<Button Text="Continue with Google"
 			        HeightRequest="50"
-			        Command="{Binding SignInWithProviderCommand}"
-			        CommandParameter="google"
-			        IsVisible="{Binding IsConfigured}" />
-
-			<Button Text="Continue with Microsoft"
-			        HeightRequest="50"
-			        Command="{Binding SignInWithProviderCommand}"
-			        CommandParameter="microsoft"
-			        IsVisible="{Binding IsConfigured}" />
-
-			<Button Text="Continue with Facebook"
-			        HeightRequest="50"
-			        Command="{Binding SignInWithProviderCommand}"
-			        CommandParameter="facebook"
+			        Command="{Binding SignInWithGoogleCommand}"
 			        IsVisible="{Binding IsConfigured}" />
 
 			<!--
-				Apple is not one of the three above: its sheet hands the
-				app a signed token with no browser leg at all, so it has
-				its own command.
+				Apple's sheet hands the app a signed token directly, and it
+				only exists on iOS, so it has its own command.
 
 				Hidden unless the platform can actually raise that sheet
 				and this build has an intergroup to enrol against. On

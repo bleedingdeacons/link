@@ -121,7 +121,6 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal(
 			Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(start.State))),
 			start.Nonce);
-		Assert.False(start.IsBrowserFlow);
 
 		_google.Enrols();
 		_google.Routes["signInWithIdp"] = _ => FakeGoogle.Json("""{"idToken":"apple-identity","refreshToken":"r","expiresIn":"3600"}""");
@@ -140,12 +139,62 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Null(await Client().StartSignInAsync("google"));
 
 	[Fact]
-	public async Task AOneTimeCodeIsNotACredentialHere()
+	public async Task NoCredentialAtAllAsksNothingOfAnybody()
 	{
-		var result = await Client().EnrolAsync(new EnrolmentRequest { Code = "browser-code", PublicKey = "spki", Platform = "android" });
+		var result = await Client().EnrolAsync(new EnrolmentRequest { PublicKey = "spki", Platform = "android" });
 
 		Assert.False(result.Succeeded);
 		Assert.Empty(_google.Requests);
+	}
+
+	[Fact]
+	public async Task ABuildWithNoFirebaseConfigurationSaysSoRatherThanFailingOddly()
+	{
+		var client = new FirebaseFellowshipClient(
+			new HttpClient(_google),
+			new FirebaseConfiguration(),
+			new FellowshipConfiguration { BaseUrl = "https://aa-bristol.org" },
+			_site);
+
+		var result = await client.EnrolAsync(new EnrolmentRequest { FirebaseToken = "x", PublicKey = "spki", Platform = "android" });
+
+		Assert.Contains("no Firebase configuration", result.Error, StringComparison.Ordinal);
+		Assert.Empty(_google.Requests);
+	}
+
+	[Fact]
+	public void TheApiKeyIsReadWhenFirstNeededAndOnlyOnce()
+	{
+		var reads = 0;
+		var configuration = new FirebaseConfiguration
+		{
+			ApiKeySource = () =>
+			{
+				reads++;
+				return "from-the-platform";
+			},
+		};
+
+		Assert.Equal(0, reads);
+		Assert.Equal("from-the-platform", configuration.ApiKey);
+		Assert.True(configuration.IsConfigured);
+		Assert.Equal(1, reads);
+	}
+
+	[Fact]
+	public async Task FreedomIsGivenTheIdTokenAndNeverTheRefreshToken()
+	{
+		_google.SignedIn();
+
+		Assert.Equal(IdToken, await Client().SessionProofAsync(RefreshToken));
+	}
+
+	[Fact]
+	public async Task NoProofIsEmptyRatherThanAnException()
+	{
+		_google.Throws = new HttpRequestException("offline");
+
+		Assert.Equal(string.Empty, await Client().SessionProofAsync(RefreshToken));
 	}
 
 	[Fact]
@@ -815,16 +864,16 @@ public sealed class FirebaseFellowshipClientTests
 		}
 	}
 
-	/// <summary>What stays in WordPress. Anything else being asked of it would be a mistake.</summary>
-	private sealed class SiteStub : IFellowshipClient
+	/// <summary>What stays in WordPress.</summary>
+	private sealed class SiteStub : ISiteClient
 	{
 		public FellowshipDirectory Directory { get; set; } = FellowshipDirectory.Empty;
 
 		public string DirectoryAskedWith { get; private set; } = string.Empty;
 
-		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default)
+		public Task<FellowshipDirectory> FetchDirectoryAsync(string idToken, CancellationToken cancellationToken = default)
 		{
-			DirectoryAskedWith = token;
+			DirectoryAskedWith = idToken;
 
 			return Task.FromResult(Directory);
 		}
@@ -833,27 +882,5 @@ public sealed class FirebaseFellowshipClientTests
 
 		public Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default) =>
 			Task.FromResult(PasswordSetResult.Ok());
-
-		public Task<SignInStart?> StartSignInAsync(string provider, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<InboxPage> FetchInboxAsync(string token, long sinceId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> MarkReadAsync(string token, long messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> MarkReceivedAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<IReadOnlyList<MessageReceipt>?> FetchReceiptsAsync(string token, IReadOnlyCollection<long> messageIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<SendResult> SendAsync(string token, SendRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<RotateKeyResult> RotateKeyAsync(string token, RotateKeyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> ReportKeyFaultAsync(string token, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-		public Task<bool> SignOutAsync(string token, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 	}
 }

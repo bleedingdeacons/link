@@ -4,9 +4,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// Raises the platform's own Sign in with Apple sheet.
 ///
 /// <para><b>Why this is a seam rather than a call.</b> Apple's sheet is
-/// iOS-only and, unlike Google's, has no browser leg — the system hands
-/// the app a signed ID token directly. That makes it the one credential
-/// path with no shared implementation, so the interface exists to keep
+/// iOS-only, and the system hands the app a signed ID token directly. The
+/// interface exists to keep
 /// <see cref="IFellowshipClient"/>'s callers from having to know which
 /// head they are on.</para>
 ///

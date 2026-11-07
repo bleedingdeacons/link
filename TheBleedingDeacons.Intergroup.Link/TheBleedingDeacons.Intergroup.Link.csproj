@@ -15,12 +15,6 @@
 			one. `Platforms/iOS/PushRegistrar.ios.cs` says so at the point
 			where the difference lives.
 
-			Sign in with Apple is the sharper gap: `DeviceAuthService` and
-			Fellowship both have the path, but nothing on this side raises
-			the platform sheet to get the token it needs, so an iOS member
-			signs in with Google. That works — WebAuthenticator and the
-			`link` URL scheme are wired in Info.plist below.
-
 			This file previously carried TargetFramework *singular* and an
 			argument for why: listing the TFM before the work was done
 			would produce a head that compiles and does not work. The

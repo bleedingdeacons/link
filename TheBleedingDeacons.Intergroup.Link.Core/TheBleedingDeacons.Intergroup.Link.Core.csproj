@@ -15,7 +15,7 @@
 
 		<b>What may live here: anything that does not touch MAUI.</b> The
 		line is not stylistic — the moment a file references Preferences,
-		SecureStorage, FileSystem, MainThread, WebAuthenticator or any
+		SecureStorage, FileSystem, MainThread or any
 		Microsoft.Maui type it stops compiling here, because those
 		assemblies come from the MAUI workload and this project does not
 		have it.
@@ -30,7 +30,7 @@
 		What deliberately stayed in the app:
 
 		  * ConfigurationService  — Preferences and SecureStorage.
-		  * DeviceAuthService     — WebAuthenticator and DeviceInfo.
+		  * DeviceAuthService     — the platform's sign-in sheets and DeviceInfo.
 		  * DeviceKeyStore        — SecureStorage for the private key.
 		  * PushRegistrar         — partial, per-head Firebase.
 		  * Views, ViewModels, MauiProgram — MAUI by definition.

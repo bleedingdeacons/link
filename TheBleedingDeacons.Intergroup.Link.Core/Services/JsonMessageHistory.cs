@@ -395,6 +395,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			await WriteUnguardedAsync(
 				new Held([], mark, held.MemberId)
 				{
+					SenderNames = held.SenderNames,
+					SenderNamesFetchedAt = held.SenderNamesFetchedAt,
 					PolledUpTo = held.PolledUpTo,
 					SentClearedUpTo = Math.Max(sent, held.SentClearedUpTo),
 				},
@@ -434,7 +436,13 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			if (held.MemberId > 0 && (held.ClearedUpTo > 0 || held.SentClearedUpTo > 0 || held.Deleted.Count > 0))
 			{
 				await WriteUnguardedAsync(
-					new Held([], held.ClearedUpTo, held.MemberId) { Deleted = held.Deleted, SentClearedUpTo = held.SentClearedUpTo },
+					new Held([], held.ClearedUpTo, held.MemberId)
+					{
+						Deleted = held.Deleted,
+						SentClearedUpTo = held.SentClearedUpTo,
+						SenderNames = held.SenderNames,
+						SenderNamesFetchedAt = held.SenderNamesFetchedAt,
+					},
 					cancellationToken).ConfigureAwait(false);
 			}
 			else if (File.Exists(_path))
@@ -484,31 +492,29 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 	}
 
 	/// <inheritdoc />
-	public async Task ReturnToFellowshipAsync(CancellationToken cancellationToken = default)
+	public async Task<SenderNames> SenderNamesAsync(CancellationToken cancellationToken = default)
 	{
+		var held = await ReadAsync(cancellationToken).ConfigureAwait(false);
+
+		return new SenderNames(held.SenderNames, held.SenderNamesFetchedAt);
+	}
+
+	/// <inheritdoc />
+	public async Task RememberSenderNamesAsync(
+		IReadOnlyDictionary<long, string> names,
+		long fetchedAt,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(names);
+
 		await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
 		try
 		{
 			var held = await ReadUnguardedAsync(cancellationToken).ConfigureAwait(false);
 
-			if (held.PolledUpTo < LinkMessageIds.FirstFirebaseId && held.ClearedUpTo < LinkMessageIds.FirstFirebaseId)
-			{
-				return;
-			}
-
-			var highest = held.Messages.Keys
-				.Concat(held.Deleted.Keys)
-				.Where(id => id < LinkMessageIds.FirstFirebaseId)
-				.DefaultIfEmpty(0)
-				.Max();
-
 			await WriteUnguardedAsync(
-				held with
-				{
-					PolledUpTo = Math.Min(held.PolledUpTo, highest),
-					ClearedUpTo = held.ClearedUpTo < LinkMessageIds.FirstFirebaseId ? held.ClearedUpTo : 0,
-				},
+				held with { SenderNames = new Dictionary<long, string>(names), SenderNamesFetchedAt = fetchedAt },
 				cancellationToken).ConfigureAwait(false);
 		}
 		finally
@@ -695,6 +701,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 
 		return new Held(messages, Math.Max(held.ClearedUpTo, Math.Max(0, incoming.ClearedUpTo)), memberId)
 		{
+			SenderNames = held.SenderNames,
+			SenderNamesFetchedAt = held.SenderNamesFetchedAt,
 			SentClearedUpTo = Math.Max(held.SentClearedUpTo, Math.Max(0, incoming.SentClearedUpTo)),
 			PolledUpTo = Math.Max(held.PolledUpTo, Math.Max(0, incoming.PolledUpTo)),
 			Sent = sent,
@@ -830,6 +838,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			{
 				PolledUpTo = Math.Max(0, stored.PolledUpTo),
 				SentClearedUpTo = Math.Max(0, stored.SentClearedUpTo),
+				SenderNames = stored.SenderNames ?? [],
+				SenderNamesFetchedAt = stored.SenderNamesFetchedAt,
 				Sent = stored.Sent.Where(m => m.Id > 0).ToDictionary(m => m.Id),
 				Deleted = stored.Deleted.Where(d => d.Id > 0).ToDictionary(d => d.Id, d => d.ReplyToId),
 			};
@@ -848,6 +858,8 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 			SentClearedUpTo = held.SentClearedUpTo,
 			PolledUpTo = held.PolledUpTo,
 			MemberId = held.MemberId,
+			SenderNames = held.SenderNames.Count > 0 ? new Dictionary<long, string>(held.SenderNames) : null,
+			SenderNamesFetchedAt = held.SenderNamesFetchedAt,
 			Messages = held.Messages.Values.OrderByDescending(m => m.Id).ToList(),
 			Sent = held.Sent.Values.OrderByDescending(m => m.Id).ToList(),
 			Deleted = held.Deleted.OrderByDescending(d => d.Key).Select(d => new DeletedMessage(d.Key, d.Value)).ToList(),
@@ -959,6 +971,12 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		/// </summary>
 		public long SentClearedUpTo { get; init; }
 
+		/// <summary>What the directory last said each sender is called.</summary>
+		public Dictionary<long, string> SenderNames { get; init; } = [];
+
+		/// <summary>When the directory last answered, in Unix seconds, or 0.</summary>
+		public long SenderNamesFetchedAt { get; init; }
+
 		/// <summary>
 		/// What this member has sent. Empty on every Held built without
 		/// saying otherwise, which is what makes a clear, a reset and an
@@ -1014,6 +1032,16 @@ public sealed class JsonMessageHistory : IMessageHistory, IDisposable
 		/// see <see cref="IMessageHistory.AdoptAsync"/>.
 		/// </summary>
 		public long MemberId { get; set; }
+
+		/// <summary>
+		/// What the directory last said each sender is called. Here so the names are
+		/// encrypted with the rest, and absent from every older file, which reads as none.
+		/// </summary>
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+		public Dictionary<long, string>? SenderNames { get; set; }
+
+		[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+		public long SenderNamesFetchedAt { get; set; }
 
 		public List<LinkMessage> Messages { get; set; } = [];
 

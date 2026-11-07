@@ -19,8 +19,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// <c>REVERSED_CLIENT_ID</c> as a URL scheme, which CI writes in from the
 /// same plist. GoogleSignIn raises an Objective-C exception — a launch-time
 /// crash, not a refusal — when the scheme is missing, so this answers
-/// unavailable instead of finding out. Unavailable means the browser, as
-/// before.</para>
+/// unavailable instead of finding out. Unavailable means the member is told
+/// to use their password.</para>
 ///
 /// <para><b>No entitlement is needed.</b> Unlike Sign in with Apple this
 /// works on a free personal team, so the sideloaded build gets it too.</para>
@@ -60,7 +60,7 @@ public sealed partial class NativeGoogleSignIn
 		catch (Exception ex)
 #pragma warning restore CA1031
 		{
-			Log.Warning(ex, "Native Google sign-in could not be completed; using the browser");
+			Log.Warning(ex, "Native Google sign-in could not be completed");
 			return NativeGoogleSignInResult.Unavailable;
 		}
 
@@ -125,7 +125,7 @@ public sealed partial class NativeGoogleSignIn
 		{
 			// Google sign-in not enabled for the project, or a client id from
 			// another one. A configuration fault, not the member's.
-			Log.Error(ex, "Firebase refused the Google credential; using the browser");
+			Log.Error(ex, "Firebase refused the Google credential");
 			return NativeGoogleSignInResult.Unavailable;
 		}
 		finally

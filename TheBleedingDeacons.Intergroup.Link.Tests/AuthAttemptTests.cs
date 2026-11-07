@@ -109,7 +109,7 @@ public sealed class AuthAttemptTests
 	[Fact]
 	public void ACancellationIsInformationNotAWarning()
 	{
-		// A closed browser tab is a member changing their mind.
+		// A closed account picker is a member changing their mind.
 		using (var attempt = AuthAttempt.Begin("Sign-in", "google", _log))
 		{
 			attempt.Finished(EnrolmentResult.Cancelled());
@@ -136,22 +136,9 @@ public sealed class AuthAttemptTests
 	}
 
 	[Fact]
-	public void NotOfferedIsNeitherACancellationNorARefusal()
-	{
-		using (var attempt = AuthAttempt.Begin("Key replacement", "google", _log))
-		{
-			attempt.Finished(RotateKeyResult.NotOffered());
-		}
-
-		var outcome = _sink.Events[^1];
-		Assert.Equal(LogEventLevel.Information, outcome.Level);
-		Assert.Contains("not offered", outcome.RenderMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
-	}
-
-	[Fact]
 	public void AnExceptionIsLoggedAsAnErrorWithTheAttemptAndNotCaught()
 	{
-		var thrown = new InvalidOperationException("No browser.");
+		var thrown = new InvalidOperationException("No picker.");
 		string id = string.Empty;
 
 		var escaped = Assert.Throws<InvalidOperationException>(() =>

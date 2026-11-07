@@ -4,20 +4,16 @@ using TheBleedingDeacons.Intergroup.Link.Models;
 namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
 /// <summary>
-/// Everything Link asks of the Fellowship plugin.
+/// Everything Link asks of its back end.
 ///
-/// <para>One interface for the whole REST surface rather than one per
-/// route, because there is exactly one implementation and exactly one
-/// server; splitting it would be ceremony. What it is for is the test
-/// seam — every view model takes this, so none of them needs a network.
-/// </para>
+/// <para>What it is for is the test seam: every view model takes this, so none of them
+/// needs a network.</para>
 /// </summary>
 public interface IFellowshipClient
 {
 	/// <summary>
-	/// Begin a sign-in. Answers an authorization URL for Google, or a
-	/// nonce for Apple, plus the state that ties the rest of the flow to
-	/// this attempt.
+	/// Begin a sign-in. Answers the nonce for Apple's sheet, and the state that ties the
+	/// rest of the flow to this attempt, or null for a provider that needs neither.
 	/// </summary>
 	Task<SignInStart?> StartSignInAsync(string provider, CancellationToken cancellationToken = default);
 
@@ -89,13 +85,9 @@ public interface IFellowshipClient
 	/// Present a new public key after the platform invalidated the old
 	/// keypair.
 	///
-	/// <para><b>And the messages come back.</b> This said the opposite,
-	/// and reasoned that the server never held the private half so could
-	/// not re-seal anything. It does not need to: it holds the bodies in
-	/// plain text and seals them afresh on every fetch, so the next sync
-	/// re-delivers everything still inside the retention window. Only what
-	/// the server has already swept, and pushes sent before the change,
-	/// are genuinely gone.</para>
+	/// <para><b>Messages sealed to the old key don't come back.</b> The server can't read
+	/// them, so nothing can seal them again. Only messages sent from now on reach the new
+	/// key.</para>
 	/// </summary>
 	Task<RotateKeyResult> RotateKeyAsync(string token, RotateKeyRequest request, CancellationToken cancellationToken = default);
 
@@ -110,39 +102,32 @@ public interface IFellowshipClient
 
 	/// <summary>Sign out, which revokes this device server-side.</summary>
 	Task<bool> SignOutAsync(string token, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// A short-lived token proving this device to the intergroup's own plugins, or empty
+	/// when one can't be had. Never the long-lived token this phone keeps.
+	/// </summary>
+	Task<string> SessionProofAsync(string token, CancellationToken cancellationToken = default);
 }
 
-/// <summary>What <c>/auth/device/start</c> answers.</summary>
+/// <summary>What starting an Apple sign-in answers.</summary>
 public sealed record SignInStart
 {
 	public required string State { get; init; }
 
-	/// <summary>Set for the server-side flow (Google); empty for Apple.</summary>
-	public string AuthorizationUrl { get; init; } = string.Empty;
-
-	/// <summary>Set for the client-side flow (Apple); empty for Google.</summary>
 	public string Nonce { get; init; } = string.Empty;
-
-	public bool IsBrowserFlow => !string.IsNullOrEmpty(AuthorizationUrl);
 }
 
-/// <summary>What the app posts to <c>/auth/device/exchange</c>.</summary>
+/// <summary>What enrolling this handset needs: a credential, and its new public key.</summary>
 public sealed record EnrolmentRequest
 {
-	/// <summary>The one-time code the browser carried back (Google).</summary>
-	public string Code { get; init; } = string.Empty;
-
 	/// <summary>The state issued at start (Apple).</summary>
 	public string State { get; init; } = string.Empty;
 
 	/// <summary>The platform-issued ID token (Apple).</summary>
 	public string IdToken { get; init; } = string.Empty;
 
-	/// <summary>
-	/// A Firebase ID token from native Google sign-in. Sent alone: it
-	/// needs no state, because Fellowship pins it to its own Firebase
-	/// project and accepts it once.
-	/// </summary>
+	/// <summary>A Firebase ID token from native Google sign-in. Sent alone.</summary>
 	public string FirebaseToken { get; init; } = string.Empty;
 
 	/// <summary>The address, for the password flow.</summary>
@@ -165,8 +150,6 @@ public sealed record EnrolmentRequest
 	public string Label { get; init; } = string.Empty;
 
 	public required string Platform { get; init; }
-
-	public string PushProvider { get; init; } = string.Empty;
 
 	public string PushToken { get; init; } = string.Empty;
 }
@@ -207,11 +190,11 @@ public sealed record EnrolmentResult
 
 	/// <summary>
 	/// The sign-in stopped before it reached the intergroup — the member
-	/// closed the picker or the browser, or the platform said it had.
+	/// closed the picker, or the platform said they had.
 	///
 	/// <para>Not a failure, so no <see cref="Error"/>. It used to say
 	/// nothing at all, on the reasoning that the member knew what they
-	/// did. That holds for a member who closed a browser tab, and fails
+	/// did. That holds for a member who closed the picker, and fails
 	/// for one whose phone answered "cancelled" without ever showing
 	/// them anything — which Android's account picker does after too many
 	/// dismissed prompts. From the screen the two looked identical, and
@@ -231,44 +214,23 @@ public sealed record EnrolmentResult
 	/// stopped: empty for every other outcome.
 	/// </summary>
 	public string Notice =>
-		Succeeded || Unavailable || Error.Length > 0
+		Succeeded || Error.Length > 0
 			? string.Empty
 			: string.IsNullOrWhiteSpace(Detail)
 				? "The sign-in stopped before it finished. Please try again."
 				: $"The sign-in stopped before it finished.\n{Detail.Trim()}";
 
 	public static EnrolmentResult Ok(DeviceSession session) => new() { Session = session };
-
-	/// <summary>
-	/// The server does not take a Firebase token — too old for it, or no
-	/// Firebase project set up. Not the member's problem: the caller goes
-	/// to the browser instead and shows nothing.
-	/// </summary>
-	public bool Unavailable { get; init; }
-
-	public static EnrolmentResult NotOffered() => new() { Unavailable = true };
 }
 
 /// <summary>
-/// What the app posts to replace this handset's key.
-///
-/// <para><b>A credential as well as the public half, since Fellowship
-/// 1.7.</b> The device token alone used to be enough, and because the
-/// server seals from plaintext on every fetch, substituting the key was
-/// sufficient to have every retained message re-sealed to it. The
-/// keypair could not help: it seals, and never authenticates.</para>
-///
-/// <para>Whichever shape the member signs in with — the same three
-/// enrolment takes — and it has to be the member this handset belongs
-/// to.</para>
+/// What replacing this handset's key needs: a fresh proof of who is holding it, as at
+/// enrolment, and the public half.
 /// </summary>
 public sealed record RotateKeyRequest
 {
 	/// <summary>Base64 SubjectPublicKeyInfo for the new keypair.</summary>
 	public required string PublicKey { get; init; }
-
-	/// <summary>The one-time code the browser carried back (Google).</summary>
-	public string Code { get; init; } = string.Empty;
 
 	/// <summary>The state issued at start (Apple).</summary>
 	public string State { get; init; } = string.Empty;
@@ -306,11 +268,6 @@ public sealed record RotateKeyResult
 	public static RotateKeyResult Ok() => new() { Succeeded = true };
 
 	public static RotateKeyResult Failed(string error) => new() { Error = error };
-
-	/// <summary>As <see cref="EnrolmentResult.Unavailable"/>.</summary>
-	public bool Unavailable { get; init; }
-
-	public static RotateKeyResult NotOffered() => new() { Unavailable = true };
 }
 
 /// <summary>What setting a password answered.</summary>
@@ -350,7 +307,7 @@ public sealed record SealedMessage
 	public required string Payload { get; init; }
 
 	/// <summary>
-	/// Who the server says sent it, on Firebase, or null from Fellowship.
+	/// Who the server says sent it, or null when it didn't say.
 	///
 	/// <para>On Firebase the sender's phone writes the sealed payload, so what is
 	/// inside is only their word. The server sets this from the sender's sign-in,

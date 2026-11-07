@@ -23,6 +23,7 @@ public partial class SignInPage : ContentPage
 	{
 		base.OnAppearing();
 		_viewModel.PropertyChanged += OnViewModelChanged;
+		_viewModel.ShowWhySigningIn();
 	}
 
 	protected override void OnDisappearing()

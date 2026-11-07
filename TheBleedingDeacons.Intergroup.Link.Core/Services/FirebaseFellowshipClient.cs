@@ -11,26 +11,23 @@ using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 namespace TheBleedingDeacons.Intergroup.Link.Services;
 
 /// <summary>
-/// Link's back end on Firebase, behind the same seam as
-/// <see cref="FellowshipClient"/>.
+/// Link's back end on Firebase.
 ///
-/// <para>REST over <see cref="HttpClient"/> rather than the native SDKs, so that
-/// Link.Core stays plain .NET and all of this can be tested without a phone. Like
-/// the other client, every method answers a value and never throws over a lost
-/// network.</para>
+/// <para>REST over <see cref="HttpClient"/> rather than the native SDKs, so that Link.Core
+/// stays plain .NET and all of this can be tested without a phone. Every method answers a
+/// value and never throws over a lost network.</para>
 ///
-/// <para><b>The <c>token</c> every method takes is a Firebase refresh token</b>,
-/// kept where the device token used to be.</para>
+/// <para><b>The <c>token</c> every method takes is a Firebase refresh token.</b> It lasts
+/// until revoked, so it goes only to Google. Anything else gets a short-lived ID token.</para>
 ///
-/// <para><b>The member list stays in WordPress.</b> So the directory, the password
-/// check and setting a password all still go to Fellowship, and sending fails if
-/// WordPress is down because a Function has to ask it who a message reaches.
-/// Receiving doesn't touch WordPress at all.</para>
+/// <para><b>The member list stays in WordPress.</b> So the directory, the password check and
+/// setting a password all go to the site, and sending fails if WordPress is down because a
+/// Function has to ask it who a message reaches. Receiving doesn't touch WordPress at all.</para>
 ///
-/// <para><b>What the server no longer knows.</b> Messages are sealed on the phone,
-/// so unread counts and read state can't come from it: <see cref="InboxPage.Unread"/>
-/// is always 0, nothing reads that value in the app today, and a message read on
-/// one of a member's phones stays unread on another.</para>
+/// <para><b>What the server no longer knows.</b> Messages are sealed on the phone, so unread
+/// counts and read state can't come from it: <see cref="InboxPage.Unread"/> is always 0,
+/// nothing reads that value in the app today, and a message read on one of a member's phones
+/// stays unread on another.</para>
 /// </summary>
 public sealed class FirebaseFellowshipClient : IFellowshipClient
 {
@@ -65,7 +62,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	private readonly HttpClient _http;
 	private readonly FirebaseConfiguration _firebase;
 	private readonly FellowshipConfiguration _fellowship;
-	private readonly IFellowshipClient _site;
+	private readonly ISiteClient _site;
 	private readonly FirebaseIdentity _identity;
 
 	/// <summary>This member's name from the directory, which is the only place it is known.</summary>
@@ -74,12 +71,12 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	/// <param name="http">Shared with the site's client, for the same reasons.</param>
 	/// <param name="firebase">The project.</param>
 	/// <param name="fellowship">The site, for the password check.</param>
-	/// <param name="site">What still lives in WordPress: the directory and setting a password.</param>
+	/// <param name="site">What stays in WordPress: the directory and setting a password.</param>
 	public FirebaseFellowshipClient(
 		HttpClient http,
 		FirebaseConfiguration firebase,
 		FellowshipConfiguration fellowship,
-		IFellowshipClient site)
+		ISiteClient site)
 	{
 		_http = http ?? throw new ArgumentNullException(nameof(http));
 		_firebase = firebase ?? throw new ArgumentNullException(nameof(firebase));
@@ -94,8 +91,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	/// <para>Nothing is asked of the server: the nonce only has to tie Apple's
 	/// answer to this attempt, and Firebase checks it. Apple is given the hash
 	/// and Firebase the raw value, which is the way round Firebase requires.
-	/// Google signs in natively and has no browser flow here, so it answers
-	/// null.</para>
+	/// Google needs nothing started, so it answers null.</para>
 	/// </summary>
 	public Task<SignInStart?> StartSignInAsync(string provider, CancellationToken cancellationToken = default)
 	{
@@ -116,6 +112,12 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	public async Task<EnrolmentResult> EnrolAsync(EnrolmentRequest request, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(request);
+
+		if (!_firebase.IsConfigured)
+		{
+			// A packaging mistake rather than anything the member did, so it says so.
+			return EnrolmentResult.Failed("This build of Link has no Firebase configuration, so it can't sign in.");
+		}
 
 		var (identity, refusal) = await ProveAsync(
 			request.FirebaseToken, request.IdToken, request.State, request.Email, request.Password, cancellationToken).ConfigureAwait(false);
@@ -294,7 +296,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	{
 		ArgumentNullException.ThrowIfNull(messageIds);
 
-		// A phone that moved here still holds messages it sent through Fellowship.
+		// A phone from before the move still holds messages it sent through Fellowship.
 		// Firestore has never heard of those, and they would break the query below,
 		// because it sorts ids as text and a short id sorts after a long one.
 		var ours = messageIds.Where(id => id >= LinkMessageIds.FirstFirebaseId).ToList();
@@ -510,6 +512,13 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 		_ownName = null;
 
 		return signedOut.Succeeded;
+	}
+
+	public async Task<string> SessionProofAsync(string token, CancellationToken cancellationToken = default)
+	{
+		var (user, _) = await _identity.CurrentAsync(token, cancellationToken).ConfigureAwait(false);
+
+		return user?.IdToken ?? string.Empty;
 	}
 
 	/// <summary>

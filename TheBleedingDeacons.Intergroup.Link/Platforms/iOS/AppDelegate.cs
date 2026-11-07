@@ -12,14 +12,6 @@ namespace TheBleedingDeacons.Intergroup.Link;
 /// <summary>
 /// The iOS application delegate.
 ///
-/// <para>The Android counterpart of the two sign-in overrides below is
-/// <c>WebAuthenticatorCallbackActivity</c>: both exist so the browser leg
-/// of Google sign-in can hand its one-time code back to the app. Without
-/// them iOS opens the sign-in page, the member signs in, and the callback
-/// to <c>link://auth</c> lands nowhere — a failure that looks like the
-/// server refusing the sign-in rather than the app failing to catch the
-/// answer.</para>
-///
 /// <para><b>Push is handled here rather than in a service of its own</b>,
 /// which is the shape of the difference between the platforms. Android
 /// starts <c>LinkFirebaseMessagingService</c> with no MAUI host and
@@ -55,25 +47,6 @@ public class AppDelegate : MauiUIApplicationDelegate
 
 		return launched;
 	}
-
-	/// <summary>
-	/// The custom-scheme return leg: <c>link://auth</c> coming back from
-	/// the system browser.
-	/// </summary>
-	public override bool OpenUrl(UIApplication application, NSUrl url, NSDictionary options) =>
-		Platform.OpenUrl(application, url, options);
-
-	/// <summary>
-	/// The universal-link return leg. Nothing uses it today — the callback
-	/// is a custom scheme — but WebAuthenticator's contract is that both
-	/// are forwarded, and a half-wired delegate is the kind of thing that
-	/// works until the day the callback shape changes.
-	/// </summary>
-	public override bool ContinueUserActivity(
-		UIApplication application,
-		NSUserActivity userActivity,
-		UIApplicationRestorationHandler completionHandler) =>
-		Platform.ContinueUserActivity(application, userActivity, completionHandler);
 
 	/// <summary>
 	/// Apple has issued this installation an APNs device token.

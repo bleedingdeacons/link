@@ -10,11 +10,32 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// </summary>
 public sealed class FirebaseConfiguration
 {
+	private string _apiKey = string.Empty;
+
 	public string ProjectId { get; set; } = "fellowship-510917";
 
 	public string Region { get; set; } = "europe-west2";
 
-	public string ApiKey { get; set; } = string.Empty;
+	public string ApiKey
+	{
+		get
+		{
+			if (_apiKey.Length == 0 && ApiKeySource is not null)
+			{
+				_apiKey = ApiKeySource();
+			}
+
+			return _apiKey;
+		}
+
+		set => _apiKey = value;
+	}
+
+	/// <summary>
+	/// Where to read the key from when it's first needed. On iOS the native configuration
+	/// isn't loaded until after the app has started building.
+	/// </summary>
+	public Func<string>? ApiKeySource { get; set; }
 
 	public bool IsConfigured => !string.IsNullOrWhiteSpace(ProjectId) && !string.IsNullOrWhiteSpace(ApiKey);
 
