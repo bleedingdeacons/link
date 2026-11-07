@@ -97,6 +97,19 @@
 				       FontSize="{StaticResource SecondaryFontSize}"
 				       HorizontalTextAlignment="Center" />
 
+				<!--
+					Up here with the other messages, because what it says is about
+					the buttons below it: the next sign-in moves the old phone here.
+				-->
+				<VerticalStackLayout Spacing="4" IsVisible="{Binding HasHeldBackup}">
+					<Label Text="{Binding HeldBackup}"
+					       FontSize="{StaticResource SecondaryFontSize}"
+					       HorizontalTextAlignment="Center" />
+					<Button Text="Don't restore it"
+					        Style="{StaticResource Quiet}"
+					        Command="{Binding CancelRestoreCommand}" />
+				</VerticalStackLayout>
+
 			</VerticalStackLayout>
 
 			<Button Text="Continue with Google"
@@ -198,6 +211,32 @@
 				<Button Text="Set password"
 				        HeightRequest="50"
 				        Command="{Binding SetPasswordCommand}" />
+
+			</VerticalStackLayout>
+
+			<!--
+				For a member moving to a new phone. On this screen rather than only
+				in Settings, because taking the old phone's place needs the sign-in
+				itself. See MessageBackup.
+			-->
+			<Button Text="Moving phones? Restore from a backup"
+			        Style="{StaticResource Quiet}"
+			        Command="{Binding StartRestoreCommand}"
+			        IsVisible="{Binding CanOfferRestore}" />
+
+			<VerticalStackLayout Spacing="12" IsVisible="{Binding OpeningBackup}">
+
+				<Entry Placeholder="The backup's passphrase"
+				       IsPassword="True"
+				       Text="{Binding BackupPassphrase}" />
+
+				<Button Text="Open this backup"
+				        HeightRequest="50"
+				        Command="{Binding OpenBackupCommand}" />
+
+				<Button Text="Cancel"
+				        Style="{StaticResource Quiet}"
+				        Command="{Binding CancelRestoreCommand}" />
 
 			</VerticalStackLayout>
 

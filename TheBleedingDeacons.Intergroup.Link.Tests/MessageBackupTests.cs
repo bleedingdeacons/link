@@ -22,6 +22,8 @@ public sealed class MessageBackupTests : IDisposable
 	private readonly byte[] _key = RandomNumberGenerator.GetBytes(32);
 	private readonly MemorySessions _sessions = new() { Session = new DeviceSession { Token = Token, DeviceId = 3, MemberId = 7, MemberName = "Dave B" } };
 	private readonly MemorySettings _settings = new();
+	private readonly MemoryKeys _keys = new();
+	private readonly Sealing.Keypair _oldPhone = Sealing.NewKeypair();
 	private readonly JsonMessageHistory _history;
 
 	public MessageBackupTests()
@@ -39,7 +41,7 @@ public sealed class MessageBackupTests : IDisposable
 		}
 	}
 
-	private MessageBackup Subject => new(_sessions, _history, _settings, _settings, _settings, _settings);
+	private MessageBackup Subject => new(_sessions, _history, _settings, _settings, _settings, _settings, _keys);
 
 	[Fact]
 	public async Task A_backup_restores_onto_a_phone_that_has_lost_everything()
@@ -202,11 +204,246 @@ public sealed class MessageBackupTests : IDisposable
 		using var history = new JsonMessageHistory(file, _key);
 		Directory.CreateDirectory(file);
 
-		var subject = new MessageBackup(_sessions, history, _settings, _settings, _settings, _settings);
+		var subject = new MessageBackup(_sessions, history, _settings, _settings, _settings, _settings, _keys);
 		var restored = await subject.RestoreAsync(made!.File, Passphrase);
 
 		Assert.Equal(BackupRestoreOutcome.NotWritten, restored.Outcome);
 		Assert.Equal(MessageBackup.NotWritten, restored.Message);
+	}
+
+	[Fact]
+	public async Task A_backup_says_which_device_it_came_from_and_holds_its_key()
+	{
+		await _history.AdoptAsync(7);
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_old" });
+
+		var made = await Subject.MakeAsync(Passphrase);
+
+		var device = BackupFile.Open(made!.File, Passphrase)!.Device!;
+		Assert.Equal("d_old", device.Id);
+		Assert.Equal(_keys.Pair.PrivateKeyPem, device.PrivateKey);
+	}
+
+	[Fact]
+	public async Task A_phone_with_no_key_makes_a_backup_with_no_device()
+	{
+		await _history.AdoptAsync(7);
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_old" });
+		await _keys.ClearAsync();
+
+		var made = await Subject.MakeAsync(Passphrase);
+
+		Assert.Null(BackupFile.Open(made!.File, Passphrase)!.Device);
+	}
+
+	[Fact]
+	public async Task Restoring_in_settings_on_another_phone_says_that_phone_stays()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+
+		var restored = await Subject.RestoreAsync(file, Passphrase);
+
+		Assert.True(restored.Succeeded);
+		Assert.EndsWith(MessageBackup.OtherPhoneStays, restored.Message, StringComparison.Ordinal);
+		Assert.Equal("d_new", (await _sessions.LoadAsync())!.FirebaseDeviceId);
+	}
+
+	[Fact]
+	public async Task Restoring_in_settings_on_the_same_phone_says_nothing_about_another()
+	{
+		await _history.AdoptAsync(7);
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_old" });
+		var made = await Subject.MakeAsync(Passphrase);
+
+		var restored = await Subject.RestoreAsync(made!.File, Passphrase);
+
+		Assert.DoesNotContain(MessageBackup.OtherPhoneStays, restored.Message, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task Restoring_in_settings_leaves_this_phones_key_alone()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var before = _keys.Pair.PrivateKeyPem;
+
+		await Subject.RestoreAsync(file, Passphrase);
+
+		Assert.Equal(before, _keys.Pair.PrivateKeyPem);
+	}
+
+	[Fact]
+	public async Task A_held_backup_changes_nothing_until_the_sign_in()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var before = _keys.Pair.PrivateKeyPem;
+		var subject = Subject;
+
+		var held = await subject.HoldForSignInAsync(file, Passphrase);
+
+		Assert.Equal(BackupRestoreOutcome.Held, held.Outcome);
+		Assert.Equal(MessageBackup.WillTakeOver, held.Message);
+		Assert.True(subject.IsHolding);
+		Assert.False(held.Succeeded);
+		Assert.Empty(await _history.AllAsync());
+		Assert.Equal(before, _keys.Pair.PrivateKeyPem);
+	}
+
+	[Fact]
+	public async Task A_wrong_passphrase_holds_nothing()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var subject = Subject;
+
+		var held = await subject.HoldForSignInAsync(file, "not the passphrase at all");
+
+		Assert.Equal(BackupRestoreOutcome.CouldNotOpen, held.Outcome);
+		Assert.False(subject.IsHolding);
+	}
+
+	[Fact]
+	public async Task Signing_in_is_aimed_at_the_backups_device_with_the_backups_key()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		var aimed = subject.AimedAtHeldDevice(new EnrolmentRequest { PublicKey = "this-phones-new-key", Platform = "android" });
+
+		Assert.Equal("d_old", aimed.TakeOverDeviceId);
+		Assert.Equal(_oldPhone.PublicKey, aimed.TakeOverPublicKey);
+		Assert.Equal("this-phones-new-key", aimed.PublicKey);
+	}
+
+	[Fact]
+	public async Task With_nothing_held_an_enrolment_is_left_as_it_was()
+	{
+		var request = new EnrolmentRequest { PublicKey = "key", Platform = "android" };
+
+		Assert.Same(request, Subject.AimedAtHeldDevice(request));
+		Assert.Null(await Subject.FinishHeldAsync(tookOver: false));
+	}
+
+	[Fact]
+	public async Task A_backup_with_no_device_is_not_aimed_at_anything()
+	{
+		await _history.AdoptAsync(7);
+		var made = await Subject.MakeAsync(Passphrase);
+		var subject = Subject;
+
+		var held = await subject.HoldForSignInAsync(made!.File, Passphrase);
+
+		Assert.Equal(MessageBackup.WillJoinAsNew, held.Message);
+		Assert.Empty(subject.AimedAtHeldDevice(new EnrolmentRequest { PublicKey = "key", Platform = "android" }).TakeOverDeviceId);
+	}
+
+	[Fact]
+	public async Task A_takeover_keeps_the_backups_key_and_restores_the_messages()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		await subject.KeepHeldKeyAsync();
+		var restored = await subject.FinishHeldAsync(tookOver: true);
+
+		Assert.Equal(_oldPhone.PrivateKeyPem, _keys.Pair.PrivateKeyPem);
+		Assert.True(restored!.Succeeded);
+		Assert.StartsWith(MessageBackup.TookOver, restored.Message, StringComparison.Ordinal);
+		Assert.Equal([12L], (await _history.AllAsync()).Select(m => m.Id));
+		Assert.False(subject.IsHolding);
+	}
+
+	[Fact]
+	public async Task The_first_sync_after_a_takeover_starts_from_the_backups_mark()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		await subject.FinishHeldAsync(tookOver: true);
+
+		Assert.Equal(12, await _history.PollFromAsync());
+	}
+
+	[Fact]
+	public async Task A_refused_takeover_still_restores_the_messages_and_keeps_the_new_key()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var before = _keys.Pair.PrivateKeyPem;
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		var restored = await subject.FinishHeldAsync(tookOver: false);
+
+		Assert.Equal(before, _keys.Pair.PrivateKeyPem);
+		Assert.True(restored!.Succeeded);
+		Assert.StartsWith(MessageBackup.CouldNotTakeOver, restored.Message, StringComparison.Ordinal);
+		Assert.Equal([12L], (await _history.AllAsync()).Select(m => m.Id));
+	}
+
+	[Fact]
+	public async Task A_held_backup_from_another_member_is_refused_after_the_sign_in()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		await _sessions.SaveAsync(_sessions.Session! with { MemberId = 9 });
+		await _history.AdoptAsync(9);
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		var restored = await subject.FinishHeldAsync(tookOver: false);
+
+		Assert.Equal(BackupRestoreOutcome.OtherMember, restored!.Outcome);
+		Assert.Empty(await _history.AllAsync());
+	}
+
+	[Fact]
+	public async Task A_held_backup_can_be_put_down()
+	{
+		var file = await BackupFromAnotherPhoneAsync();
+		var subject = Subject;
+		await subject.HoldForSignInAsync(file, Passphrase);
+
+		subject.ForgetHeld();
+
+		Assert.False(subject.IsHolding);
+		Assert.Empty(subject.AimedAtHeldDevice(new EnrolmentRequest { PublicKey = "key", Platform = "android" }).TakeOverDeviceId);
+	}
+
+	[Fact]
+	public async Task A_v1_backup_can_be_held_and_joins_as_new()
+	{
+		var file = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "backup-v1.linkbackup"));
+		await _history.AdoptAsync(7);
+		var subject = Subject;
+
+		var held = await subject.HoldForSignInAsync(file, "fixture passphrase, test messages only");
+		var restored = await subject.FinishHeldAsync(tookOver: false);
+
+		Assert.Equal(MessageBackup.WillJoinAsNew, held.Message);
+		Assert.StartsWith(MessageBackup.JoinedAsNew, restored!.Message, StringComparison.Ordinal);
+		Assert.Equal(3, restored.Added);
+	}
+
+	/// <summary>
+	/// A backup made on the phone before this one, then this phone signed in as a new
+	/// device with a new key and an empty history.
+	/// </summary>
+	private async Task<byte[]> BackupFromAnotherPhoneAsync()
+	{
+		await _history.AdoptAsync(7);
+		await _history.SaveAsync([new LinkMessage { Id = 12, Subject = "Train times", Body = "Meet at nine" }]);
+		await _history.MarkPolledAsync(12);
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_old" });
+		await _keys.ImportAsync(_oldPhone.PrivateKeyPem);
+
+		var made = await Subject.MakeAsync(Passphrase);
+
+		await _history.ResetAsync();
+		await _history.AdoptAsync(7);
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_new" });
+		await _keys.RegenerateAsync();
+
+		return made!.File;
 	}
 
 	[Fact]
@@ -263,7 +500,7 @@ public sealed class MessageBackupTests : IDisposable
 	}
 
 	[Fact]
-	public async Task No_token_and_no_key_ever_reach_the_file()
+	public async Task No_token_ever_reaches_the_file_and_the_only_key_is_the_devices()
 	{
 		await _history.AdoptAsync(7);
 		await _history.SaveAsync(
@@ -274,12 +511,13 @@ public sealed class MessageBackupTests : IDisposable
 		await _history.SaveSentAsync(new SentMessage { Id = 13, Subject = "Thanks", To = "Jo B" });
 		await _history.DeleteAsync(11);
 
+		await _sessions.SaveAsync(_sessions.Session! with { FirebaseDeviceId = "d_abc" });
+
 		var made = await Subject.MakeAsync(Passphrase);
 
 		var json = Encoding.UTF8.GetString(BackupBytes.Read(made!.File).Plaintext(Passphrase));
 
 		Assert.DoesNotContain(Token, json, StringComparison.Ordinal);
-		Assert.DoesNotContain("PRIVATE KEY", json, StringComparison.OrdinalIgnoreCase);
 
 		// The check that catches next year's field, not just today's values.
 		using var document = JsonDocument.Parse(json);
@@ -287,13 +525,12 @@ public sealed class MessageBackupTests : IDisposable
 		Collect(document.RootElement, names);
 
 		Assert.DoesNotContain(names, n => n.Contains("token", StringComparison.OrdinalIgnoreCase));
-		Assert.DoesNotContain(names, n => n.Contains("key", StringComparison.OrdinalIgnoreCase));
 		Assert.DoesNotContain(names, n => n.Contains("password", StringComparison.OrdinalIgnoreCase));
 		Assert.DoesNotContain(names, n => n.Contains("secret", StringComparison.OrdinalIgnoreCase));
-		Assert.DoesNotContain(names, n => n.Contains("device", StringComparison.OrdinalIgnoreCase));
 		Assert.DoesNotContain(names, n => n.Contains("fingerprint", StringComparison.OrdinalIgnoreCase));
 
-		Assert.Equal(AllowedNames, names);
+		// Version 2's two names and nothing else: the device, and its key.
+		Assert.Equal(new SortedSet<string>(AllowedNames.Concat(["device", "privateKey"]), StringComparer.Ordinal), names);
 	}
 
 	[Fact]
@@ -427,6 +664,42 @@ public sealed class MessageBackupTests : IDisposable
 		public Task ClearAsync()
 		{
 			Session = null;
+
+			return Task.CompletedTask;
+		}
+	}
+
+	private sealed class MemoryKeys : IDeviceKeyStore
+	{
+		public Sealing.Keypair Pair { get; private set; } = Sealing.NewKeypair();
+
+		private bool _cleared;
+
+		public Task<bool> HasKeyAsync() => Task.FromResult(!_cleared);
+
+		public Task<string> RegenerateAsync()
+		{
+			Pair = Sealing.NewKeypair();
+			_cleared = false;
+
+			return Task.FromResult(Pair.PublicKey);
+		}
+
+		public Task<string> ImportAsync(string privateKeyPem)
+		{
+			Pair = new Sealing.Keypair(new BackupDevice { PrivateKey = privateKeyPem }.PublicKey(), privateKeyPem);
+			_cleared = false;
+
+			return Task.FromResult(Pair.PublicKey);
+		}
+
+		public Task<string> PublicKeyAsync() => Task.FromResult(_cleared ? string.Empty : Pair.PublicKey);
+
+		public Task<string> PrivateKeyAsync() => Task.FromResult(_cleared ? string.Empty : Pair.PrivateKeyPem);
+
+		public Task ClearAsync()
+		{
+			_cleared = true;
 
 			return Task.CompletedTask;
 		}

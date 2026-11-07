@@ -16,8 +16,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// is made here rather than lazily on the first message.</para>
 ///
 /// <para>Lives in the app rather than Link.Core because it reaches for
-/// <c>WebAuthenticator</c> and <c>DeviceInfo</c>, both of which come from
-/// the MAUI workload.</para>
+/// <c>DeviceInfo</c>, which comes from the MAUI workload.</para>
 /// </summary>
 public sealed class DeviceAuthService
 {
@@ -29,6 +28,7 @@ public sealed class DeviceAuthService
 	private readonly IAppleSignIn _apple;
 	private readonly INativeGoogleSignIn _nativeGoogle;
 	private readonly FingerprintSignIn _fingerprint;
+	private readonly MessageBackup? _backup;
 
 	private const string GoogleUnavailable =
 		"Google sign-in isn't available on this phone. Please sign in with your password.";
@@ -41,8 +41,10 @@ public sealed class DeviceAuthService
 		IAppleSignIn apple,
 		INativeGoogleSignIn nativeGoogle,
 		IMessageHistory history,
-		FingerprintSignIn fingerprint)
+		FingerprintSignIn fingerprint,
+		MessageBackup? backup = null)
 	{
+		_backup = backup;
 		_fingerprint = fingerprint;
 		_apple = apple;
 		_nativeGoogle = nativeGoogle;
@@ -72,6 +74,20 @@ public sealed class DeviceAuthService
 	/// registered here.</para>
 	/// </summary>
 	public bool PushRegistered { get; private set; }
+
+	/// <summary>
+	/// What became of a backup held for the sign-in that has just finished, for the
+	/// sign-in screen to say and apply. Read once.
+	/// </summary>
+	public BackupRestore? TakeRestored()
+	{
+		var restored = _restored;
+		_restored = null;
+
+		return restored;
+	}
+
+	private BackupRestore? _restored;
 
 	/// <summary>
 	/// Re-send this handset's push token, if it has one and is signed in.
@@ -318,9 +334,9 @@ public sealed class DeviceAuthService
 
 		// Generated here rather than by the caller, so the old pair is not
 		// thrown away until a credential has actually been gathered — a
-		// member who backs out of the browser tab keeps whatever they had.
+		// member who backs out of the picker keeps whatever they had.
 		var publicKey = await _keys.RegenerateAsync().ConfigureAwait(false);
-		Log.Information("New keypair generated; presenting it for device {DeviceId}", session.DeviceId);
+		Log.Information("New keypair generated; presenting it for device {DeviceId}", session.FirebaseDeviceId);
 
 		return await _client.RotateKeyAsync(
 			session.Token, request with { PublicKey = publicKey }, cancellationToken).ConfigureAwait(false);
@@ -568,7 +584,7 @@ public sealed class DeviceAuthService
 			var revoked = false;
 			if (session is not null && session.IsSignedIn)
 			{
-				Log.Information("Signing out device {DeviceId} for member {MemberId}", session.DeviceId, session.MemberId);
+				Log.Information("Signing out device {DeviceId} for member {MemberId}", session.FirebaseDeviceId, session.MemberId);
 				revoked = await _client.SignOutAsync(session.Token, cancellationToken).ConfigureAwait(false);
 			}
 
@@ -622,11 +638,18 @@ public sealed class DeviceAuthService
 			string.IsNullOrEmpty(pushToken) ? "not yet issued" : "present");
 
 		var result = await _client.EnrolAsync(
-			request with { PushToken = pushToken },
+			(_backup?.AimedAtHeldDevice(request) ?? request) with { PushToken = pushToken },
 			cancellationToken).ConfigureAwait(false);
 
 		if (result.Succeeded && result.Session is not null)
 		{
+			// Before the session: a phone that is signed in has to hold the key
+			// its device's messages are sealed to.
+			if (result.TookOver && _backup is not null)
+			{
+				await _backup.KeepHeldKeyAsync(cancellationToken).ConfigureAwait(false);
+			}
+
 			await _sessions.SaveAsync(result.Session).ConfigureAwait(false);
 
 			// Whose messages are on this phone? A handset that was refused
@@ -646,10 +669,18 @@ public sealed class DeviceAuthService
 			PushRegistered = pushToken.Length > 0;
 
 			Log.Information(
-				"Enrolled as device {DeviceId} for member {MemberId}; push {Push}",
-				result.Session.DeviceId,
+				"{How} device {DeviceId} for member {MemberId}; push {Push}",
+				result.TookOver ? "Took over" : "Enrolled as",
+				result.Session.FirebaseDeviceId,
 				result.Session.MemberId,
 				string.IsNullOrEmpty(pushToken) ? "unavailable (polling)" : "registered");
+
+			// Here rather than on the sign-in screen, so the messages are in before
+			// the member sees a list and the first sync starts from the backup's mark.
+			if (_backup is not null)
+			{
+				_restored = await _backup.FinishHeldAsync(result.TookOver, cancellationToken).ConfigureAwait(false);
+			}
 		}
 		else
 		{

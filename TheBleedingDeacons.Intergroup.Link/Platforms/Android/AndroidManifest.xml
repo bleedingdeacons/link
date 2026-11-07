@@ -16,9 +16,9 @@
 			what the enrolment flow exists to prevent.
 
 			The cost is that a member restoring a phone signs in again.
-			That is the correct trade, and it is also the honest one: the
-			private key is device-bound by design, so a restored copy
-			would not be able to open anything anyway.
+			That is the correct trade. Moving the key to a new phone is the
+			member's own backup, under their own passphrase, and it still
+			needs a sign-in. See MessageBackup.
 		-->
 	</application>
 

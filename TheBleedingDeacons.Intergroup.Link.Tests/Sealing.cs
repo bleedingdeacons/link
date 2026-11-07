@@ -41,6 +41,16 @@ internal static class Sealing
 	/// <summary>Key size Fellowship's floor requires.</summary>
 	public const int KeyBits = 2048;
 
+	/// <summary>A keypair, as a phone's key store would hold it.</summary>
+	internal sealed record Keypair(string PublicKey, string PrivateKeyPem);
+
+	internal static Keypair NewKeypair()
+	{
+		using var rsa = RSA.Create(KeyBits);
+
+		return new Keypair(Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo()), rsa.ExportPkcs8PrivateKeyPem());
+	}
+
 	/// <summary>A sealed envelope and the private key that opens it.</summary>
 	internal sealed record Sealed
 	{

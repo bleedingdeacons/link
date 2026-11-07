@@ -8,8 +8,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 ///
 /// <para>Generated once, on first attach. The public half goes to
 /// Fellowship at enrolment and everything the server sends this device is
-/// sealed to it; the private half is what opens those messages and never
-/// leaves the handset.</para>
+/// sealed to it; the private half is what opens those messages, and leaves
+/// the handset only inside a backup the member seals themselves.</para>
 ///
 /// <para>See <see cref="IDeviceKeyStore"/> for the storage limitation
 /// this carries and the hardware-backed step that would remove it.</para>
@@ -48,6 +48,28 @@ public sealed class DeviceKeyStore : IDeviceKeyStore
 		var publicSpki = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo());
 
 		await SecureStorage.SetAsync(PrivateKeyName, privatePem).ConfigureAwait(false);
+		await SecureStorage.SetAsync(PublicKeyName, publicSpki).ConfigureAwait(false);
+
+		return publicSpki;
+	}
+
+	/// <inheritdoc />
+	public async Task<string> ImportAsync(string privateKeyPem)
+	{
+		using var rsa = RSA.Create();
+
+		try
+		{
+			rsa.ImportFromPem(privateKeyPem);
+		}
+		catch (ArgumentException e)
+		{
+			throw new CryptographicException("That is not a private key.", e);
+		}
+
+		var publicSpki = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo());
+
+		await SecureStorage.SetAsync(PrivateKeyName, privateKeyPem).ConfigureAwait(false);
 		await SecureStorage.SetAsync(PublicKeyName, publicSpki).ConfigureAwait(false);
 
 		return publicSpki;

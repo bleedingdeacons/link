@@ -68,12 +68,12 @@ public sealed class AuthAttemptTests
 	{
 		using (var attempt = AuthAttempt.Begin("Sign-in", "password", _log))
 		{
-			attempt.Finished(EnrolmentResult.Ok(new DeviceSession { Token = "secret", DeviceId = 12, MemberId = 7 }));
+			attempt.Finished(EnrolmentResult.Ok(new DeviceSession { Token = "secret", FirebaseDeviceId = "d_abc", MemberId = 7 }));
 		}
 
 		var outcome = _sink.Events[^1];
 		Assert.Equal(LogEventLevel.Information, outcome.Level);
-		Assert.Equal("12", outcome.Properties["DeviceId"].ToString());
+		Assert.Equal("\"d_abc\"", outcome.Properties["DeviceId"].ToString());
 		Assert.Equal("7", outcome.Properties["MemberId"].ToString());
 		Assert.True(outcome.Properties.ContainsKey("ElapsedMs"));
 	}

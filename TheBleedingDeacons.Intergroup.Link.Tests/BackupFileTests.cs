@@ -62,12 +62,12 @@ public class BackupFileTests
 		var bytes = BackupBytes.Read(file);
 
 		Assert.Equal("LKBK", Encoding.ASCII.GetString(file, 0, 4));
-		Assert.Equal(1, BinaryPrimitives.ReadUInt16BigEndian(file.AsSpan(4)));
+		Assert.Equal(2, BinaryPrimitives.ReadUInt16BigEndian(file.AsSpan(4)));
 		Assert.Equal(600_000, bytes.Iterations);
 
 		using var document = JsonDocument.Parse(bytes.Plaintext(Passphrase));
 
-		Assert.Equal(1, document.RootElement.GetProperty("formatVersion").GetInt32());
+		Assert.Equal(2, document.RootElement.GetProperty("formatVersion").GetInt32());
 		Assert.Equal(7, document.RootElement.GetProperty("memberId").GetInt64());
 	}
 
@@ -163,7 +163,7 @@ public class BackupFileTests
 	{
 		var file = BackupFile.Seal(Contents(), Passphrase);
 
-		BinaryPrimitives.WriteUInt16BigEndian(file.AsSpan(4), 2);
+		BinaryPrimitives.WriteUInt16BigEndian(file.AsSpan(4), 3);
 
 		Assert.Null(BackupFile.Open(file, Passphrase));
 	}
@@ -200,6 +200,79 @@ public class BackupFileTests
 		var file = BackupBytes.Seal(BackupBytes.Gzip(Encoding.UTF8.GetBytes(json)), Passphrase);
 
 		Assert.Null(BackupFile.Open(file, Passphrase));
+	}
+
+	[Fact]
+	public void The_device_comes_back_when_the_passphrase_opens_it()
+	{
+		var key = Sealing.NewKeypair();
+		var file = BackupFile.Seal(Contents() with { Device = new BackupDevice { Id = "d_abc", PrivateKey = key.PrivateKeyPem } }, Passphrase);
+
+		var device = BackupFile.Open(file, Passphrase)!.Device!;
+
+		Assert.Equal("d_abc", device.Id);
+		Assert.Equal(key.PrivateKeyPem, device.PrivateKey);
+		Assert.Equal(key.PublicKey, device.PublicKey());
+	}
+
+	[Fact]
+	public void The_key_is_not_readable_in_the_file()
+	{
+		var key = Sealing.NewKeypair();
+		var file = BackupFile.Seal(Contents() with { Device = new BackupDevice { Id = "d_abc", PrivateKey = key.PrivateKeyPem } }, Passphrase);
+
+		var everything = Encoding.Latin1.GetString(file);
+
+		Assert.DoesNotContain("PRIVATE KEY", everything, StringComparison.Ordinal);
+		Assert.DoesNotContain("d_abc", everything, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public void Printing_a_backup_does_not_print_the_key()
+	{
+		var contents = Contents() with { Device = new BackupDevice { Id = "d_abc", PrivateKey = "-----BEGIN PRIVATE KEY-----" } };
+
+		Assert.DoesNotContain("PRIVATE KEY", contents.ToString(), StringComparison.Ordinal);
+		Assert.DoesNotContain("PRIVATE KEY", contents.Device.ToString(), StringComparison.Ordinal);
+	}
+
+	[Theory]
+	[InlineData("""{"id":"d_abc"}""")]
+	[InlineData("""{"privateKey":"key"}""")]
+	[InlineData("""{"id":"","privateKey":""}""")]
+	public void A_device_that_is_not_whole_is_no_device(string device)
+	{
+		var json = $$"""{"formatVersion":2,"memberId":7,"history":{"messages":[],"sent":[],"deleted":[]},"device":{{device}}}""";
+		var file = BackupBytes.Seal(BackupBytes.Gzip(Encoding.UTF8.GetBytes(json)), Passphrase, version: 2);
+
+		var opened = BackupFile.Open(file, Passphrase);
+
+		Assert.NotNull(opened);
+		Assert.Null(opened.Device);
+	}
+
+	[Fact]
+	public void A_version_1_file_never_has_a_device_whatever_it_says()
+	{
+		const string json = """{"formatVersion":1,"memberId":7,"history":{"messages":[],"sent":[],"deleted":[]},"device":{"id":"d_abc","privateKey":"key"}}""";
+		var file = BackupBytes.Seal(BackupBytes.Gzip(Encoding.UTF8.GetBytes(json)), Passphrase);
+
+		Assert.Null(BackupFile.Open(file, Passphrase)!.Device);
+	}
+
+	[Fact]
+	public void A_version_1_file_saying_it_is_version_2_does_not_open()
+	{
+		const string json = """{"formatVersion":1,"memberId":7,"history":{"messages":[],"sent":[],"deleted":[]}}""";
+		var file = BackupBytes.Seal(BackupBytes.Gzip(Encoding.UTF8.GetBytes(json)), Passphrase, version: 2);
+
+		Assert.Null(BackupFile.Open(file, Passphrase));
+	}
+
+	[Fact]
+	public void A_key_that_cannot_be_read_has_no_public_half()
+	{
+		Assert.Empty(new BackupDevice { Id = "d_abc", PrivateKey = "not a key" }.PublicKey());
 	}
 
 	[Fact]
@@ -335,14 +408,14 @@ internal sealed record BackupBytes(byte[] File, int Iterations, byte[] Salt, byt
 	}
 
 	/// <summary>Seal anything at all, correctly, as somebody holding the passphrase could.</summary>
-	public static byte[] Seal(byte[] plaintext, string passphrase)
+	public static byte[] Seal(byte[] plaintext, string passphrase, ushort version = 1)
 	{
 		const int iterations = 600_000;
 
 		var file = new byte[54 + plaintext.Length];
 
 		"LKBK"u8.CopyTo(file);
-		BinaryPrimitives.WriteUInt16BigEndian(file.AsSpan(4), 1);
+		BinaryPrimitives.WriteUInt16BigEndian(file.AsSpan(4), version);
 		BinaryPrimitives.WriteInt32BigEndian(file.AsSpan(6), iterations);
 		RandomNumberGenerator.Fill(file.AsSpan(10, 28));
 

@@ -316,6 +316,20 @@ public sealed class FakeDeviceKeyStore : IDeviceKeyStore
 		return Task.FromResult(_keys.PublicKey);
 	}
 
+	public Task<string> ImportAsync(string privateKeyPem)
+	{
+		using var rsa = System.Security.Cryptography.RSA.Create();
+		rsa.ImportFromPem(privateKeyPem);
+
+		_keys = new Sealing.Keypair
+		{
+			PublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo()),
+			PrivateKeyPem = privateKeyPem,
+		};
+
+		return Task.FromResult(_keys.PublicKey);
+	}
+
 	public Task<string> PublicKeyAsync() => Task.FromResult(_keys?.PublicKey ?? string.Empty);
 
 	public Task<string> PrivateKeyAsync() => Task.FromResult(_keys?.PrivateKeyPem ?? string.Empty);

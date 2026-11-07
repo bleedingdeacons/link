@@ -27,13 +27,22 @@ public sealed partial class SignInViewModel : ObservableObject
 	private readonly FellowshipConfiguration _configuration;
 	private readonly FingerprintSignIn _fingerprint;
 	private readonly FirebaseSessionsOnly _sessions;
+	private readonly MessageBackup _backup;
+	private readonly IBackupFiles _backupFiles;
+
+	/// <summary>The file chosen, until its passphrase has opened it.</summary>
+	private byte[]? _chosenBackup;
 
 	public SignInViewModel(
 		DeviceAuthService auth,
 		FellowshipConfiguration configuration,
 		FingerprintSignIn fingerprint,
-		FirebaseSessionsOnly sessions)
+		FirebaseSessionsOnly sessions,
+		MessageBackup backup,
+		IBackupFiles backupFiles)
 	{
+		_backup = backup;
+		_backupFiles = backupFiles;
 		_sessions = sessions;
 		_auth = auth;
 		_configuration = configuration;
@@ -62,7 +71,28 @@ public sealed partial class SignInViewModel : ObservableObject
 	[NotifyCanExecuteChangedFor(nameof(SignInWithPasswordCommand))]
 	[NotifyCanExecuteChangedFor(nameof(RequestPasswordLinkCommand))]
 	[NotifyCanExecuteChangedFor(nameof(SetPasswordCommand))]
+	[NotifyCanExecuteChangedFor(nameof(StartRestoreCommand))]
+	[NotifyCanExecuteChangedFor(nameof(OpenBackupCommand))]
 	private bool _busy;
+
+	/// <summary>Whether the passphrase for a chosen backup is being asked for.</summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(CanOfferRestore))]
+	private bool _openingBackup;
+
+	[ObservableProperty]
+	private string _backupPassphrase = string.Empty;
+
+	/// <summary>What the sign-in about to happen will do with the backup that is open.</summary>
+	[ObservableProperty]
+	[NotifyPropertyChangedFor(nameof(HasHeldBackup))]
+	[NotifyPropertyChangedFor(nameof(CanOfferRestore))]
+	private string _heldBackup = string.Empty;
+
+	public bool HasHeldBackup => !string.IsNullOrEmpty(HeldBackup);
+
+	/// <summary>Whether to offer restoring: the build has an intergroup, and no backup is under way.</summary>
+	public bool CanOfferRestore => IsConfigured && !OpeningBackup && !HasHeldBackup;
 
 	[ObservableProperty]
 	private string _email = string.Empty;
@@ -300,6 +330,91 @@ public sealed partial class SignInViewModel : ObservableObject
 		Notice = string.Empty;
 	}
 
+	/// <summary>Choose a backup to move this phone onto. The passphrase is asked for once there is one.</summary>
+	[RelayCommand(CanExecute = nameof(CanSignIn))]
+	private async Task StartRestoreAsync()
+	{
+		Error = string.Empty;
+		Notice = string.Empty;
+
+		_chosenBackup = await _backupFiles.PickAsync().ConfigureAwait(true);
+
+		OpeningBackup = _chosenBackup is not null;
+	}
+
+	/// <summary>
+	/// Open the chosen backup and hold it for the sign-in. A wrong passphrase leaves
+	/// the question open, so the member needn't choose the file a second time.
+	/// </summary>
+	[RelayCommand(CanExecute = nameof(CanSignIn))]
+	private async Task OpenBackupAsync()
+	{
+		if (_chosenBackup is not { } file)
+		{
+			return;
+		}
+
+		Busy = true;
+		Error = string.Empty;
+
+		try
+		{
+			var held = await _backup.HoldForSignInAsync(file, BackupPassphrase).ConfigureAwait(true);
+
+			BackupPassphrase = string.Empty;
+
+			if (held.Outcome != BackupRestoreOutcome.Held)
+			{
+				Error = held.Message;
+				return;
+			}
+
+			_chosenBackup = null;
+			OpeningBackup = false;
+			HeldBackup = held.Message;
+		}
+		finally
+		{
+			Busy = false;
+		}
+	}
+
+	/// <summary>Put the backup down, and the key in it. Signing in is then an ordinary sign-in.</summary>
+	[RelayCommand]
+	private void CancelRestore()
+	{
+		_backup.ForgetHeld();
+		_chosenBackup = null;
+		OpeningBackup = false;
+		BackupPassphrase = string.Empty;
+		HeldBackup = string.Empty;
+		Error = string.Empty;
+	}
+
+	/// <summary>
+	/// Say what became of a backup held for this sign-in, and put its choices back.
+	/// On the main thread, which a style needs.
+	/// </summary>
+	private async Task ShowRestoredAsync(BackupRestore restored, long memberId)
+	{
+		HeldBackup = string.Empty;
+
+		if (restored.Succeeded)
+		{
+			_backup.ApplySettings(restored.Settings);
+
+			if (restored.MadeAt is { } madeAt)
+			{
+				_backupFiles.RememberBackup(memberId, madeAt);
+			}
+		}
+
+		await Shell.Current.DisplayAlertAsync(
+			restored.Succeeded ? "Backup restored" : "Backup not restored",
+			restored.Message,
+			"OK").ConfigureAwait(true);
+	}
+
 	/// <summary>
 	/// The shared half of every sign-in: busy on, errors cleared, and the
 	/// shell refreshed if a session came back.
@@ -331,9 +446,16 @@ public sealed partial class SignInViewModel : ObservableObject
 				// on to their messages.
 				await _fingerprint.SetUpAsync().ConfigureAwait(true);
 
+				var restored = _auth.TakeRestored();
+
 				if (Shell.Current is AppShell shell)
 				{
 					await shell.RefreshAsync().ConfigureAwait(true);
+				}
+
+				if (restored is not null)
+				{
+					await ShowRestoredAsync(restored, result.Session!.MemberId).ConfigureAwait(true);
 				}
 
 				return;

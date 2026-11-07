@@ -149,6 +149,16 @@ public sealed record EnrolmentRequest
 	/// <summary>Something a member will recognise in the Devices list.</summary>
 	public string Label { get; init; } = string.Empty;
 
+	/// <summary>
+	/// The device to take over instead of enrolling, from a backup. Empty for an
+	/// ordinary sign-in. <see cref="PublicKey"/> is still needed, because a device
+	/// that can't be taken over enrols as new with the same sign-in.
+	/// </summary>
+	public string TakeOverDeviceId { get; init; } = string.Empty;
+
+	/// <summary>The public half of the backup's key, which the device has to hold now.</summary>
+	public string TakeOverPublicKey { get; init; } = string.Empty;
+
 	public required string Platform { get; init; }
 
 	public string PushToken { get; init; } = string.Empty;
@@ -170,6 +180,12 @@ public sealed record EnrolmentResult
 	public string Error { get; init; } = string.Empty;
 
 	public bool Succeeded => Session is not null;
+
+	/// <summary>
+	/// This phone took a backup's device over, so the key it holds now has to be
+	/// the backup's rather than the one it offered.
+	/// </summary>
+	public bool TookOver { get; init; }
 
 	public static EnrolmentResult Failed(string error) => new() { Error = error };
 

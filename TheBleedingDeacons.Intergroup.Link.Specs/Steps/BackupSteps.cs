@@ -87,12 +87,27 @@ public sealed class BackupSteps(World world)
 	[Then(@"^the restore added (\d+) messages?$")]
 	public void Added(int count) => Restored.Added.ShouldBe(count);
 
+	[Given(@"^this phone is device ""(.+)"" on Firebase$")]
+	public async Task OnFirebase(string deviceId) =>
+		await world.Sessions.SaveAsync(world.Sessions.Session.ShouldNotBeNull() with { FirebaseDeviceId = deviceId });
+
+	/// <summary>Only once the passphrase has opened it: the bytes are read by hand in Link.Tests.</summary>
+	[Then(@"^the backup holds device ""(.+)"" and this phone's key$")]
+	public async Task HoldsTheDevice(string deviceId)
+	{
+		var device = BackupFile.Open(Backup, Passphrase).ShouldNotBeNull().Device.ShouldNotBeNull();
+
+		device.Id.ShouldBe(deviceId);
+		device.PrivateKey.ShouldBe(await world.Keys.PrivateKeyAsync());
+		device.PublicKey().ShouldBe(await world.Keys.PublicKeyAsync());
+	}
+
 	/// <summary>
 	/// By value and by name: the token this handset holds, and any property
 	/// that sounds like a credential. Link.Tests holds the names to an exact
 	/// list and reads the bytes by hand.
 	/// </summary>
-	[Then(@"^the backup holds no token and no key$")]
+	[Then(@"^the backup holds no token$")]
 	public void NoCredential()
 	{
 		var opened = BackupFile.Open(Backup, Passphrase).ShouldNotBeNull();
@@ -102,8 +117,6 @@ public sealed class BackupSteps(World world)
 
 		json.ShouldNotContain(world.Sessions.Session.ShouldNotBeNull().Token, Case.Insensitive);
 		json.ShouldNotContain("token", Case.Insensitive);
-		json.ShouldNotContain("privateKey", Case.Insensitive);
-		json.ShouldNotContain("PRIVATE KEY", Case.Insensitive);
 	}
 
 	[Then(@"^the passphrase ""(.+)"" typed again as ""(.+)"" is (accepted|refused)$")]

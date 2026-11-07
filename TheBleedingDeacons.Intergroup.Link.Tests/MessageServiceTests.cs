@@ -1012,6 +1012,8 @@ public sealed class MessageServiceTests
 
 		public Task<string> RegenerateAsync() => Task.FromResult("public");
 
+		public Task<string> ImportAsync(string privateKeyPem) => Task.FromResult("public");
+
 		public Task<string> PublicKeyAsync() => Task.FromResult("public");
 
 		public Task<string> PrivateKeyAsync() => Task.FromResult(privateKey);

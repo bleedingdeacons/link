@@ -96,7 +96,7 @@ public sealed class AuthAttempt : IDisposable
 
 		if (result.Succeeded)
 		{
-			Succeeded(result.Session!.DeviceId, result.Session.MemberId);
+			Succeeded(result.Session!.FirebaseDeviceId, result.Session.MemberId);
 		}
 		else
 		{
@@ -193,7 +193,7 @@ public sealed class AuthAttempt : IDisposable
 		_context.Dispose();
 	}
 
-	private void Succeeded(long deviceId, long memberId)
+	private void Succeeded(string deviceId, long memberId)
 	{
 		_finished = true;
 		Log.Information(

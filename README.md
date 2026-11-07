@@ -35,8 +35,9 @@ is all the app puts there.
 
 On first attach Link generates an RSA-2048 keypair in the platform
 keystore. The public half goes to Fellowship at enrolment; **the private
-half never leaves the handset**. Everything the server sends this device
-is sealed to that key.
+half stays on the handset**, unless the member makes a backup, which carries it
+sealed under their passphrase. Everything the server sends this device is
+sealed to that key.
 
 **Fellowship can still read your messages** — bodies are stored in plain
 text server-side, which is what makes committee broadcasts, the message
@@ -201,7 +202,8 @@ Settings has two actions under *Messages on this phone*: **Back up messages**
 and **Restore from a backup**. A backup is one file,
 `link-backup-<date>.linkbackup`, saved through the phone's share sheet and
 chosen again with its file picker. It holds the history (messages, sent copies,
-deleted ids, and the clear and poll marks) and the style and switches.
+deleted ids, and the clear and poll marks), the style and switches, and which
+device this phone is, with its private key.
 
 **What the member is told, because each of these is easy to get wrong.** A
 backup is a copy of their messages outside Link. Clearing messages, signing out
@@ -210,12 +212,13 @@ so an erasure request cannot reach it. A forgotten passphrase means the backup
 cannot be opened, and nobody can recover it. Settings says all of this before a
 file is made, in `MessageBackup`'s words.
 
-**Nothing in it signs in.** No device token, no private key. A backup restores
-messages onto a phone a member has already signed in to and enrols nothing, so
-`android:allowBackup="false"` stays, for the reason written in the manifest. A
-test holds the file's property names to an exact list, so a new one goes in on
-purpose or not at all. Fingerprint sign-in is left out too: only a finger this
-phone has matched turns it on.
+**Nothing in it signs in.** It holds no token, so
+`android:allowBackup="false"` stays, for the reason written in the manifest. It
+does hold the phone's private key, which opens messages and proves nothing, and
+Settings says so before a file is made. So the passphrase is what stands between
+somebody holding the file and that key. A test holds the file's property names to
+an exact list, so a new one goes in on purpose or not at all. Fingerprint sign-in
+is left out too: only a finger this phone has matched turns it on.
 
 ### The file
 
@@ -225,7 +228,7 @@ big-endian:
 | Offset | Size | What |
 | --- | --- | --- |
 | 0 | 4 | `LKBK` |
-| 4 | 2 | Format version, 1 |
+| 4 | 2 | Format version, 2 |
 | 6 | 4 | PBKDF2-SHA256 iterations, 600,000 |
 | 10 | 16 | Salt, random |
 | 26 | 12 | Nonce, random |
@@ -250,13 +253,38 @@ the rules. Both are in Link.Core and tested there. `IBackupFiles` is the app's
 seam over the sheet and the picker, with a half per head. `BackupFileTests` reads
 the layout again without calling the shipping code, and
 `Fixtures/backup-v1.linkbackup` is a version 1 file committed so that every later
-version has to go on restoring it. The sealer has no fixture because one would
-have to carry a private key. This one holds test messages and no key.
+version has to go on restoring it. Version 2 has the same layout and adds the
+device to the JSON. A version 1 file has no device, so it restores the messages
+and the phone joins as new. The sealer has no fixture because one would have to
+carry a private key. This one holds test messages and no key.
+
+### Moving to a new phone
+
+**Moving phones? Restore from a backup** on the sign-in screen opens the file and
+holds it until the member signs in. That sign-in takes the old phone's place:
+
+1. The `takeOverDevice` Function checks the sign-in, that the device is this
+   member's and still live, and that its public key matches the backup's.
+2. The old phone is cut off at once, even with a token that hasn't expired, and
+   the device moves to this phone with its id, key and inbox.
+3. Link keeps the backup's key, saves the session, joins the history, and the first
+   sync starts from the backup's mark, so what arrived since then still comes.
+
+**If it can't take over, this phone enrols as new** with the same sign-in, and the
+messages are restored anyway. That covers a backup from before a key replacement, a
+device an admin revoked or the member signed out, and another member's file, which
+is then refused. A refusal leaves the sign-in unspent because an Apple or Google
+credential can't be presented twice. Not being a member, or no network, stops the
+sign-in instead.
+
+**Restoring in Settings moves nothing.** A phone already signed in gets the messages
+and keeps its own device and key, and if the file came from another phone Link says
+that phone stays signed in.
 
 ### Restoring merges
 
-Restoring needs a sign-in, and **a backup from another member is refused**. The
-session is checked first and the store's own owner after it, and a refusal
+Restoring always ends with a sign-in, and **a backup from another member is
+refused**. The session is checked first and the store's own owner after it, and a refusal
 changes nothing. Then the two sides are joined:
 
 - **Messages join by id.** Read on either side is read, and a sent copy keeps the

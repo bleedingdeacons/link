@@ -3,8 +3,9 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// <summary>
 /// This handset's keypair.
 ///
-/// <para>Generated once, on first attach, and never sent anywhere except
-/// its public half. Everything Fellowship sends this device is sealed to
+/// <para>Generated once, on first attach, and never sent to any server except
+/// its public half. The private half leaves only inside a backup the member
+/// seals with their own passphrase. Everything Fellowship sends this device is sealed to
 /// it, and the server holds only the public key — so losing the private
 /// half means losing every message already sent, permanently and for
 /// everyone including the server. That is why
@@ -35,6 +36,15 @@ public interface IDeviceKeyStore
 	/// half as base64 SubjectPublicKeyInfo — the form Fellowship stores.
 	/// </summary>
 	Task<string> RegenerateAsync();
+
+	/// <summary>
+	/// Keep a keypair that came from a backup, replacing any that exists, and
+	/// return the public half as base64 SPKI.
+	/// </summary>
+	/// <param name="privateKeyPem">The private half, as PKCS#8 PEM.</param>
+	/// <exception cref="System.Security.Cryptography.CryptographicException">It
+	/// isn't a key. Nothing is replaced.</exception>
+	Task<string> ImportAsync(string privateKeyPem);
 
 	/// <summary>The public half as base64 SPKI, or empty when there is none.</summary>
 	Task<string> PublicKeyAsync();

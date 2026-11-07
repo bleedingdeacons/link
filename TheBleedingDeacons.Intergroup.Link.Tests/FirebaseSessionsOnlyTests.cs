@@ -122,6 +122,8 @@ public sealed class FirebaseSessionsOnlyTests : IDisposable
 
 		public Task<string> RegenerateAsync() => Task.FromResult(string.Empty);
 
+		public Task<string> ImportAsync(string privateKeyPem) => Task.FromResult(string.Empty);
+
 		public Task<string> PublicKeyAsync() => Task.FromResult(string.Empty);
 
 		public Task<string> PrivateKeyAsync() => Task.FromResult(string.Empty);

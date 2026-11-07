@@ -64,6 +64,133 @@ public sealed class FirebaseFellowshipClientTests
 	}
 
 	[Fact]
+	public async Task TakingOverAskedForGivesThisPhoneThatDeviceAndEnrolsNothing()
+	{
+		_google.TakesOver();
+
+		var result = await Client().EnrolAsync(TakingOver());
+
+		Assert.True(result.TookOver);
+		Assert.Equal(DeviceId, result.Session!.FirebaseDeviceId);
+		Assert.Equal(MemberId, result.Session.MemberId);
+		Assert.Equal(RefreshToken, result.Session.Token);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/enrol", StringComparison.Ordinal));
+
+		var taking = _google.Only("/takeOverDevice");
+		Assert.Equal("Bearer google-identity", taking.Authorization);
+
+		var data = JsonDocument.Parse(taking.Body).RootElement.GetProperty("data");
+		Assert.Equal(DeviceId, data.GetProperty("deviceId").GetString());
+		Assert.Equal("backup-spki", data.GetProperty("publicKey").GetString());
+		Assert.Equal("ios", data.GetProperty("platform").GetString());
+		Assert.Equal("New phone", data.GetProperty("label").GetString());
+		Assert.Equal("push", data.GetProperty("pushToken").GetString());
+	}
+
+	[Fact]
+	public async Task AnOrdinarySignInTakesNothingOver()
+	{
+		_google.Enrols();
+
+		var result = await Client().EnrolAsync(new EnrolmentRequest { FirebaseToken = "google-identity", PublicKey = "spki", Platform = "android" });
+
+		Assert.False(result.TookOver);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("takeOverDevice", StringComparison.Ordinal));
+	}
+
+	[Theory]
+	[InlineData("fellowship_key_mismatch")]
+	[InlineData("fellowship_no_such_device")]
+	[InlineData("fellowship_device_revoked")]
+	[InlineData("fellowship_bad_public_key")]
+	public async Task ADeviceThatCanNotBeTakenOverEnrolsAsNewWithTheSameSignIn(string reason)
+	{
+		_google.Enrols();
+		_google.Routes["/takeOverDevice"] = _ => Refusal(reason, "No.");
+
+		var result = await Client().EnrolAsync(TakingOver());
+
+		Assert.True(result.Succeeded);
+		Assert.False(result.TookOver);
+
+		var enrol = _google.Only("/enrol");
+		Assert.Equal("Bearer google-identity", enrol.Authorization);
+
+		// Its own new key, not the backup's.
+		Assert.Equal("new-spki", JsonDocument.Parse(enrol.Body).RootElement.GetProperty("data").GetProperty("publicKey").GetString());
+	}
+
+	[Fact]
+	public async Task AppleIsAskedOnceWhenATakeoverIsRefused()
+	{
+		// Firebase refuses an Apple credential presented twice.
+		_google.Enrols();
+		_google.Routes["/takeOverDevice"] = _ => Refusal("fellowship_key_mismatch", "No.");
+		_google.Routes["signInWithIdp"] = _ => FakeGoogle.Json("""{"idToken":"apple-identity","refreshToken":"r","expiresIn":"3600"}""");
+
+		var result = await Client().EnrolAsync(new EnrolmentRequest
+		{
+			IdToken = "apple-token",
+			State = "state",
+			PublicKey = "new-spki",
+			Platform = "ios",
+			TakeOverDeviceId = DeviceId,
+			TakeOverPublicKey = "backup-spki",
+		});
+
+		Assert.True(result.Succeeded);
+		_google.Only("signInWithIdp");
+	}
+
+	[Fact]
+	public async Task NotBeingAMemberStopsTheSignInRatherThanEnrolling()
+	{
+		_google.Enrols();
+		_google.Routes["/takeOverDevice"] = _ => Refusal("fellowship_not_a_member", "That address does not match a member record.");
+
+		var result = await Client().EnrolAsync(TakingOver());
+
+		Assert.False(result.Succeeded);
+		Assert.Equal("That address does not match a member record.", result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/enrol", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task NoAnswerToATakeoverStopsTheSignInRatherThanEnrolling()
+	{
+		_google.Enrols();
+		_google.Routes["/takeOverDevice"] = _ => throw new HttpRequestException("offline");
+
+		var result = await Client().EnrolAsync(TakingOver());
+
+		Assert.False(result.Succeeded);
+		Assert.NotEmpty(result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/enrol", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task AKeyThatCouldNotBeReadSkipsTheTakeover()
+	{
+		_google.Enrols();
+
+		var result = await Client().EnrolAsync(TakingOver() with { TakeOverPublicKey = string.Empty });
+
+		Assert.True(result.Succeeded);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("takeOverDevice", StringComparison.Ordinal));
+	}
+
+	private static EnrolmentRequest TakingOver() => new()
+	{
+		FirebaseToken = "google-identity",
+		PublicKey = "new-spki",
+		Platform = "ios",
+		Label = "New phone",
+		PushToken = "push",
+		TakeOverDeviceId = DeviceId,
+		TakeOverPublicKey = "backup-spki",
+	};
+
+	[Fact]
 	public async Task AnEnrolmentStillWorksWhenWordPressCanNotSayTheName()
 	{
 		_google.Enrols();
@@ -801,6 +928,12 @@ public sealed class FirebaseFellowshipClientTests
 			Routes["securetoken"] = _ => Json($$$$$$"""{"id_token":"{{{{{{IdToken}}}}}}","refresh_token":"{{{{{{RefreshToken}}}}}}","expires_in":"{{{{{{expiresIn}}}}}}"}""");
 
 		public void InboxAnswers(string rows) => Routes[":runQuery"] = _ => Json(rows);
+
+		public void TakesOver()
+		{
+			Enrols();
+			Routes["/takeOverDevice"] = Routes["/enrol"];
+		}
 
 		public void Enrols()
 		{
