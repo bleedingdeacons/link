@@ -135,7 +135,8 @@ internal sealed class FirebaseIdentity(HttpClient http, FirebaseConfiguration co
 			["refresh_token"] = refreshToken,
 		});
 
-		using var response = await http.PostAsync(configuration.SecureToken, form, cancellationToken).ConfigureAwait(false);
+		using var request = WithKey(new HttpRequestMessage(HttpMethod.Post, configuration.SecureToken) { Content = form });
+		using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
 		var json = await FirebaseHttp.ReadAsync(response, cancellationToken).ConfigureAwait(false);
 
 		if (!response.IsSuccessStatusCode)
@@ -166,6 +167,20 @@ internal sealed class FirebaseIdentity(HttpClient http, FirebaseConfiguration co
 		return (user, FellowshipFailure.None);
 	}
 
+	/// <summary>
+	/// Say which app is using the key. Without this, a key restricted to the app is refused.
+	/// See <see cref="FirebaseConfiguration.ClientHeaders"/>.
+	/// </summary>
+	private HttpRequestMessage WithKey(HttpRequestMessage request)
+	{
+		foreach (var (name, value) in configuration.ClientHeaders)
+		{
+			request.Headers.TryAddWithoutValidation(name, value);
+		}
+
+		return request;
+	}
+
 	private async Task<SignedIn?> SignInAsync(
 		string method,
 		Dictionary<string, object> body,
@@ -173,7 +188,11 @@ internal sealed class FirebaseIdentity(HttpClient http, FirebaseConfiguration co
 	{
 		try
 		{
-			using var response = await http.PostAsJsonAsync(configuration.Identity(method), body, cancellationToken).ConfigureAwait(false);
+			using var request = WithKey(new HttpRequestMessage(HttpMethod.Post, configuration.Identity(method))
+			{
+				Content = JsonContent.Create(body),
+			});
+			using var response = await http.SendAsync(request, cancellationToken).ConfigureAwait(false);
 			var json = await FirebaseHttp.ReadAsync(response, cancellationToken).ConfigureAwait(false);
 
 			if (!response.IsSuccessStatusCode || json is null)
