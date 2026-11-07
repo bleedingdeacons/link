@@ -881,9 +881,90 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.ThrowsAny<CryptographicException>(() => MessageSealer.Seal(Sealing.Payload(), Convert.ToBase64String([1, 2, 3])));
 	}
 
+	private static readonly Dictionary<string, string> AppHeaders = new(StringComparer.Ordinal)
+	{
+		["X-Android-Package"] = "org.thebleedingdeacons.intergroup.link",
+		["X-Android-Cert"] = "C0D04DED4B490C0D5805377F130F88E43D106532",
+	};
+
+	[Fact]
+	public async Task SigningInSaysWhichAppIsUsingTheKey()
+	{
+		// Google refuses a key restricted to the app when a call doesn't say which app it
+		// is, and that refusal stopped every sign-in.
+		_google.Enrols();
+
+		await Client().EnrolAsync(new EnrolmentRequest { FirebaseToken = "google-identity", PublicKey = "spki", Platform = "android" });
+
+		var signIn = _google.Only("signInWithCustomToken");
+		Assert.Equal("org.thebleedingdeacons.intergroup.link", signIn.Headers["X-Android-Package"]);
+		Assert.Equal("C0D04DED4B490C0D5805377F130F88E43D106532", signIn.Headers["X-Android-Cert"]);
+	}
+
+	[Fact]
+	public async Task RefreshingATokenSaysWhichAppIsUsingTheKey()
+	{
+		_google.SignedIn();
+
+		await Client().SessionProofAsync(RefreshToken);
+
+		var refresh = _google.Only("securetoken");
+		Assert.Equal("org.thebleedingdeacons.intergroup.link", refresh.Headers["X-Android-Package"]);
+		Assert.Equal("C0D04DED4B490C0D5805377F130F88E43D106532", refresh.Headers["X-Android-Cert"]);
+	}
+
+	[Fact]
+	public async Task ThePasswordSignInSaysWhichAppIsUsingTheKey()
+	{
+		_google.Enrols();
+		_google.Routes["/auth/identity/password"] = _ => FakeGoogle.Json("""{"token":"pw-custom"}""");
+
+		await Client().EnrolAsync(new EnrolmentRequest { Email = "a@example.org", Password = "pw", PublicKey = "spki", Platform = "android" });
+
+		Assert.All(
+			_google.Requests.Where(r => r.Url.Contains("signInWithCustomToken", StringComparison.Ordinal)),
+			r => Assert.Equal("org.thebleedingdeacons.intergroup.link", r.Headers["X-Android-Package"]));
+	}
+
+	[Fact]
+	public async Task NothingButGoogleIsToldWhichAppIsCalling()
+	{
+		// The site and the Functions aren't Google's key checks, and have no need of it.
+		_google.Enrols();
+
+		await Client().EnrolAsync(new EnrolmentRequest { FirebaseToken = "google-identity", PublicKey = "spki", Platform = "android" });
+
+		Assert.DoesNotContain("X-Android-Cert", _google.Only("/enrol").Headers.Keys);
+	}
+
+	[Fact]
+	public void WhichAppIsAskedOnceAndOnlyWhenNeeded()
+	{
+		var reads = 0;
+		var configuration = new FirebaseConfiguration
+		{
+			ClientHeadersSource = () =>
+			{
+				reads++;
+				return AppHeaders;
+			},
+		};
+
+		Assert.Equal(0, reads);
+		Assert.Equal(AppHeaders, configuration.ClientHeaders);
+		Assert.Equal(AppHeaders, configuration.ClientHeaders);
+		Assert.Equal(1, reads);
+	}
+
+	[Fact]
+	public void WithNothingToSayNoHeadersAreSent()
+	{
+		Assert.Empty(new FirebaseConfiguration().ClientHeaders);
+	}
+
 	private FirebaseFellowshipClient Client() => new(
 		new HttpClient(_google),
-		new FirebaseConfiguration { ApiKey = "api-key" },
+		new FirebaseConfiguration { ApiKey = "api-key", ClientHeadersSource = () => AppHeaders },
 		new FellowshipConfiguration { BaseUrl = "https://aa-bristol.org" },
 		_site);
 
@@ -902,7 +983,10 @@ public sealed class FirebaseFellowshipClientTests
 		return "e30." + System.Buffers.Text.Base64Url.EncodeToString(claims) + ".signature";
 	}
 
-	private sealed record FakeRequest(string Method, string Url, string Authorization, string Body);
+	private sealed record FakeRequest(string Method, string Url, string Authorization, string Body)
+	{
+		public Dictionary<string, string> Headers { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+	}
 
 	private sealed record FakeReply(HttpStatusCode Status, string Body);
 
@@ -968,7 +1052,10 @@ public sealed class FirebaseFellowshipClientTests
 				request.Method.Method,
 				request.RequestUri!.ToString(),
 				request.Headers.Authorization?.ToString() ?? string.Empty,
-				body);
+				body)
+			{
+				Headers = request.Headers.ToDictionary(h => h.Key, h => string.Join(',', h.Value), StringComparer.OrdinalIgnoreCase),
+			};
 
 			lock (_gate)
 			{

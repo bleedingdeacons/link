@@ -37,6 +37,29 @@ public sealed class FirebaseConfiguration
 	/// </summary>
 	public Func<string>? ApiKeySource { get; set; }
 
+	/// <summary>
+	/// The headers that say which app is using the key, sent with every call that carries
+	/// it. The key only accepts calls from this app, so a call without them is refused.
+	/// Empty off the phone.
+	/// </summary>
+	public IReadOnlyDictionary<string, string> ClientHeaders
+	{
+		get
+		{
+			if (_clientHeaders is null)
+			{
+				_clientHeaders = ClientHeadersSource?.Invoke() ?? new Dictionary<string, string>(StringComparer.Ordinal);
+			}
+
+			return _clientHeaders;
+		}
+	}
+
+	/// <summary>Where to read <see cref="ClientHeaders"/> from, once, when first needed.</summary>
+	public Func<IReadOnlyDictionary<string, string>>? ClientHeadersSource { get; set; }
+
+	private IReadOnlyDictionary<string, string>? _clientHeaders;
+
 	public bool IsConfigured => !string.IsNullOrWhiteSpace(ProjectId) && !string.IsNullOrWhiteSpace(ApiKey);
 
 	/// <summary>The root of this project's documents, with no trailing slash.</summary>

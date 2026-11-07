@@ -155,7 +155,11 @@ public static class LinkServices
 
 				_client = new FirebaseFellowshipClient(
 					_http,
-					new FirebaseConfiguration { ApiKeySource = FirebaseApiKey.Read },
+					new FirebaseConfiguration
+					{
+						ApiKeySource = FirebaseApiKey.Read,
+						ClientHeadersSource = FirebaseClientHeaders.Read,
+					},
 					Configuration,
 					new SiteClient(_http, Configuration));
 
