@@ -27,9 +27,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// that only Link could read.</para>
 /// </summary>
 /// <remarks>
-/// On Firebase the session's token is a refresh token, which lasts until revoked and
-/// is never handed to anything else, Freedom included. Freedom will take the device's
-/// short-lived ID token once it has been taught to.
+/// A session's token is a refresh token, which lasts until revoked and is never handed to
+/// anything but Google. Freedom gets the device's short-lived ID token instead.
 /// </remarks>
 public sealed class FreedomLoggingSource : ILoggingSource
 {
@@ -39,11 +38,19 @@ public sealed class FreedomLoggingSource : ILoggingSource
 
 	private readonly IFreedomSession _freedom;
 	private readonly IHandoverRecord _handover;
+	private readonly Func<DeviceSession, CancellationToken, Task<string>> _proof;
 
-	public FreedomLoggingSource(IFreedomSession freedom, IHandoverRecord handover)
+	/// <param name="freedom">The Freedom client.</param>
+	/// <param name="handover">Which build last handed over.</param>
+	/// <param name="proof">A short-lived token proving this device to Freedom.</param>
+	public FreedomLoggingSource(
+		IFreedomSession freedom,
+		IHandoverRecord handover,
+		Func<DeviceSession, CancellationToken, Task<string>> proof)
 	{
 		_freedom = freedom ?? throw new ArgumentNullException(nameof(freedom));
 		_handover = handover ?? throw new ArgumentNullException(nameof(handover));
+		_proof = proof ?? throw new ArgumentNullException(nameof(proof));
 	}
 
 	public async Task<BetterStackConfiguration?> FetchAsync(DeviceSession session, CancellationToken cancellationToken = default)
@@ -59,17 +66,18 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		// and so does the logger.
 		if (sync.Status is SyncStatus.NotEnrolled or SyncStatus.Revoked)
 		{
-			if (session.Backend == LinkBackend.Firebase)
-			{
-				Log.Information("Freedom can't take a Firebase session yet; carrying on without its settings");
-				return null;
-			}
-
 			// Freedom's sign-in, done with Link's: the second half of every
 			// first launch after a sign-in, so worth a line either way.
 			Log.Information("Handing device {DeviceId}'s Link session to Freedom ({Status})", session.DeviceId, sync.Status);
 
-			var enrolled = await _freedom.EnrolAsync(FreedomProof.ExistingSession(session.Token), cancellationToken).ConfigureAwait(false);
+			var proof = await _proof(session, cancellationToken).ConfigureAwait(false);
+			if (proof.Length == 0)
+			{
+				Log.Information("No token to hand this session to Freedom with; trying again later");
+				return null;
+			}
+
+			var enrolled = await _freedom.EnrolAsync(FreedomProof.ExistingSession(proof), cancellationToken).ConfigureAwait(false);
 			if (!enrolled.Succeeded)
 			{
 				Log.Warning("Freedom did not take this handset's session ({Status}): {Message}", enrolled.Status, enrolled.Message);
@@ -80,14 +88,22 @@ public sealed class FreedomLoggingSource : ILoggingSource
 			_handover.MarkCurrent();
 			sync = enrolled.Sync ?? await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
 		}
-		else if (IsAnswer(sync.Status) && !_handover.IsCurrent && session.Backend == LinkBackend.Fellowship)
+		else if (IsAnswer(sync.Status) && !_handover.IsCurrent)
 		{
 			// Signed in already, but not since Link was updated: hand over
 			// once more so Freedom has this build's name, model and version.
 			// See IHandoverRecord. It re-attaches the same device; if it is
 			// refused, the sync already in hand still counts.
-			var refreshed = await _freedom.EnrolAsync(FreedomProof.ExistingSession(session.Token), cancellationToken).ConfigureAwait(false);
-			if (refreshed.Succeeded)
+			var proof = await _proof(session, cancellationToken).ConfigureAwait(false);
+			var refreshed = proof.Length == 0
+				? null
+				: await _freedom.EnrolAsync(FreedomProof.ExistingSession(proof), cancellationToken).ConfigureAwait(false);
+
+			if (refreshed is null)
+			{
+				Log.Information("No token to refresh this handset's details with; trying again later");
+			}
+			else if (refreshed.Succeeded)
 			{
 				Log.Information("Freedom has this build's details for device {DeviceId}", session.DeviceId);
 				_handover.MarkCurrent();

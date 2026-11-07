@@ -153,14 +153,14 @@ Feature: What only a phone can answer
       Then no push arrives
       And the message is there on the next sync
       # aps-environment is grantable only to a paid Developer Program
-      # team, so the entitlement is compiled out and FirebasePush finds
-      # no GoogleService-Info.plist.
+      # team, so the entitlement is compiled out and Apple gives this
+      # build no push token. Firebase still starts, so signing in works.
 
     Scenario: Sign in with Apple is hidden rather than offered and broken
       Given a build made without -p:LinkPaidTeam=true
       When the sign-in screen is shown
       Then there is no Continue with Apple button
-      And Google sign-in works through the browser
+      And Google sign-in works through its account picker
 
     Scenario: A sideloaded build stops working after seven days
       Given an .ipa re-signed with a free Apple ID

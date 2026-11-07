@@ -586,6 +586,137 @@ public sealed class MessageServiceTests
 		Assert.Equal(Sealing.ExpectedId, message.Id);
 	}
 
+	[Fact]
+	public async Task ASenderGoesByTheDirectorysNameNotTheOneTheySealed()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient
+		{
+			Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] },
+			Directory = new FellowshipDirectory { Members = [new DirectoryMember { Id = 8, Name = "Sue M" }] },
+		};
+		var history = new FakeHistory();
+
+		await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Equal("Sue M", history.Held.Single().Sender);
+		Assert.Equal("Sue M", history.Names.Names[8]);
+	}
+
+	[Fact]
+	public async Task ASenderTheDirectoryDoesNotListKeepsTheirSealedName()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient
+		{
+			Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] },
+			Directory = new FellowshipDirectory { Members = [new DirectoryMember { Id = 9, Name = "Someone else" }] },
+		};
+		var history = new FakeHistory();
+
+		await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Equal(Sealing.ExpectedSender, history.Held.Single().Sender);
+	}
+
+	[Fact]
+	public async Task WordPressBeingDownDoesNotStopMessagesArriving()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] } };
+		var history = new FakeHistory();
+
+		var result = await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.True(result.Succeeded);
+		Assert.Equal(Sealing.ExpectedSender, history.Held.Single().Sender);
+		Assert.Empty(history.Names.Names);
+	}
+
+	[Fact]
+	public async Task TheDirectoryIsAskedOnceASyncHoweverManyMessagesArrive()
+	{
+		using var mailbox = new Mailbox();
+		var client = new FakeClient
+		{
+			Inbox = new InboxPage
+			{
+				Messages =
+				[
+					mailbox.Envelope(1) with { SenderMemberId = 0 },
+					mailbox.Envelope(2) with { SenderMemberId = 0 },
+				],
+			},
+		};
+		var history = new FakeHistory();
+
+		await Service(client, history, mailbox.PrivateKey).SyncAsync();
+
+		Assert.Equal(1, client.DirectoryFetches);
+	}
+
+	[Fact]
+	public async Task AKnownSenderAndARecentAnswerMeanNoNeedToAsk()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient { Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] } };
+		var history = new FakeHistory
+		{
+			Names = new SenderNames(new Dictionary<long, string> { [8] = "Sue M" }, DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+		};
+
+		await Service(client, history, sealed_.PrivateKeyPem).SyncAsync();
+
+		Assert.Equal(0, client.DirectoryFetches);
+		Assert.Equal("Sue M", history.Held.Single().Sender);
+	}
+
+	[Fact]
+	public async Task NothingArrivingMeansNoNeedToAskEither()
+	{
+		var client = new FakeClient();
+
+		await Service(client, new FakeHistory(), "key").SyncAsync();
+
+		Assert.Equal(0, client.DirectoryFetches);
+	}
+
+	[Fact]
+	public async Task APushUsesWhatThePhoneKnowsAndAsksNobody()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient();
+		var history = new FakeHistory
+		{
+			Names = new SenderNames(new Dictionary<long, string> { [8] = "Sue M" }, 1),
+		};
+
+		var message = await Service(client, history, sealed_.PrivateKeyPem)
+			.ReceivePushAsync(SealedMessage.FromPush(sealed_.WrappedKey, sealed_.Payload, "500", "8"));
+
+		Assert.Equal("Sue M", message!.Sender);
+		Assert.Equal(0, client.DirectoryFetches);
+	}
+
+	[Fact]
+	public async Task AMemberWhoEnrolledWithoutTheirNameGetsItWhenTheDirectoryAnswers()
+	{
+		var sealed_ = SealedFrom(id: 500, senderId: 8);
+		var client = new FakeClient
+		{
+			Inbox = new InboxPage { Messages = [sealed_.Envelope(500) with { SenderMemberId = 8 }] },
+			Directory = new FellowshipDirectory
+			{
+				Members = [new DirectoryMember { Id = 8, Name = "Sue M" }, new DirectoryMember { Id = 2, Name = "Dave P" }],
+			},
+		};
+		var sessions = new FakeSessions();
+
+		await new MessageService(client, new FakeHistory(), new FakeKeys(sealed_.PrivateKeyPem), sessions).SyncAsync();
+
+		Assert.Equal("Dave P", sessions.Session!.MemberName);
+	}
+
 	private static Sealing.Sealed SealedFrom(long id, long senderId)
 	{
 		var payload = Sealing.Payload();
@@ -707,8 +838,19 @@ public sealed class MessageServiceTests
 		public Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default) =>
 			Task.FromResult(PasswordSetResult.Failed("not used"));
 
-		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default) =>
-			Task.FromResult(FellowshipDirectory.Empty);
+		public FellowshipDirectory Directory { get; set; } = FellowshipDirectory.Empty;
+
+		public int DirectoryFetches { get; private set; }
+
+		public Task<FellowshipDirectory> FetchDirectoryAsync(string token, CancellationToken cancellationToken = default)
+		{
+			DirectoryFetches++;
+
+			return Task.FromResult(Directory);
+		}
+
+		public Task<string> SessionProofAsync(string token, CancellationToken cancellationToken = default) =>
+			Task.FromResult("id-token");
 
 		public Task<bool> UpdatePushTokenAsync(string token, string pushToken, CancellationToken cancellationToken = default) =>
 			Task.FromResult(true);
@@ -824,7 +966,16 @@ public sealed class MessageServiceTests
 
 		public long Owner { get; private set; }
 
-		public Task ReturnToFellowshipAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+		public SenderNames Names { get; set; } = SenderNames.None;
+
+		public Task<SenderNames> SenderNamesAsync(CancellationToken cancellationToken = default) => Task.FromResult(Names);
+
+		public Task RememberSenderNamesAsync(IReadOnlyDictionary<long, string> names, long fetchedAt, CancellationToken cancellationToken = default)
+		{
+			Names = new SenderNames(names, fetchedAt);
+
+			return Task.CompletedTask;
+		}
 
 		public Task AdoptAsync(long memberId, CancellationToken cancellationToken = default)
 		{

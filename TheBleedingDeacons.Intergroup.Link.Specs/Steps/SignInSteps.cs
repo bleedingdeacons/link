@@ -15,17 +15,9 @@ namespace TheBleedingDeacons.Intergroup.Link.Specs.Steps;
 [Binding]
 public sealed class SignInSteps
 {
-	private SignInStart? _start;
 	private EnrolmentResult? _enrolment;
 	private PasswordSetResult? _password;
 	private bool _linkAccepted;
-
-	[Given(@"^a sign-in that answered an authorization URL$")]
-	public void BrowserFlow() =>
-		_start = new SignInStart { State = "state-1", AuthorizationUrl = "https://aa-bristol.org/oauth/start" };
-
-	[Given(@"^a sign-in that answered a nonce and no URL$")]
-	public void NativeFlow() => _start = new SignInStart { State = "state-1", Nonce = "nonce-1" };
 
 	[Given(@"^the member cancelled the sign-in$")]
 	public void Cancelled() => _enrolment = EnrolmentResult.Cancelled();
@@ -54,12 +46,6 @@ public sealed class SignInSteps
 
 	[Given(@"^setting a password was accepted$")]
 	public void PasswordAccepted() => _password = PasswordSetResult.Ok();
-
-	[Then(@"^the browser is used$")]
-	public void BrowserUsed() => _start.ShouldNotBeNull().IsBrowserFlow.ShouldBeTrue();
-
-	[Then(@"^the browser is not used$")]
-	public void BrowserNotUsed() => _start.ShouldNotBeNull().IsBrowserFlow.ShouldBeFalse();
 
 	[Then(@"^the sign-in (succeeded|did not succeed)$")]
 	public void SignInOutcome(string outcome) =>

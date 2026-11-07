@@ -157,6 +157,80 @@ public sealed class HistoryRecoveryTests : IDisposable
 		Assert.False(File.Exists(_path));
 	}
 
+	[Fact]
+	public async Task SenderNamesAreKeptAcrossALaunch()
+	{
+		using (var history = New())
+		{
+			await history.RememberSenderNamesAsync(new Dictionary<long, string> { [8] = "Sue M" }, 1788000000);
+		}
+
+		using var reopened = New();
+		var names = await reopened.SenderNamesAsync();
+
+		Assert.Equal("Sue M", names.Names[8]);
+		Assert.Equal(1788000000, names.FetchedAt);
+	}
+
+	[Fact]
+	public async Task ABrandNewHistoryKnowsNoNames()
+	{
+		using var history = New();
+		var names = await history.SenderNamesAsync();
+
+		Assert.Empty(names.Names);
+		Assert.Equal(0, names.FetchedAt);
+	}
+
+	[Fact]
+	public async Task ClearingMessagesKeepsTheNamesBecauseTheyAreTheDirectorysNotTheConversations()
+	{
+		using var history = New();
+		await history.AdoptAsync(7);
+		await history.SaveAsync([Message(1, "Held")]);
+		await history.RememberSenderNamesAsync(new Dictionary<long, string> { [8] = "Sue M" }, 1788000000);
+
+		await history.ClearAsync();
+
+		Assert.Empty(await history.AllAsync());
+		Assert.Equal("Sue M", (await history.SenderNamesAsync()).Names[8]);
+	}
+
+	[Fact]
+	public async Task SomeoneElseSigningInDoesNotInheritTheNames()
+	{
+		using var history = New();
+		await history.AdoptAsync(7);
+		await history.RememberSenderNamesAsync(new Dictionary<long, string> { [8] = "Sue M" }, 1788000000);
+
+		await history.AdoptAsync(9);
+
+		Assert.Empty((await history.SenderNamesAsync()).Names);
+	}
+
+	[Fact]
+	public async Task TheSameMemberSigningBackInKeepsTheNames()
+	{
+		using var history = New();
+		await history.AdoptAsync(7);
+		await history.RememberSenderNamesAsync(new Dictionary<long, string> { [8] = "Sue M" }, 1788000000);
+
+		await history.AdoptAsync(7);
+
+		Assert.Equal("Sue M", (await history.SenderNamesAsync()).Names[8]);
+	}
+
+	[Fact]
+	public async Task NamesAreEncryptedWithTheRest()
+	{
+		using var history = New();
+		await history.RememberSenderNamesAsync(new Dictionary<long, string> { [8] = "Sue M" }, 1788000000);
+
+		var raw = await File.ReadAllBytesAsync(_path);
+
+		Assert.DoesNotContain("Sue M", System.Text.Encoding.UTF8.GetString(raw), StringComparison.Ordinal);
+	}
+
 	private JsonMessageHistory New() => new(_path, _key);
 
 	private static LinkMessage Message(long id, string subject) => new()

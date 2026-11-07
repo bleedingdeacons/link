@@ -75,10 +75,7 @@ internal static class HeadlessMessages
 			// Nor this: only a sign-out touches it, and nothing signs out
 			// from here. Both halves are stateless over Preferences, so a
 			// fresh pair agrees with the app's about everything.
-			new FingerprintSignIn(new FingerprintReader(), new FingerprintState()),
-			LinkServices.Configuration,
-			// Nor this: only a sign-in or a launch asks the site.
-			LinkServices.Backend);
+			new FingerprintSignIn(new FingerprintReader(), new FingerprintState()));
 
 		return auth.RegisterPushTokenAsync(token);
 	}

@@ -21,9 +21,6 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed class DeviceAuthService
 {
-	/// <summary>The provider name the sign-in page sends for Google.</summary>
-	private const string GoogleProvider = "google";
-
 	private readonly IFellowshipClient _client;
 	private readonly IDeviceKeyStore _keys;
 	private readonly ISessionStore _sessions;
@@ -32,8 +29,9 @@ public sealed class DeviceAuthService
 	private readonly IAppleSignIn _apple;
 	private readonly INativeGoogleSignIn _nativeGoogle;
 	private readonly FingerprintSignIn _fingerprint;
-	private readonly FellowshipConfiguration _configuration;
-	private readonly BackendSwitch _backend;
+
+	private const string GoogleUnavailable =
+		"Google sign-in isn't available on this phone. Please sign in with your password.";
 
 	public DeviceAuthService(
 		IFellowshipClient client,
@@ -43,11 +41,8 @@ public sealed class DeviceAuthService
 		IAppleSignIn apple,
 		INativeGoogleSignIn nativeGoogle,
 		IMessageHistory history,
-		FingerprintSignIn fingerprint,
-		FellowshipConfiguration configuration,
-		BackendSwitch backend)
+		FingerprintSignIn fingerprint)
 	{
-		_backend = backend;
 		_fingerprint = fingerprint;
 		_apple = apple;
 		_nativeGoogle = nativeGoogle;
@@ -56,7 +51,6 @@ public sealed class DeviceAuthService
 		_sessions = sessions;
 		_push = push;
 		_history = history;
-		_configuration = configuration;
 	}
 
 	/// <summary>
@@ -93,8 +87,6 @@ public sealed class DeviceAuthService
 	/// </summary>
 	public async Task<bool> RestoreAsync(CancellationToken cancellationToken = default)
 	{
-		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
-
 		var session = await _sessions.LoadAsync().ConfigureAwait(false);
 		if (session is null || !session.IsSignedIn)
 		{
@@ -112,26 +104,6 @@ public sealed class DeviceAuthService
 		}
 
 		return await RegisterPushTokenAsync(pushToken, cancellationToken).ConfigureAwait(false);
-	}
-
-	/// <summary>
-	/// Ask the site which back end to use, and move if it has changed.
-	///
-	/// <para>Before a sign-in and at each launch or return to the app. Never a reason
-	/// for either to fail: a phone that can't ask stays where it was.</para>
-	/// </summary>
-	public async Task FollowBackendAsync(CancellationToken cancellationToken = default)
-	{
-		try
-		{
-			await _backend.RefreshAsync(cancellationToken).ConfigureAwait(false);
-		}
-#pragma warning disable CA1031 // Deliberately broad: see the remarks.
-		catch (Exception ex)
-#pragma warning restore CA1031
-		{
-			Log.Warning(ex, "Could not check which back end to use; staying on {Backend}", _backend.Current);
-		}
 	}
 
 	/// <summary>
@@ -167,42 +139,17 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
-	/// Sign in with Google: the browser leg, then the exchange.
+	/// Sign in with Google: the platform's own picker, then Firebase, then enrolling.
 	///
-	/// <para>The browser is handed a one-time code, not a token — see
-	/// Fellowship's <c>DeviceCodeStore</c> for why. This method's job is
-	/// to spend that code, in this process, over TLS.</para>
+	/// <para>The picker hands back a Firebase ID token, which proves an address once. The
+	/// phone then enrols with it, and that identity is deleted.</para>
 	/// </summary>
-	/// <summary>
-	/// Sign in with Google, kept as its own name because it is the path
-	/// most members take and the one every caller already knew about.
-	/// </summary>
-	public Task<EnrolmentResult> SignInWithGoogleAsync(CancellationToken cancellationToken = default) =>
-		SignInWithProviderAsync("google", cancellationToken);
-
-	/// <summary>
-	/// Sign in through any of the browser-leg providers.
-	///
-	/// <para>Google, Microsoft and Facebook differ only in a string. The
-	/// flow — a system browser, a one-time code caught on the custom
-	/// scheme, an exchange over TLS — is identical, because it is
-	/// Fellowship that knows how each provider works and this side never
-	/// needs to. Apple is the exception and has its own method: its sheet
-	/// hands over a token with no browser involved at all.</para>
-	///
-	/// <para>The provider name is passed straight through to the server,
-	/// which refuses one it does not know. Validating the list here as
-	/// well would mean two places to update when a fifth arrives, and the
-	/// server is the one that has to be right.</para>
-	/// </summary>
-	public async Task<EnrolmentResult> SignInWithProviderAsync(
-		string provider,
-		CancellationToken cancellationToken = default)
+	public async Task<EnrolmentResult> SignInWithGoogleAsync(CancellationToken cancellationToken = default)
 	{
-		using var attempt = AuthAttempt.Begin("Sign-in", provider);
+		using var attempt = AuthAttempt.Begin("Sign-in", "google");
 		try
 		{
-			return attempt.Finished(await SignInThroughProviderAsync(provider, cancellationToken).ConfigureAwait(false));
+			return attempt.Finished(await SignInThroughGoogleAsync(cancellationToken).ConfigureAwait(false));
 		}
 		catch (Exception ex) when (attempt.Threw(ex))
 		{
@@ -210,57 +157,13 @@ public sealed class DeviceAuthService
 		}
 	}
 
-	private async Task<EnrolmentResult> SignInThroughProviderAsync(
-		string provider,
-		CancellationToken cancellationToken)
+	private async Task<EnrolmentResult> SignInThroughGoogleAsync(CancellationToken cancellationToken)
 	{
-		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
-
-		if (provider == GoogleProvider)
+		if (!_nativeGoogle.IsAvailable)
 		{
-			if (_nativeGoogle.IsAvailable)
-			{
-				var native = await SignInWithNativeGoogleAsync(cancellationToken).ConfigureAwait(false);
-				if (native is not null)
-				{
-					return native;
-				}
-
-				// Null means native sign-in could not be done here at all, on
-				// the handset or on the server — not that the member refused
-				// or was refused. The browser is the same Google account by
-				// another road, so take it rather than show an error nobody
-				// can act on.
-				Log.Information("Native Google sign-in could not be used; falling back to the browser");
-			}
-			else
-			{
-				Log.Debug("Native Google sign-in is not available in this build; using the browser");
-			}
+			return EnrolmentResult.Failed(GoogleUnavailable);
 		}
 
-		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
-		if (refusal is not null)
-		{
-			return refusal;
-		}
-
-		return await EnrolAsync(new EnrolmentRequest
-		{
-			Code = code,
-			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
-			Platform = PlatformName(),
-			Label = DeviceLabel(),
-		}, cancellationToken).ConfigureAwait(false);
-	}
-
-	/// <summary>
-	/// Google through the platform's own picker, then Firebase, then the
-	/// exchange. Null when either end cannot do it and the browser should
-	/// be used instead.
-	/// </summary>
-	private async Task<EnrolmentResult?> SignInWithNativeGoogleAsync(CancellationToken cancellationToken)
-	{
 		Log.Debug("Raising the native Google account picker");
 		var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
 		Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
@@ -270,51 +173,32 @@ public sealed class DeviceAuthService
 			case NativeGoogleSignInOutcome.Cancelled:
 				return EnrolmentResult.Cancelled(signIn.Detail);
 			case NativeGoogleSignInOutcome.Unavailable:
-				return null;
+				return EnrolmentResult.Failed(GoogleUnavailable);
 		}
 
-		var result = await EnrolAsync(new EnrolmentRequest
+		return await EnrolAsync(new EnrolmentRequest
 		{
 			FirebaseToken = signIn.IdToken,
 			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
 			Platform = PlatformName(),
 			Label = DeviceLabel(),
 		}, cancellationToken).ConfigureAwait(false);
-
-		if (result.Unavailable)
-		{
-			// Fellowship is older than firebase_token, or has no Firebase
-			// project to check it against. The keypair just made is simply
-			// made again by the browser path; nothing was enrolled with it.
-			Log.Information("Fellowship does not offer native Google sign-in; using the browser");
-			return null;
-		}
-
-		return result;
 	}
 
 	/// <summary>
-	/// Replace this handset's keypair, proving who is holding it through
-	/// the same browser leg a sign-in uses.
+	/// Replace this handset's keypair, proving who is holding it with Google.
 	///
-	/// <para><b>Why a credential at all.</b> Fellowship seals from
-	/// plaintext on every fetch, so substituting the key on a device row
-	/// is enough to have every retained message re-sealed to it — and the
-	/// device token alone used to be enough to do that. The keypair
-	/// cannot stand in: it seals and never authenticates.</para>
-	///
-	/// <para>The device row, its token and its place in the intergroup's
-	/// list all survive. That is the whole reason this is not simply a
-	/// re-enrolment.</para>
+	/// <para>The keypair can't prove anything: it seals and never authenticates. So a fresh
+	/// sign-in is needed, and it has to be the member this phone belongs to. The device, its
+	/// token and its place in the intergroup's list all survive, which is the whole reason
+	/// this isn't simply enrolling again.</para>
 	/// </summary>
-	public async Task<RotateKeyResult> ReplaceKeyWithProviderAsync(
-		string provider,
-		CancellationToken cancellationToken = default)
+	public async Task<RotateKeyResult> ReplaceKeyWithGoogleAsync(CancellationToken cancellationToken = default)
 	{
-		using var attempt = AuthAttempt.Begin("Key replacement", provider);
+		using var attempt = AuthAttempt.Begin("Key replacement", "google");
 		try
 		{
-			return attempt.Finished(await ReplaceKeyThroughProviderAsync(provider, cancellationToken).ConfigureAwait(false));
+			return attempt.Finished(await ReplaceKeyThroughGoogleAsync(cancellationToken).ConfigureAwait(false));
 		}
 		catch (Exception ex) when (attempt.Threw(ex))
 		{
@@ -322,54 +206,30 @@ public sealed class DeviceAuthService
 		}
 	}
 
-	private async Task<RotateKeyResult> ReplaceKeyThroughProviderAsync(
-		string provider,
-		CancellationToken cancellationToken)
+	private async Task<RotateKeyResult> ReplaceKeyThroughGoogleAsync(CancellationToken cancellationToken)
 	{
-		if (provider == GoogleProvider && _nativeGoogle.IsAvailable)
+		if (!_nativeGoogle.IsAvailable)
 		{
-			Log.Debug("Raising the native Google account picker");
-			var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
-			Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
-
-			if (signIn.Outcome == NativeGoogleSignInOutcome.Cancelled)
-			{
-				return RotateKeyResult.Failed(string.Empty);
-			}
-
-			if (signIn.Outcome == NativeGoogleSignInOutcome.SignedIn)
-			{
-				var rotated = await RotateAsync(
-					new RotateKeyRequest { FirebaseToken = signIn.IdToken, PublicKey = string.Empty },
-					cancellationToken).ConfigureAwait(false);
-
-				if (!rotated.Unavailable)
-				{
-					return rotated;
-				}
-
-				// Fellowship does not take the token, and RotateAsync has
-				// already replaced the local pair for nothing. The old one
-				// is unrecoverable either way — that is what brought the
-				// member here — so the browser simply carries on with a
-				// fresh one of its own.
-				Log.Information("Fellowship does not offer native Google sign-in; using the browser");
-			}
+			return RotateKeyResult.Failed(GoogleUnavailable);
 		}
 
-		var (code, refusal) = await BrowserCodeAsync(provider, cancellationToken).ConfigureAwait(false);
-		if (refusal is not null)
-		{
-			return RotateKeyResult.Failed(refusal.Error);
-		}
+		Log.Debug("Raising the native Google account picker");
+		var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
+		Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
 
-		return await RotateAsync(new RotateKeyRequest { Code = code, PublicKey = string.Empty }, cancellationToken)
-			.ConfigureAwait(false);
+		return signIn.Outcome switch
+		{
+			NativeGoogleSignInOutcome.Cancelled => RotateKeyResult.Failed(string.Empty),
+			NativeGoogleSignInOutcome.SignedIn => await RotateAsync(
+				new RotateKeyRequest { FirebaseToken = signIn.IdToken, PublicKey = string.Empty },
+				cancellationToken).ConfigureAwait(false),
+			_ => RotateKeyResult.Failed(GoogleUnavailable),
+		};
 	}
 
 	/// <summary>
 	/// Replace the keypair, proving who is holding the handset through
-	/// Apple's own sheet. See <see cref="ReplaceKeyWithProviderAsync"/>
+	/// Apple's own sheet. See <see cref="ReplaceKeyWithGoogleAsync"/>
 	/// for why a credential is needed at all.
 	/// </summary>
 	public async Task<RotateKeyResult> ReplaceKeyWithAppleAsync(CancellationToken cancellationToken = default)
@@ -414,7 +274,7 @@ public sealed class DeviceAuthService
 
 	/// <summary>
 	/// Replace the keypair with an email and password. See
-	/// <see cref="ReplaceKeyWithProviderAsync"/>.
+	/// <see cref="ReplaceKeyWithGoogleAsync"/>.
 	/// </summary>
 	public async Task<RotateKeyResult> ReplaceKeyWithPasswordAsync(
 		string email,
@@ -444,87 +304,6 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
-	/// The browser leg, shared by signing in and by replacing a key.
-	///
-	/// <para>Answers the one-time code, or the refusal to show instead of
-	/// one. Extracted rather than copied because the two callers have to
-	/// agree about what a closed browser tab means — silence — and a
-	/// second copy is how one of them comes to say something.</para>
-	/// </summary>
-	private async Task<(string Code, EnrolmentResult? Refusal)> BrowserCodeAsync(
-		string provider,
-		CancellationToken cancellationToken)
-	{
-		var start = await _client.StartSignInAsync(provider, cancellationToken).ConfigureAwait(false);
-		if (start is null || !start.IsBrowserFlow)
-		{
-			// Null is either side of the wire: Fellowship refused (its
-			// client has logged the status) or never answered (logged at
-			// Debug). Not a browser flow is a provider it knows but does not
-			// offer that way.
-			Log.Warning(
-				"Fellowship did not start a browser sign-in for {Provider}: {Why}",
-				provider,
-				start is null ? "no answer, or refused" : "not a browser flow");
-
-			return (string.Empty, EnrolmentResult.Failed(
-				$"This intergroup is not set up for {Describe(provider)} sign-in."));
-		}
-
-		Log.Information("Opening the browser for {Provider} sign-in", provider);
-
-		try
-		{
-			// No cancellation token: WebAuthenticator has no overload that
-			// takes one, and it does not need it — the thing that cancels
-			// this is the member closing the browser tab, which arrives as
-			// the TaskCanceledException caught below.
-#pragma warning disable S8949
-			var result = await WebAuthenticator.Default.AuthenticateAsync(
-				new Uri(start.AuthorizationUrl),
-				new Uri(_configuration.CallbackUrl)).ConfigureAwait(false);
-#pragma warning restore S8949
-
-			// Fellowship's callback puts either a code or an error on the
-			// redirect. The error values are its own — see that
-			// controller — and each of them means something a member can
-			// act on, so they are translated rather than collapsed.
-			if (result.Properties.TryGetValue("error", out var error))
-			{
-				// Fellowship's own code — not_a_member, declined,
-				// verification — which says more than the sentence it
-				// becomes on screen.
-				Log.Warning("The browser came back with Fellowship's error {CallbackError}", error);
-				return (string.Empty, EnrolmentResult.Failed(Explain(error)));
-			}
-
-			if (!result.Properties.TryGetValue("code", out var returned) || string.IsNullOrEmpty(returned))
-			{
-				Log.Warning(
-					"The browser came back with neither a code nor an error; it carried {CallbackKeys}",
-					string.Join(",", result.Properties.Keys));
-				return (string.Empty, EnrolmentResult.Failed("The sign-in did not complete. Please try again."));
-			}
-
-			// That a code came back, never the code: it is a credential
-			// until it is spent.
-			Log.Information("The browser came back with a one-time code");
-			return (returned, null);
-		}
-		catch (TaskCanceledException)
-		{
-			// The member closed the browser tab. Not a failure worth an
-			// error message — they know what they did. Nor worth a stack
-			// trace: the exception is how WebAuthenticator says "closed",
-			// and it carries nothing more.
-#pragma warning disable S6667 // See above: the exception is the signal, not a fault.
-			Log.Information("The browser was closed before the sign-in finished");
-#pragma warning restore S6667
-			return (string.Empty, EnrolmentResult.Cancelled("The browser was closed."));
-		}
-	}
-
-	/// <summary>
 	/// Generate the new pair and present its public half, with whichever
 	/// credential the caller gathered.
 	/// </summary>
@@ -548,7 +327,7 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
-	/// Sign in with Apple: no browser leg.
+	/// Sign in with Apple.
 	///
 	/// <para>The platform sheet hands the app a signed ID token directly,
 	/// so the state issued here goes back with it and Fellowship looks the
@@ -575,8 +354,8 @@ public sealed class DeviceAuthService
 	/// the platform sheet, enrol with what it hands back.
 	///
 	/// <para>The counterpart of <see cref="SignInWithGoogleAsync"/>, and
-	/// deliberately the same shape despite having no browser leg — the
-	/// caller should not have to know which provider needs one.</para>
+	/// deliberately the same shape despite being a different sheet — the
+	/// caller should not have to know which provider it is.</para>
 	///
 	/// <para><b>Cancelling is not an error.</b> The sheet returning
 	/// nothing is overwhelmingly a member changing their mind, and the
@@ -622,9 +401,6 @@ public sealed class DeviceAuthService
 			return EnrolmentResult.Failed("This device cannot sign in with Apple.");
 		}
 
-		// Before the nonce, which the two back ends make differently.
-		await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
-
 		var start = await StartAppleAsync(cancellationToken).ConfigureAwait(false);
 		if (start is null || string.IsNullOrEmpty(start.Nonce) || string.IsNullOrEmpty(start.State))
 		{
@@ -659,7 +435,7 @@ public sealed class DeviceAuthService
 	/// <summary>
 	/// Sign in with an email and a password.
 	///
-	/// <para>No browser and no provider. This is the only path where the
+	/// <para>No provider. This is the only path where the
 	/// app handles a secret rather than relaying somebody else's proof of
 	/// one, which is why the password is passed straight through to the
 	/// request and never kept: there is no "remember me", because a
@@ -683,8 +459,6 @@ public sealed class DeviceAuthService
 			// it is the same address failing every time is the first
 			// question about a refused password. Never the password.
 			Log.Information("Password sign-in for {Email}", email.Trim());
-
-			await FollowBackendAsync(cancellationToken).ConfigureAwait(false);
 
 			return attempt.Finished(await EnrolAsync(new EnrolmentRequest
 			{
@@ -841,14 +615,14 @@ public sealed class DeviceAuthService
 
 		// Which credential, by name only. The values are all secrets.
 		Log.Information(
-			"Enrolling with Fellowship by {Credential} as {Platform} \"{Label}\"; push token {PushToken}",
+			"Enrolling by {Credential} as {Platform} \"{Label}\"; push token {PushToken}",
 			CredentialKind(request),
 			request.Platform,
 			request.Label,
 			string.IsNullOrEmpty(pushToken) ? "not yet issued" : "present");
 
 		var result = await _client.EnrolAsync(
-			request with { PushProvider = string.IsNullOrEmpty(pushToken) ? string.Empty : "fcm", PushToken = pushToken },
+			request with { PushToken = pushToken },
 			cancellationToken).ConfigureAwait(false);
 
 		if (result.Succeeded && result.Session is not null)
@@ -879,18 +653,11 @@ public sealed class DeviceAuthService
 		}
 		else
 		{
-			// The attempt's outcome line carries the reason at the right
-			// level. This says only what was undone — and, unlike the line it
-			// replaces, does not call a Fellowship without Firebase a
-			// cancellation.
-			var why = (result.Unavailable, string.IsNullOrEmpty(result.Error)) switch
-			{
-				(true, _) => "credential not offered",
-				(false, true) => "cancelled",
-				(false, false) => "refused",
-			};
-
-			Log.Information("Fellowship did not enrol this handset ({Why}); discarding the keypair it was offered", why);
+			// The attempt's outcome line carries the reason at the right level. This says only
+			// what was undone.
+			Log.Information(
+				"This handset was not enrolled ({Why}); discarding the keypair it was offered",
+				string.IsNullOrEmpty(result.Error) ? "cancelled" : "refused");
 
 			// Enrolment failed after a keypair was generated. Clearing it
 			// keeps "has a key" and "is enrolled" in step, so a retry does
@@ -902,8 +669,7 @@ public sealed class DeviceAuthService
 	}
 
 	/// <summary>
-	/// Which proof an enrolment carries, for the log. Mirrors the order
-	/// <c>FellowshipClient.EnrolAsync</c> picks one in.
+	/// Which proof an enrolment carries, for the log.
 	/// </summary>
 	private static string CredentialKind(EnrolmentRequest request)
 	{
@@ -912,39 +678,8 @@ public sealed class DeviceAuthService
 			return "password";
 		}
 
-		if (!string.IsNullOrEmpty(request.Code))
-		{
-			return "one-time code";
-		}
-
 		return string.IsNullOrEmpty(request.FirebaseToken) ? "Apple ID token" : "Firebase token";
 	}
-
-	/// <summary>
-	/// Turn one of Fellowship's redirect error values into something a
-	/// member can act on.
-	/// </summary>
-	private static string Explain(string error) => error switch
-	{
-		"not_a_member" =>
-			"That address is not one the intergroup holds for you. Sign in with the address you gave them, or ask them to update it.",
-		"declined" => "Sign-in was cancelled.",
-		"verification" => "That sign-in could not be verified. Please try again.",
-		_ => "The sign-in did not complete. Please try again.",
-	};
-
-	/// <summary>
-	/// A provider's name as a member would write it, for the one message
-	/// that has to name it.
-	/// </summary>
-	private static string Describe(string provider) => provider switch
-	{
-		"google" => "Google",
-		"microsoft" => "Microsoft",
-		"facebook" => "Facebook",
-		"apple" => "Apple",
-		_ => provider,
-	};
 
 	internal static string PlatformName() =>
 		DeviceInfo.Current.Platform == DevicePlatform.iOS ? "ios" : "android";

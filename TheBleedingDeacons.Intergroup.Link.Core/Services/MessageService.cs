@@ -44,6 +44,9 @@ public sealed class MessageService : IMessageService
 	/// </summary>
 	public const int PagesPerSync = 10;
 
+	/// <summary>How long what the directory said about senders is trusted before asking again.</summary>
+	private const long SenderNamesLifetimeSeconds = 24 * 60 * 60;
+
 	private readonly IFellowshipClient _client;
 	private readonly IMessageHistory _history;
 	private readonly IDeviceKeyStore _keys;
@@ -78,6 +81,9 @@ public sealed class MessageService : IMessageService
 			.Select(m => m.Id)
 			.Concat((await _history.DeletedAsync(cancellationToken).ConfigureAwait(false)).Select(d => d.Id))
 			.ToHashSet();
+
+		var names = await _history.SenderNamesAsync(cancellationToken).ConfigureAwait(false);
+		var askedDirectory = false;
 
 		string? privateKey = null;
 		var fetched = 0;
@@ -138,6 +144,14 @@ public sealed class MessageService : IMessageService
 					reached = Math.Max(reached, envelope.Id);
 					continue;
 				}
+
+				if (!askedDirectory && ShouldAskDirectory(names, message.SenderId))
+				{
+					askedDirectory = true;
+					names = await RefreshSenderNamesAsync(session, names, cancellationToken).ConfigureAwait(false);
+				}
+
+				message = Named(envelope, message, names);
 
 				opened.Add(message);
 
@@ -244,6 +258,13 @@ public sealed class MessageService : IMessageService
 		{
 			return null;
 		}
+
+		// What the phone already knows, and no asking: a push has seconds, and WordPress
+		// may be down. A sender it doesn't know keeps their sealed name.
+		message = Named(
+			envelope,
+			message,
+			await _history.SenderNamesAsync(cancellationToken).ConfigureAwait(false));
 
 		await _history.SaveAsync([message], cancellationToken).ConfigureAwait(false);
 
@@ -426,15 +447,64 @@ public sealed class MessageService : IMessageService
 	};
 
 	/// <summary>
+	/// The directory's name for whoever the server says sent this.
+	///
+	/// <para>The sealed name is only the sender's word, and a tampered app could seal any
+	/// name. The id beside it comes from their sign-in. A sender the directory doesn't list,
+	/// such as WordPress admin, keeps the sealed name.</para>
+	/// </summary>
+	private static LinkMessage Named(SealedMessage envelope, LinkMessage message, SenderNames names) =>
+		envelope.SenderMemberId is { } sender
+		&& names.Names.TryGetValue(sender, out var name)
+		&& !string.IsNullOrWhiteSpace(name)
+			? message with { Sender = name }
+			: message;
+
+	private static bool ShouldAskDirectory(SenderNames names, long senderId) =>
+		(senderId > 0 && !names.Names.ContainsKey(senderId))
+		|| DateTimeOffset.UtcNow.ToUnixTimeSeconds() - names.FetchedAt > SenderNamesLifetimeSeconds;
+
+	/// <summary>
+	/// Ask the directory who everyone is. An empty answer means it couldn't be asked, so
+	/// what the phone already knows stands. A sync never fails over this.
+	/// </summary>
+	private async Task<SenderNames> RefreshSenderNamesAsync(
+		DeviceSession session,
+		SenderNames current,
+		CancellationToken cancellationToken)
+	{
+		var directory = await _client.FetchDirectoryAsync(session.Token, cancellationToken).ConfigureAwait(false);
+		if (directory.Members.Count == 0)
+		{
+			return current;
+		}
+
+		var names = new Dictionary<long, string>();
+		foreach (var member in directory.Members)
+		{
+			names[member.Id] = member.Name;
+		}
+
+		var fetchedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+		await _history.RememberSenderNamesAsync(names, fetchedAt, cancellationToken).ConfigureAwait(false);
+
+		// The other thing only the directory knows: what this member is called, if they
+		// enrolled while WordPress couldn't say.
+		if (session.MemberName.Length == 0 && names.TryGetValue(session.MemberId, out var own))
+		{
+			await _sessions.SaveAsync(session with { MemberName = own }).ConfigureAwait(false);
+		}
+
+		return new SenderNames(names, fetchedAt);
+	}
+
+	/// <summary>
 	/// Whether what is sealed disagrees with what the server recorded.
 	///
-	/// <para>Only on Firebase, where a sender's phone does the sealing. So a member
-	/// with a tampered app can seal any sender id, but the server sets the outer
-	/// one from their sign-in, and this is what stops them passing as someone else:
-	/// a reply goes to the id, so it would otherwise go to the wrong person.</para>
-	///
-	/// <para><b>The name is still their word.</b> <see cref="LinkMessage.Sender"/>
-	/// can say anything, with the right id behind it.</para>
+	/// <para>A sender's phone does the sealing, so a member with a tampered app can seal any
+	/// sender id. The server sets the outer one from their sign-in, and this is what stops
+	/// them passing as someone else: a reply goes to the id, so it would otherwise go to the
+	/// wrong person.</para>
 	/// </summary>
 	private static bool IsForged(SealedMessage envelope, LinkMessage message)
 	{

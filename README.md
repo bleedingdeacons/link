@@ -376,7 +376,7 @@ a test project can see it. Hand reached the same arrangement for the same
 reason.
 
 The line is not stylistic: the moment a file references `Preferences`,
-`SecureStorage`, `FileSystem`, `MainThread` or `WebAuthenticator`, it
+`SecureStorage`, `FileSystem` or `MainThread`, it
 stops compiling in Core. That constraint is why the cipher takes a PEM
 string, the history takes a path and a key, and the client takes an
 `HttpClient` — each of those seams exists so a test can drive it.
@@ -480,9 +480,8 @@ than degrading, so asking for it unconditionally would trade a working
 sideload for a feature that still would not work.
 
 The default build therefore hides the button rather than offering one
-that always fails, and an iOS member signs in with Google — which works,
-because WebAuthenticator and the `link` scheme are wired in
-`Platforms/iOS/Info.plist` and `AppDelegate`.
+that always fails, and an iOS member signs in with Google, which needs no
+paid team.
 
 That flag now gates `aps-environment` as well, for the same paid-team
 reason, which is why it is no longer called `LinkAppleSignIn`. See the
@@ -611,8 +610,7 @@ had before any of this existed.
 
 "I can't get in" was the report the log could least answer. It used to
 say that an enrolment succeeded or was refused, and nothing else: not
-which button, not whether Google's native sheet was tried and fell back,
-not whether the browser came back with an error, a code or nothing.
+which button, and not what Google's sheet answered.
 
 Every sign-in, key replacement and sign-out is now an **attempt**
 (`AuthAttempt`). While one is open, every event logged on its path carries
@@ -622,13 +620,13 @@ from a layer that does not know a sign-in is happening. One Better Stack
 query on the attempt id is the whole story. Each attempt ends in exactly
 one outcome line with its duration: succeeded (Information, with device
 and member ids), cancelled by the member (Information, because a closed
-browser tab is not a fault), not offered (Information), refused (Warning,
+account picker is not a fault), refused (Warning,
 with the sentence the member was shown), or threw (Error, logged from an
 exception filter so the attempt's properties are still attached; the
 exception goes on exactly as before).
 
-Between those: the native picker's answer, the browser opening and what
-came back (Fellowship's own error code, such as `not_a_member`), which
+Between those: the picker's answer, the error code a Function answered
+(such as `fellowship_not_a_member`), which
 credential the enrolment carried and whether a push token went with it,
 the Freedom handover, and on every launch which page the shell chose.
 
@@ -726,8 +724,7 @@ first time.
   entitlements file. So an iOS build signed this way polls. The push code
   is in it and will stay dormant.
 * **The message list and sign-in are the point.** What Hot Restart is good for
-  is proving the UI, the Google browser leg and the `link` scheme return
-  work on a real handset. It is not a way to hand Link to a member.
+  is proving the UI and Google's account picker work on a real handset. It is not a way to hand Link to a member.
 
 ### What CI produces
 
@@ -789,9 +786,8 @@ artifacts came out with no idea which intergroup they belonged to — which
 is fine for a build nobody installs and useless the moment one reaches a
 phone, as the first sideloaded `.ipa` demonstrated by opening, offering
 Google sign-in, and failing on every call after it. Only `BaseUrl` is
-written; `CallbackUrl` and `PollSeconds` come from the defaults in
-`FellowshipConfiguration`, so the callback scheme gains no fifth place to
-disagree with itself. The file still never enters git.
+written; `PollSeconds` comes from the default in `FellowshipConfiguration`.
+The file still never enters git.
 
 Unset the variable and the old behaviour returns: a build that succeeds
 and a sign-in screen that says the app has not been set up. That is what
@@ -811,49 +807,19 @@ a fork gets.
   re-seal them: Fellowship holds only the public half. Use a local build
   for a handset that is already enrolled.
 
-## The four places `link://auth` is written
-
-The custom scheme has to agree in four places, and a mismatch shows up as
-a browser tab that opens and never comes back, with nothing in any log to
-say why:
-
-1. `appsettings.json` → `CallbackUrl`
-2. `Platforms/Android/WebAuthenticatorCallbackActivity.cs` → the intent filter
-3. `Platforms/iOS/Info.plist` → `CFBundleURLTypes`
-4. Fellowship's `DeviceRedirectValidator` → the allow-list
-
-**Google is not one of them, and this list used to say it was.** The
-redirect URI registered with the OAuth client is Fellowship's own HTTPS
-callback; Google never sees `link://auth` and would reject a custom
-scheme on a Web application client if offered one. The scheme is internal
-to Link and Fellowship, and only the last leg — Fellowship handing the
-one-time code back to the handset — travels over it.
-
-Entry 3 is why an iOS build can sign in at all. It is the platform
-counterpart of entry 2, and without it the browser leg completes and the
-answer lands nowhere.
-
-What travels that way is a one-time code, never a token. A custom scheme
-can in principle be claimed by another app on the device, which is
-precisely why the thing that goes through it is worthless two minutes
-later and worthless once used, and why the credential itself is fetched
-over TLS from Link's own process afterwards.
-
-## Native Google sign-in
+## Google sign-in
 
 On Android and iOS, **Continue with Google** — at sign-in and when
-replacing a key — skips the browser and `link://auth` entirely: the
-platform's own account picker (Credential Manager on Android, GoogleSignIn
-on iOS), then Firebase Auth, then the Firebase ID token to Fellowship as
-`firebase_token`. Fellowship pins it to the Firebase project of its FCM
-service account and accepts each token once. Link signs out of Firebase
-as soon as it has the token; the keypair and the device token are made
-exactly as before. See `NativeGoogleSignIn`.
+replacing a key — uses the platform's own account picker (Credential Manager
+on Android, GoogleSignIn on iOS), then Firebase Auth. The resulting Firebase
+ID token goes to the `enrol` Function, which checks the member against
+WordPress and gives this phone its own Firebase identity. See
+`NativeGoogleSignIn`.
 
-Anywhere it cannot work it quietly uses the browser instead: a Firebase
-config with no Google client in it, an APK signed with a key whose SHA-1 is
-not registered, a Fellowship older than the field or with no service
-account. To turn it on:
+There is no browser sign-in and no custom URL scheme. Where the picker can't
+work, the member is told to use their password: a Firebase config with no
+Google client in it, an APK signed with a key whose SHA-1 is not registered,
+or a phone with no Google account support. To turn it on:
 
 1. Firebase console (project `fellowship-510917`) → **Authentication →
    Sign-in method → Google** → enable.

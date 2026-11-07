@@ -5,31 +5,18 @@ Feature: Getting a phone onto the fellowship's list
 
   A member signs in with the email address their intergroup already
   holds. Two flows meet at one exchange: Google server-side through a
-  browser leg that carries a one-time code, Apple client-side with no
-  browser leg at all, and a password route for whoever has neither.
+  platform's own account picker, Apple its own sheet, and a password route
+  for whoever has neither.
 
   What is settled here is what each outcome *means*. Raising the
-  platform sheet, claiming the URI scheme and writing the private half
+  platform sheet and writing the private half
   into a keystore are all MAUI, and are on-device criteria rather than
   scenarios — see OnDevice.feature.
-
-  Rule: The two flows are told apart by what the start answers
-
-    Scenario: A server-side provider answers a URL to open
-      Given a sign-in that answered an authorization URL
-      Then the browser is used
-
-    Scenario: A client-side provider answers a nonce instead
-      Given a sign-in that answered a nonce and no URL
-      Then the browser is not used
-      # Fellowship rejects an Apple token minted without the nonce it
-      # issued, every single time — which would look like a server bug
-      # from the app and an app bug from the server.
 
   Rule: A sign-in that stops says so, without calling it a failure
 
     It used to say nothing, on the reasoning that the member knew what
-    they did. That holds for a closed browser tab, and fails for a phone
+    they did. That holds for a closed account picker, and fails for a phone
     that answers "cancelled" without showing anything — Android's
     account picker does, once Google has paused it for a handset that
     dismissed it too often. Neither reaches the intergroup's log, and a

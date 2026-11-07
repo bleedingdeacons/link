@@ -19,14 +19,6 @@ public sealed class FellowshipConfiguration
 	public string BaseUrl { get; set; } = string.Empty;
 
 	/// <summary>
-	/// The custom scheme the OAuth browser leg comes back to. Must match
-	/// the intent filter in AndroidManifest.xml and the allow-list in
-	/// Fellowship's <c>DeviceRedirectValidator</c>; all three say
-	/// <c>link://auth</c>.
-	/// </summary>
-	public string CallbackUrl { get; set; } = "link://auth";
-
-	/// <summary>
 	/// How often the app polls when it is on screen.
 	///
 	/// <para>Push is the fast path; this is the reliable one. A phone in a

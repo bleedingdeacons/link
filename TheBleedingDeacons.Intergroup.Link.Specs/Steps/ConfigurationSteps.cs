@@ -23,8 +23,4 @@ public sealed class ConfigurationSteps(World world)
 	[Then(@"^the route for ""(.+)"" is ""(.+)""$")]
 	public void Route(string path, string expected) =>
 		world.Settings.ShouldNotBeNull().Route(path).ToString().ShouldBe(expected);
-
-	[Then(@"^the callback is ""(.+)""$")]
-	public void Callback(string callback) =>
-		world.Settings.ShouldNotBeNull().CallbackUrl.ShouldBe(callback);
 }

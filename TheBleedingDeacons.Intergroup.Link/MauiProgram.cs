@@ -155,7 +155,7 @@ public static class MauiProgram
 		// is per-instance.
 		builder.Services.AddSingleton(LinkServices.Configuration);
 		builder.Services.AddSingleton(LinkServices.Client);
-		builder.Services.AddSingleton(LinkServices.Backend);
+		builder.Services.AddSingleton<ISessionStore>(LinkServices.Sessions);
 		builder.Services.AddSingleton(LinkServices.Sessions);
 		builder.Services.AddSingleton(LinkServices.Keys);
 		builder.Services.AddSingleton(LinkServices.History);
@@ -203,7 +203,9 @@ public static class MauiProgram
 					new SecureStorageCredentialStore("link"),
 					device: new LinkDeviceIdentity(),
 					httpClient: LinkServices.Http,
-					logger: sp.GetService<ILogger<FreedomClient>>())), new HandoverRecord())
+					logger: sp.GetService<ILogger<FreedomClient>>())),
+					new HandoverRecord(),
+					static (session, cancellationToken) => LinkServices.Client.SessionProofAsync(session.Token, cancellationToken))
 				: NoLoggingSource.Instance);
 		builder.Services.AddSingleton<RemoteLogging>();
 

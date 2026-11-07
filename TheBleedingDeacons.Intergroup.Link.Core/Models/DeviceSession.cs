@@ -21,14 +21,11 @@ public sealed record DeviceSession
 	public long DeviceId { get; init; }
 
 	/// <summary>
-	/// This device on Firebase, where ids are strings, or empty for a session
-	/// with Fellowship's own device list. <see cref="Token"/> is then a Firebase
-	/// refresh token.
+	/// This device on Firebase, where ids are strings. Empty only on a session from
+	/// before the move, which <c>FirebaseSessionsOnly</c> retires. <see cref="Token"/>
+	/// is a Firebase refresh token.
 	/// </summary>
 	public string FirebaseDeviceId { get; init; } = string.Empty;
-
-	/// <summary>The back end this session's token belongs to.</summary>
-	public LinkBackend Backend => string.IsNullOrEmpty(FirebaseDeviceId) ? LinkBackend.Fellowship : LinkBackend.Firebase;
 
 	public long MemberId { get; init; }
 

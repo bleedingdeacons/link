@@ -10,11 +10,10 @@ namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 /// <summary>
 /// The sign-in screen.
 ///
-/// <para>Five ways in, in a deliberate order. Four providers first,
-/// because they are how nearly everybody signs in and none of them asks
-/// a member to invent or remember anything. A password underneath, for
-/// the member whose intergroup address is not a Google, Microsoft, Apple
-/// or Facebook account and who would otherwise have no way in at all.
+/// <para>Three ways in, in a deliberate order. Google and Apple first,
+/// because they ask a member to invent or remember nothing. A password
+/// underneath, for the member whose intergroup address is neither a Google
+/// nor an Apple account and who would otherwise have no way in at all.
 /// </para>
 ///
 /// <para>Sign-in fails most often for a member whose address the
@@ -27,9 +26,15 @@ public sealed partial class SignInViewModel : ObservableObject
 	private readonly DeviceAuthService _auth;
 	private readonly FellowshipConfiguration _configuration;
 	private readonly FingerprintSignIn _fingerprint;
+	private readonly FirebaseSessionsOnly _sessions;
 
-	public SignInViewModel(DeviceAuthService auth, FellowshipConfiguration configuration, FingerprintSignIn fingerprint)
+	public SignInViewModel(
+		DeviceAuthService auth,
+		FellowshipConfiguration configuration,
+		FingerprintSignIn fingerprint,
+		FirebaseSessionsOnly sessions)
 	{
+		_sessions = sessions;
 		_auth = auth;
 		_configuration = configuration;
 		_fingerprint = fingerprint;
@@ -52,7 +57,7 @@ public sealed partial class SignInViewModel : ObservableObject
 	private string _notice = string.Empty;
 
 	[ObservableProperty]
-	[NotifyCanExecuteChangedFor(nameof(SignInWithProviderCommand))]
+	[NotifyCanExecuteChangedFor(nameof(SignInWithGoogleCommand))]
 	[NotifyCanExecuteChangedFor(nameof(SignInWithAppleCommand))]
 	[NotifyCanExecuteChangedFor(nameof(SignInWithPasswordCommand))]
 	[NotifyCanExecuteChangedFor(nameof(RequestPasswordLinkCommand))]
@@ -149,19 +154,24 @@ public sealed partial class SignInViewModel : ObservableObject
 			: string.Empty;
 
 	/// <summary>
-	/// Google, Microsoft or Facebook — every provider whose flow is a
-	/// browser leg, chosen by the button that was tapped.
-	///
-	/// <para>One command with a parameter rather than three commands,
-	/// because there is genuinely one behaviour here; three copies is
-	/// how two of them end up subtly different. Apple is not one of
-	/// these: it has no browser leg, so it gets its own command below
-	/// rather than a special case inside this one.</para>
+	/// Say why signing in again is needed, if this launch retired an old session. Once:
+	/// it means nothing after they've read it.
 	/// </summary>
-	[RelayCommand(CanExecute = nameof(CanSignIn))]
-	private async Task SignInWithProviderAsync(string provider)
+	public void ShowWhySigningIn()
 	{
-		await RunAsync(() => _auth.SignInWithProviderAsync(provider)).ConfigureAwait(true);
+		if (_sessions.RetiredOne && !_toldWhySigningIn)
+		{
+			_toldWhySigningIn = true;
+			Notice = FirebaseSessionsOnly.Reason;
+		}
+	}
+
+	private bool _toldWhySigningIn;
+
+	[RelayCommand(CanExecute = nameof(CanSignIn))]
+	private async Task SignInWithGoogleAsync()
+	{
+		await RunAsync(() => _auth.SignInWithGoogleAsync()).ConfigureAwait(true);
 	}
 
 	[RelayCommand(CanExecute = nameof(CanSignIn))]

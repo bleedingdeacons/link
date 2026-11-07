@@ -5,7 +5,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 ///
 /// <para>Four answers rather than a bool, because each one asks the
 /// screen for something different. A finger that matched gets the member
-/// in; a sheet they closed says nothing, as a closed browser tab says
+/// in; a sheet they closed says nothing, as a closed account picker says
 /// nothing; a sheet the phone refused to go on with (too many wrong
 /// fingers) needs telling; and a phone with no fingerprint to read is not
 /// a failure at all but a reason to sign in another way.</para>

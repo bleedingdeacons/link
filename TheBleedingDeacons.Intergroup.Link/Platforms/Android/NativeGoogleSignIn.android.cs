@@ -76,8 +76,8 @@ public sealed partial class NativeGoogleSignIn
 #pragma warning restore CA1031
 		{
 			// No Google account and none added, Play Services missing or old,
-			// an unregistered signing key. The browser can do all of these.
-			Log.Warning(ex, "Native Google sign-in could not be completed; using the browser");
+			// an unregistered signing key. A password still works.
+			Log.Warning(ex, "Native Google sign-in could not be completed");
 			return NativeGoogleSignInResult.Unavailable;
 		}
 
@@ -150,8 +150,8 @@ public sealed partial class NativeGoogleSignIn
 		{
 			// Google sign-in not enabled for the project, or the web client
 			// id from another project. A configuration fault, not the
-			// member's — the browser still works.
-			Log.Error(ex, "Firebase refused the Google credential; using the browser");
+			// member's — a password still works.
+			Log.Error(ex, "Firebase refused the Google credential");
 			return NativeGoogleSignInResult.Unavailable;
 		}
 		finally

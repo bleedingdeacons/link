@@ -275,7 +275,7 @@ internal static class FirebaseHttp
 		}
 	}
 
-	/// <summary>The exceptions that mean the request didn't arrive. See <see cref="FellowshipClient"/>.</summary>
+	/// <summary>The exceptions that mean the request didn't arrive.</summary>
 	public static bool IsTransport(Exception e) =>
 		e is HttpRequestException
 			or TaskCanceledException

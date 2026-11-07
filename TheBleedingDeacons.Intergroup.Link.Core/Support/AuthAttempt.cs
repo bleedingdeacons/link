@@ -12,9 +12,9 @@ namespace TheBleedingDeacons.Intergroup.Link.Support;
 /// started, every step it took, and how it ended.
 ///
 /// <para><b>Why one object rather than a line per step.</b> A sign-in is
-/// not one request. Google may try the native sheet, fall back to the
-/// browser, spend a one-time code and then enrol, and each of those can
-/// fail on its own terms; Fellowship's client logs its refusals from a
+/// not one request. Google shows its picker, Firebase takes the answer, and
+/// a Function enrols the phone, and each of those can fail on its own
+/// terms; Fellowship's client logs its refusals from a
 /// layer that does not know a sign-in is happening at all. While an attempt
 /// is open, every event logged anywhere on its async path carries
 /// <c>AuthAttempt</c>, <c>AuthOperation</c> and <c>AuthMethod</c> through
@@ -25,7 +25,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Support;
 /// <para><b>Exactly one outcome line.</b> Succeeded, cancelled, refused or
 /// threw, with how long it took. Cancelling is Information, not a Warning:
 /// it is a member changing their mind, and a dashboard of warnings full of
-/// closed browser tabs hides the refusals that matter.</para>
+/// closed account pickers hides the refusals that matter.</para>
 ///
 /// <para><b>What never goes in.</b> Passwords, one-time codes, ID tokens,
 /// Firebase tokens and the device token. The address a member typed does,
@@ -100,7 +100,7 @@ public sealed class AuthAttempt : IDisposable
 		}
 		else
 		{
-			NotSucceeded(result.Error, result.Unavailable, result.Detail);
+			NotSucceeded(result.Error, result.Detail);
 		}
 
 		return result;
@@ -122,7 +122,7 @@ public sealed class AuthAttempt : IDisposable
 		}
 		else
 		{
-			NotSucceeded(result.Error, result.Unavailable);
+			NotSucceeded(result.Error);
 		}
 
 		return result;
@@ -205,19 +205,11 @@ public sealed class AuthAttempt : IDisposable
 			memberId);
 	}
 
-	private void NotSucceeded(string error, bool unavailable, string detail = "")
+	private void NotSucceeded(string error, string detail = "")
 	{
 		_finished = true;
 
-		if (unavailable)
-		{
-			Log.Information(
-				"{AuthOperation} with {AuthMethod} is not offered by the intergroup ({ElapsedMs} ms)",
-				Operation,
-				Method,
-				ElapsedMs);
-		}
-		else if (string.IsNullOrEmpty(error))
+		if (string.IsNullOrEmpty(error))
 		{
 			// An empty error is a sign-in that stopped — usually the member
 			// backing out, which is not worth a warning. The platform's own

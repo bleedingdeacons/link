@@ -37,11 +37,6 @@ Feature: Where this build of Link talks to
       Given a server address of "https://aa-bristol.org"
       Then the route for "/messages" is "https://aa-bristol.org/wp-json/fellowship/v1/messages"
 
-  Scenario: A build nobody configured knows where to come back to
-    The callback scheme is written in four places and they have to
-    agree: here, the Android intent filter, the iOS Info.plist, and
-    Fellowship's own allow-list.
-
+  Scenario: A build nobody configured talks to nowhere
     Given a build nobody has configured
-    Then the callback is "link://auth"
-    And it is not somewhere Link will talk to
+    Then it is not somewhere Link will talk to

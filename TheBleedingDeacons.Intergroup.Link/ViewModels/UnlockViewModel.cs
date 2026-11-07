@@ -61,7 +61,7 @@ public sealed partial class UnlockViewModel : ObservableObject
 	/// <summary>
 	/// Ask for the finger, and go to the messages if it matched.
 	///
-	/// <para>A closed sheet says nothing, as a closed browser tab says
+	/// <para>A closed sheet says nothing, as a closed account picker says
 	/// nothing on the sign-in page: the member knows what they did, and the
 	/// button is still there.</para>
 	/// </summary>

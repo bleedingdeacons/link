@@ -289,12 +289,7 @@
 
 					<Button Text="Continue with Google"
 					        HeightRequest="50"
-					        Command="{Binding ReplaceKeyWithProviderCommand}"
-					        CommandParameter="google" />
-					<Button Text="Continue with Microsoft"
-					        HeightRequest="50"
-					        Command="{Binding ReplaceKeyWithProviderCommand}"
-					        CommandParameter="microsoft" />
+					        Command="{Binding ReplaceKeyWithGoogleCommand}" />
 					<Button Text="Continue with Apple"
 					        HeightRequest="50"
 					        IsVisible="{Binding IsAppleAvailable}"

@@ -654,8 +654,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// gone.</para>
 	///
 	/// <para>Opening the choices is a separate step from using one, so a
-	/// member who taps the button out of curiosity is not immediately in
-	/// a browser.</para>
+	/// member who taps the button out of curiosity has not started
+	/// anything.</para>
 	/// </summary>
 	[RelayCommand]
 	private async Task StartKeyReplacementAsync()
@@ -686,8 +686,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 	}
 
 	[RelayCommand]
-	private async Task ReplaceKeyWithProviderAsync(string provider) =>
-		await ReplaceAsync(() => _auth.ReplaceKeyWithProviderAsync(provider)).ConfigureAwait(true);
+	private async Task ReplaceKeyWithGoogleAsync() =>
+		await ReplaceAsync(() => _auth.ReplaceKeyWithGoogleAsync()).ConfigureAwait(true);
 
 	[RelayCommand]
 	private async Task ReplaceKeyWithAppleAsync() =>
@@ -723,8 +723,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 				return;
 			}
 
-			// An empty error is a cancelled sign-in — a closed browser tab
-			// or a dismissed sheet. The member knows what they did.
+			// An empty error is a cancelled sign-in — a dismissed sheet.
+			// The member knows what they did.
 			Notice = result.Error;
 		}
 		finally

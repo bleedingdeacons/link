@@ -28,7 +28,9 @@ public sealed class FreedomLoggingSourceTests
 
 	private readonly FakeHandover _handover = new() { IsCurrent = true };
 
-	private FreedomLoggingSource Source() => new(_freedom, _handover);
+	private string _proof = "short-lived-id-token";
+
+	private FreedomLoggingSource Source() => new(_freedom, _handover, (_, _) => Task.FromResult(_proof));
 
 	[Fact]
 	public async Task ASignedInHandsetReadsBothValues()
@@ -60,34 +62,47 @@ public sealed class FreedomLoggingSourceTests
 
 		var config = await Source().FetchAsync(Session);
 
-		Assert.Equal("fdt_test", _freedom.HandedOver);
+		Assert.Equal("short-lived-id-token", _freedom.HandedOver);
 		Assert.True(config!.IsValid());
 	}
 
 	[Theory]
 	[InlineData(SyncStatus.NotEnrolled)]
 	[InlineData(SyncStatus.Revoked)]
-	public async Task AFirebaseRefreshTokenIsNeverHandedToFreedom(SyncStatus status)
+	public async Task TheRefreshTokenIsNeverHandedToFreedom(SyncStatus status)
 	{
 		_freedom.Syncs.Enqueue(status);
+		_freedom.Values[FreedomLoggingSource.EndpointKey] = "s1.betterstackdata.com";
+		_freedom.Values[FreedomLoggingSource.SourceTokenKey] = "src-token";
 
-		var config = await Source().FetchAsync(Session with { Token = "firebase-refresh-token", FirebaseDeviceId = "d_abc" });
+		await Source().FetchAsync(Session with { Token = "firebase-refresh-token" });
 
-		Assert.Null(_freedom.HandedOver);
-		Assert.Null(config);
+		Assert.Equal("short-lived-id-token", _freedom.HandedOver);
 	}
 
 	[Fact]
-	public async Task NorIsItHandedOverToRefreshAnOlderBuild()
+	public async Task NoProofMeansNoHandoverAndNoAnswerForNow()
 	{
+		_proof = string.Empty;
+		_freedom.Syncs.Enqueue(SyncStatus.NotEnrolled);
+
+		Assert.Null(await Source().FetchAsync(Session));
+		Assert.Null(_freedom.HandedOver);
+	}
+
+	[Fact]
+	public async Task NoProofToRefreshWithLeavesWhatFreedomAlreadyAnswered()
+	{
+		_proof = string.Empty;
 		_handover.IsCurrent = false;
 		_freedom.Values[FreedomLoggingSource.EndpointKey] = "s1.betterstackdata.com";
 		_freedom.Values[FreedomLoggingSource.SourceTokenKey] = "src-token";
 
-		var config = await Source().FetchAsync(Session with { Token = "firebase-refresh-token", FirebaseDeviceId = "d_abc" });
+		var config = await Source().FetchAsync(Session);
 
 		Assert.Null(_freedom.HandedOver);
 		Assert.True(config!.IsValid());
+		Assert.False(_handover.IsCurrent);
 	}
 
 	[Fact]
@@ -114,7 +129,7 @@ public sealed class FreedomLoggingSourceTests
 
 		var config = await Source().FetchAsync(Session);
 
-		Assert.Equal("fdt_test", _freedom.HandedOver);
+		Assert.Equal("short-lived-id-token", _freedom.HandedOver);
 		Assert.True(_handover.IsCurrent);
 		Assert.True(config!.IsValid());
 	}
@@ -214,8 +229,9 @@ public sealed class FreedomLoggingSourceTests
 	[Fact]
 	public async Task RejectsNulls()
 	{
-		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(null!, _handover));
-		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(_freedom, null!));
+		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(null!, _handover, (_, _) => Task.FromResult(_proof)));
+		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(_freedom, null!, (_, _) => Task.FromResult(_proof)));
+		Assert.Throws<ArgumentNullException>(() => new FreedomLoggingSource(_freedom, _handover, null!));
 		await Assert.ThrowsAsync<ArgumentNullException>(() => Source().FetchAsync(null!));
 	}
 
