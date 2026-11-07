@@ -46,6 +46,7 @@ public partial class SignInPage : ContentPage
 		{
 			nameof(SignInViewModel.HasError) => _viewModel.HasError,
 			nameof(SignInViewModel.HasNotice) => _viewModel.HasNotice,
+			nameof(SignInViewModel.HasHeldBackup) => _viewModel.HasHeldBackup,
 			_ => false,
 		};
 

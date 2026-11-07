@@ -204,6 +204,8 @@
 
 			<VerticalStackLayout Spacing="12" IsVisible="{Binding BackingUp}">
 				<Label FontSize="{StaticResource FootnoteFontSize}"
+				       Text="{x:Static services:MessageBackup.HoldsTheKey}" />
+				<Label FontSize="{StaticResource FootnoteFontSize}"
 				       FontAttributes="Bold"
 				       Text="{x:Static services:MessageBackup.ForgottenPassphrase}" />
 				<Entry Placeholder="A passphrase of at least 12 characters"

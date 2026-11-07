@@ -58,7 +58,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		ArgumentNullException.ThrowIfNull(session);
 
 		var sync = await _freedom.SyncAsync(cancellationToken).ConfigureAwait(false);
-		Log.Debug("Freedom sync for device {DeviceId} answered {Status}", session.DeviceId, sync.Status);
+		Log.Debug("Freedom sync for device {DeviceId} answered {Status}", session.FirebaseDeviceId, sync.Status);
 
 		// Not a Freedom tablet yet, or not any more — a new Fellowship
 		// enrolment is a new tablet. Hand the session over. Anything else
@@ -68,7 +68,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 		{
 			// Freedom's sign-in, done with Link's: the second half of every
 			// first launch after a sign-in, so worth a line either way.
-			Log.Information("Handing device {DeviceId}'s Link session to Freedom ({Status})", session.DeviceId, sync.Status);
+			Log.Information("Handing device {DeviceId}'s Link session to Freedom ({Status})", session.FirebaseDeviceId, sync.Status);
 
 			var proof = await _proof(session, cancellationToken).ConfigureAwait(false);
 			if (proof.Length == 0)
@@ -105,7 +105,7 @@ public sealed class FreedomLoggingSource : ILoggingSource
 			}
 			else if (refreshed.Succeeded)
 			{
-				Log.Information("Freedom has this build's details for device {DeviceId}", session.DeviceId);
+				Log.Information("Freedom has this build's details for device {DeviceId}", session.FirebaseDeviceId);
 				_handover.MarkCurrent();
 				sync = refreshed.Sync ?? sync;
 			}

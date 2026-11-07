@@ -92,7 +92,9 @@ Feature: A backup the member keeps themselves
   Rule: A backup is only ever its own member's
 
     Nobody's messages land on another member's phone, and a backup gets nobody
-    in: it holds no credential, so restoring always needs a sign-in.
+    in: it holds no credential, so restoring always needs a sign-in as the same
+    member. The device's key is in it, sealed under the passphrase, and that opens
+    messages and proves nothing.
 
     Scenario: Another member's backup is refused
       Given messages 12 and 13 are held
@@ -118,7 +120,13 @@ Feature: A backup the member keeps themselves
       Given messages 12 and 13 are held
       And this member sent message 14 to Jo B
       When a backup is made with the passphrase "a long enough passphrase"
-      Then the backup holds no token and no key
+      Then the backup holds no token
+
+    Scenario: The file holds what it takes to move this phone, under the passphrase
+      Given messages 12 and 13 are held
+      And this phone is device "d_abc" on Firebase
+      When a backup is made with the passphrase "a long enough passphrase"
+      Then the backup holds device "d_abc" and this phone's key
 
   Rule: It merges, and what the member removed stays removed
 

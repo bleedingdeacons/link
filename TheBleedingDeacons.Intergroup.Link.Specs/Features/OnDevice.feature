@@ -48,7 +48,7 @@ Feature: What only a phone can answer
       # not ready at enrolment never heard from it, and stayed poll-only
       # permanently while looking healthy from both ends.
 
-  Rule: The private half never leaves, and the retention window is what that costs
+  Rule: No server holds the private half, and the retention window is what that costs
 
     Fellowship holds only the public half of this handset's keypair — but
     it holds the message bodies in plain text and seals them per fetch, so
@@ -275,8 +275,28 @@ Feature: What only a phone can answer
 
     Scenario: A restored phone still has to sign in
       Given a phone that has never held this member's sign-in
-      When Link is opened
-      Then there is no way to restore a backup until the member has signed in
+      When a backup is opened on the sign-in screen
+      Then nothing comes back until the member has signed in
+
+    Scenario: A new phone takes the old one's place
+      Given two phones, and a backup made on the first
+      When the second opens that backup on the sign-in screen and signs in
+      Then the sign-in screen said the first phone would be signed out
+      And the first phone is signed out at its next sync
+      And the second phone has the messages and can open what was sent since the backup
+      And the admin Devices screen shows one device, under the second phone's name
+
+    Scenario: A backup from before a key replacement joins as new
+      Given a backup made before this phone's key was replaced
+      When another phone opens it on the sign-in screen and signs in
+      Then the first phone stays signed in
+      And the second phone is a new device with the backup's messages, and says so
+
+    Scenario: Restoring in Settings moves nothing
+      Given a second phone already signed in, and a backup made on the first
+      When the backup is restored from Settings
+      Then the second phone has the messages
+      And both phones stay signed in, and it says so
 
     Scenario: Android's own backup stays off
       When the APK's manifest is read

@@ -63,6 +63,19 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 	private readonly FirebaseConfiguration _firebase;
 	private readonly FellowshipConfiguration _fellowship;
 	private readonly ISiteClient _site;
+	/// <summary>
+	/// The refusals that say this backup's device can't be taken over, and leave the
+	/// sign-in unspent so the phone can enrol as new with it. Anything else, such as
+	/// not being a member or no network, stops the sign-in where it is.
+	/// </summary>
+	private static readonly HashSet<string> NotThisPhonesToTake = new(StringComparer.Ordinal)
+	{
+		"fellowship_key_mismatch",
+		"fellowship_no_such_device",
+		"fellowship_device_revoked",
+		"fellowship_bad_public_key",
+	};
+
 	private readonly FirebaseIdentity _identity;
 
 	/// <summary>This member's name from the directory, which is the only place it is known.</summary>
@@ -135,14 +148,44 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 		AddIfPresent(data, "label", request.Label);
 		AddIfPresent(data, "pushToken", request.PushToken);
 
+		if (request.TakeOverDeviceId.Length > 0 && request.TakeOverPublicKey.Length > 0)
+		{
+			var taking = new Dictionary<string, object>(data, StringComparer.Ordinal)
+			{
+				["deviceId"] = request.TakeOverDeviceId,
+				["publicKey"] = request.TakeOverPublicKey,
+			};
+
+			var taken = await CallAsync("takeOverDevice", identity, taking, cancellationToken).ConfigureAwait(false);
+			if (taken.Succeeded)
+			{
+				var moved = await SignedInAsDeviceAsync(taken.Result, cancellationToken).ConfigureAwait(false);
+
+				return moved.Succeeded ? moved with { TookOver = true } : moved;
+			}
+
+			if (!NotThisPhonesToTake.Contains(taken.Reason))
+			{
+				return EnrolmentResult.Failed(taken.Words("This phone could not take over. Please try again."));
+			}
+
+			Log.Information("The backup's device can't be taken over ({Reason}), so this phone is enrolling as new", taken.Reason);
+		}
+
 		var enrolled = await CallAsync("enrol", identity, data, cancellationToken).ConfigureAwait(false);
 		if (!enrolled.Succeeded)
 		{
 			return EnrolmentResult.Failed(enrolled.Words("This device could not be enrolled. Please try again."));
 		}
 
-		var customToken = FirebaseHttp.Text(enrolled.Result, "token");
-		var deviceId = FirebaseHttp.Text(enrolled.Result, "deviceId");
+		return await SignedInAsDeviceAsync(enrolled.Result, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>Become the device a Function has just answered with.</summary>
+	private async Task<EnrolmentResult> SignedInAsDeviceAsync(JsonElement answer, CancellationToken cancellationToken)
+	{
+		var customToken = FirebaseHttp.Text(answer, "token");
+		var deviceId = FirebaseHttp.Text(answer, "deviceId");
 		var signedIn = customToken.Length == 0
 			? null
 			: await _identity.SignInWithCustomTokenAsync(customToken, cancellationToken).ConfigureAwait(false);
@@ -159,7 +202,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 		{
 			Token = signedIn.RefreshToken,
 			FirebaseDeviceId = deviceId,
-			MemberId = FirebaseHttp.Number(enrolled.Result, "memberId"),
+			MemberId = FirebaseHttp.Number(answer, "memberId"),
 			MemberName = _ownName ?? string.Empty,
 		});
 	}

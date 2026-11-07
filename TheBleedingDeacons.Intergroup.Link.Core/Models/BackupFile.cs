@@ -29,7 +29,8 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// <para><b>Versioned from the first file.</b> A later version adds to the
 /// JSON, and whatever reads it has to go on reading this one.
 /// <c>Fixtures/backup-v1.linkbackup</c> in Link.Tests holds that to account,
-/// so do not change the layout of version 1: raise the version.</para>
+/// so do not change the layout of version 1: raise the version. Version 2 has
+/// the same layout and adds the device to the JSON.</para>
 ///
 /// <para><b>Every failure is the same null.</b> A wrong passphrase and a
 /// damaged file cannot be told apart, because GCM only says that the tag did
@@ -41,8 +42,11 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 /// </summary>
 public static class BackupFile
 {
-	/// <summary>The version this build writes, and the only one it reads.</summary>
-	public const int FormatVersion = 1;
+	/// <summary>The version this build writes.</summary>
+	public const int FormatVersion = 2;
+
+	/// <summary>The oldest version this build still reads.</summary>
+	public const int OldestReadableVersion = 1;
 
 	/// <summary>What the file's name ends in, dot included.</summary>
 	public const string Extension = ".linkbackup";
@@ -168,7 +172,7 @@ public static class BackupFile
 	{
 		ArgumentNullException.ThrowIfNull(file);
 
-		if (!IsReadable(file, out var iterations) || string.IsNullOrEmpty(passphrase))
+		if (!IsReadable(file, out var version, out var iterations) || string.IsNullOrEmpty(passphrase))
 		{
 			return null;
 		}
@@ -186,7 +190,7 @@ public static class BackupFile
 				plaintext,
 				file.AsSpan(0, HeaderBytes));
 
-			return Parse(Decompress(plaintext));
+			return Parse(Decompress(plaintext), version);
 		}
 		catch (Exception e) when (e is CryptographicException or InvalidDataException or JsonException)
 		{
@@ -207,14 +211,21 @@ public static class BackupFile
 	/// a different one and the tag fails. It is here so that this build never
 	/// accepts a file weaker than the ones it writes.
 	/// </remarks>
-	private static bool IsReadable(byte[] file, out int iterations)
+	private static bool IsReadable(byte[] file, out int version, out int iterations)
 	{
+		version = 0;
 		iterations = 0;
 
 		if (file.Length < CiphertextOffset
 			|| file.Length > MaximumFileBytes
-			|| !file.AsSpan(0, Magic.Length).SequenceEqual(Magic)
-			|| BinaryPrimitives.ReadUInt16BigEndian(file.AsSpan(VersionOffset)) != FormatVersion)
+			|| !file.AsSpan(0, Magic.Length).SequenceEqual(Magic))
+		{
+			return false;
+		}
+
+		version = BinaryPrimitives.ReadUInt16BigEndian(file.AsSpan(VersionOffset));
+
+		if (version is < OldestReadableVersion or > FormatVersion)
 		{
 			return false;
 		}
@@ -235,8 +246,12 @@ public static class BackupFile
 	/// Read the JSON, and refuse what could not have come from
 	/// <see cref="Seal"/>: a version that disagrees with the header, no
 	/// member, no history.
+	///
+	/// <para>A device that isn't whole counts as no device, which restores the
+	/// messages and enrols as new. So does one in a version 1 file, since no
+	/// version 1 file was written with one.</para>
 	/// </summary>
-	private static BackupContents? Parse(byte[]? json)
+	private static BackupContents? Parse(byte[]? json, int version)
 	{
 		if (json is null)
 		{
@@ -245,7 +260,8 @@ public static class BackupFile
 
 		var contents = JsonSerializer.Deserialize<BackupContents>(json, JsonOptions);
 
-		if (contents is not { FormatVersion: FormatVersion, MemberId: > 0, History: { } history }
+		if (contents is not { MemberId: > 0, History: { } history }
+			|| contents.FormatVersion != version
 			|| history.Messages is null
 			|| history.Sent is null
 			|| history.Deleted is null)
@@ -253,7 +269,9 @@ public static class BackupFile
 			return null;
 		}
 
-		return contents;
+		return version >= 2 && contents.Device is { Id.Length: > 0, PrivateKey.Length: > 0 }
+			? contents
+			: contents with { Device = null };
 	}
 
 	private static bool IsLongEnough(string? passphrase) =>

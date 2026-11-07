@@ -64,14 +64,14 @@ public partial class AppShell : Shell
 		{
 			Log.Information(
 				"Signed out behind a fingerprint as device {DeviceId} for member {MemberId}; asking for it",
-				session!.DeviceId,
+				session!.FirebaseDeviceId,
 				session.MemberId);
 		}
 		else if (signedIn)
 		{
 			Log.Information(
 				"Signed in as device {DeviceId} for member {MemberId}; showing the messages",
-				session!.DeviceId,
+				session!.FirebaseDeviceId,
 				session.MemberId);
 		}
 		else

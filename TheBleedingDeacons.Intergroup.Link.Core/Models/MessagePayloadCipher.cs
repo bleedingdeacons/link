@@ -35,7 +35,7 @@ namespace TheBleedingDeacons.Intergroup.Link.Models;
 ///
 /// <para><b>What this buys over Reach's symmetric scheme.</b> Reach
 /// issues each handset a key and keeps a copy, so its server can open
-/// anything it ever sent. Here the private half never leaves this device
+/// anything it ever sent. Here no server ever holds the private half
 /// — it is generated at enrolment and only the public half is sent — so a
 /// payload Fellowship sealed yesterday is one Fellowship cannot open
 /// today — for as long as the payload is the only copy, which on the

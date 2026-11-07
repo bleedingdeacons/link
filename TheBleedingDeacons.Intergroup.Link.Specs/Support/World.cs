@@ -118,7 +118,7 @@ public sealed class World : IDisposable
 	/// <summary>The style and the switches, which a backup carries.</summary>
 	public FakeScreenChoices Choices { get; } = new();
 
-	public MessageBackup Backup => new(Sessions, History, Choices, Choices, Choices, Choices);
+	public MessageBackup Backup => new(Sessions, History, Choices, Choices, Choices, Choices, Keys);
 
 	/// <summary>
 	/// The history is gone and the member is holding a different phone: a lost
