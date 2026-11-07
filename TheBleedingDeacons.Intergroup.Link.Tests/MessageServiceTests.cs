@@ -717,6 +717,68 @@ public sealed class MessageServiceTests
 		Assert.Equal("Dave P", sessions.Session!.MemberName);
 	}
 
+	[Fact]
+	public async Task AfterSigningInTheMemberLearnsTheirNameWithoutAMessage()
+	{
+		// Signing in no longer waits for WordPress, so the name has to arrive another way,
+		// even for a member whose inbox is empty.
+		var client = new FakeClient
+		{
+			Directory = new FellowshipDirectory
+			{
+				Members = [new DirectoryMember { Id = 8, Name = "Sue M" }, new DirectoryMember { Id = 2, Name = "Dave P" }],
+			},
+		};
+		var sessions = new FakeSessions();
+		var history = new FakeHistory();
+
+		await new MessageService(client, history, new FakeKeys("key"), sessions).LearnNamesAsync();
+
+		Assert.Equal("Dave P", sessions.Session!.MemberName);
+		Assert.Equal("Sue M", history.Names.Names[8]);
+		Assert.Equal(1, client.DirectoryFetches);
+	}
+
+	[Fact]
+	public async Task LearningNamesWhileWordPressIsDownChangesNothing()
+	{
+		var sessions = new FakeSessions();
+		var history = new FakeHistory
+		{
+			Names = new SenderNames(new Dictionary<long, string> { [8] = "Sue M" }, 1),
+		};
+
+		await new MessageService(new FakeClient(), history, new FakeKeys("key"), sessions).LearnNamesAsync();
+
+		Assert.Empty(sessions.Session!.MemberName);
+		Assert.Equal("Sue M", history.Names.Names[8]);
+	}
+
+	[Fact]
+	public async Task NobodySignedInHasNoNamesToLearn()
+	{
+		var client = new FakeClient();
+		var sessions = new FakeSessions { Session = null };
+
+		await new MessageService(client, new FakeHistory(), new FakeKeys("key"), sessions).LearnNamesAsync();
+
+		Assert.Equal(0, client.DirectoryFetches);
+	}
+
+	[Fact]
+	public async Task ANameAlreadyKnownIsNotReplaced()
+	{
+		var client = new FakeClient
+		{
+			Directory = new FellowshipDirectory { Members = [new DirectoryMember { Id = 2, Name = "Dave P" }] },
+		};
+		var sessions = new FakeSessions { Session = new DeviceSession { Token = "t", MemberId = 2, MemberName = "Dave" } };
+
+		await new MessageService(client, new FakeHistory(), new FakeKeys("key"), sessions).LearnNamesAsync();
+
+		Assert.Equal("Dave", sessions.Session!.MemberName);
+	}
+
 	private static Sealing.Sealed SealedFrom(long id, long senderId)
 	{
 		var payload = Sealing.Payload();

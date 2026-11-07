@@ -468,6 +468,24 @@ public sealed class MessageService : IMessageService
 	/// Ask the directory who everyone is. An empty answer means it couldn't be asked, so
 	/// what the phone already knows stands. A sync never fails over this.
 	/// </summary>
+	/// <summary>
+	/// Learn the directory's names, and this member's own, straight after a sign-in.
+	///
+	/// <para>Not part of the sign-in itself, so it doesn't hold it up. A failure leaves
+	/// things as they were: the name arrives with the next sync that asks.</para>
+	/// </summary>
+	public async Task LearnNamesAsync(CancellationToken cancellationToken = default)
+	{
+		var session = await _sessions.LoadAsync().ConfigureAwait(false);
+		if (session is null || !session.IsSignedIn)
+		{
+			return;
+		}
+
+		var current = await _history.SenderNamesAsync(cancellationToken).ConfigureAwait(false);
+		await RefreshSenderNamesAsync(session, current, cancellationToken).ConfigureAwait(false);
+	}
+
 	private async Task<SenderNames> RefreshSenderNamesAsync(
 		DeviceSession session,
 		SenderNames current,

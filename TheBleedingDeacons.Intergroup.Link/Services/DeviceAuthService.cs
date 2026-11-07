@@ -180,6 +180,11 @@ public sealed class DeviceAuthService
 			return EnrolmentResult.Failed(GoogleUnavailable);
 		}
 
+		// Made while the member chooses an account, rather than after: an RSA key takes a
+		// second or two on a phone, and the picker hides it. Only on a phone that isn't
+		// signed in, because making one replaces the key a signed-in phone reads with.
+		var keyPair = await KeyPairWhileWaitingAsync().ConfigureAwait(false);
+
 		Log.Debug("Raising the native Google account picker");
 		var signIn = await _nativeGoogle.SignInAsync(cancellationToken).ConfigureAwait(false);
 		Log.Information("Native Google account picker answered {NativeOutcome}", signIn.Outcome);
@@ -187,18 +192,58 @@ public sealed class DeviceAuthService
 		switch (signIn.Outcome)
 		{
 			case NativeGoogleSignInOutcome.Cancelled:
+				await DiscardAsync(keyPair).ConfigureAwait(false);
 				return EnrolmentResult.Cancelled(signIn.Detail);
 			case NativeGoogleSignInOutcome.Unavailable:
+				await DiscardAsync(keyPair).ConfigureAwait(false);
 				return EnrolmentResult.Failed(GoogleUnavailable);
 		}
 
 		return await EnrolAsync(new EnrolmentRequest
 		{
 			FirebaseToken = signIn.IdToken,
-			PublicKey = await _keys.RegenerateAsync().ConfigureAwait(false),
+			PublicKey = keyPair is null
+				? await _keys.RegenerateAsync().ConfigureAwait(false)
+				: await keyPair.ConfigureAwait(false),
 			Platform = PlatformName(),
 			Label = DeviceLabel(),
 		}, cancellationToken).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Start making the keypair off the main thread, or answer null on a phone that is
+	/// signed in, which must keep the key it has until a new one is accepted.
+	/// </summary>
+	private async Task<Task<string>?> KeyPairWhileWaitingAsync()
+	{
+		var session = await _sessions.LoadAsync().ConfigureAwait(false);
+
+		return session is { IsSignedIn: true } ? null : Task.Run(_keys.RegenerateAsync);
+	}
+
+	/// <summary>
+	/// A sign-in that stopped leaves no key behind, so "has a key" and "is enrolled" stay
+	/// in step. Waited for first, so the clear can't land before the key is written.
+	/// </summary>
+	private async Task DiscardAsync(Task<string>? keyPair)
+	{
+		if (keyPair is null)
+		{
+			return;
+		}
+
+		try
+		{
+			await keyPair.ConfigureAwait(false);
+		}
+#pragma warning disable CA1031 // Deliberately broad: it's being thrown away either way.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Log.Debug(ex, "A keypair made ahead of a sign-in that stopped failed anyway");
+		}
+
+		await _keys.ClearAsync().ConfigureAwait(false);
 	}
 
 	/// <summary>
@@ -681,6 +726,10 @@ public sealed class DeviceAuthService
 			{
 				_restored = await _backup.FinishHeldAsync(result.TookOver, cancellationToken).ConfigureAwait(false);
 			}
+
+			// The member's own name and everybody else's, after the sign-in rather than
+			// during it. Not awaited: the messages screen doesn't need them to open.
+			_ = LearnNamesAsync();
 		}
 		else
 		{
@@ -697,6 +746,20 @@ public sealed class DeviceAuthService
 		}
 
 		return result;
+	}
+
+	private static async Task LearnNamesAsync()
+	{
+		try
+		{
+			await LinkServices.Messages.LearnNamesAsync().ConfigureAwait(false);
+		}
+#pragma warning disable CA1031 // Deliberately broad: names are a nicety, and the next sync asks again.
+		catch (Exception ex)
+#pragma warning restore CA1031
+		{
+			Log.Warning(ex, "Names could not be learnt after signing in; the next sync will try");
+		}
 	}
 
 	/// <summary>

@@ -47,7 +47,6 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal(RefreshToken, result.Session!.Token);
 		Assert.Equal(DeviceId, result.Session.FirebaseDeviceId);
 		Assert.Equal(MemberId, result.Session.MemberId);
-		Assert.Equal("Dave B", result.Session.MemberName);
 
 		var enrol = _google.Only("/enrol");
 		Assert.Equal("Bearer google-identity", enrol.Authorization);
@@ -58,9 +57,10 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal("Pixel", data.GetProperty("label").GetString());
 		Assert.False(data.TryGetProperty("pushToken", out _));
 
-		// The directory is asked as the new device, because the identity just used
-		// no longer exists.
-		Assert.Equal(IdToken, _site.DirectoryAskedWith);
+		// The directory isn't asked during the sign-in: it held every sign-in up, and
+		// the name is learnt straight afterwards instead.
+		Assert.Empty(_site.DirectoryAskedWith);
+		Assert.Empty(result.Session.MemberName);
 	}
 
 	[Fact]
