@@ -38,6 +38,12 @@ public interface IMessageService
 	Task MarkReadAsync(long messageId, CancellationToken cancellationToken = default);
 
 	Task<SendResult> SendAsync(SendRequest request, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Learn the directory's names, and this member's own, straight after a sign-in, so
+	/// the sign-in needn't wait for WordPress.
+	/// </summary>
+	Task LearnNamesAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>What a sync did.</summary>

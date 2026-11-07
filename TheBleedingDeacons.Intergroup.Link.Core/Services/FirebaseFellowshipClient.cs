@@ -196,14 +196,18 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 		}
 
 		await _identity.HoldAsync(signedIn, cancellationToken).ConfigureAwait(false);
-		await FetchDirectoryAsync(signedIn.RefreshToken, cancellationToken).ConfigureAwait(false);
+
+		// The member's name is learnt from the directory after the sign-in, not during it:
+		// asking WordPress here held every sign-in up by a second for a name nothing needs
+		// yet. See MessageService.LearnNamesAsync. Forgotten here, because a name kept from
+		// an earlier sign-in could be somebody else's.
+		_ownName = null;
 
 		return EnrolmentResult.Ok(new DeviceSession
 		{
 			Token = signedIn.RefreshToken,
 			FirebaseDeviceId = deviceId,
 			MemberId = FirebaseHttp.Number(answer, "memberId"),
-			MemberName = _ownName ?? string.Empty,
 		});
 	}
 
