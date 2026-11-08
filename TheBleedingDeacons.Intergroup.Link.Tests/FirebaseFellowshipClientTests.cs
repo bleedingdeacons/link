@@ -23,6 +23,8 @@ public sealed class FirebaseFellowshipClientTests
 	private const string DeviceId = "d_abc";
 	private const long MemberId = 7;
 	private const long MessageId = 1_835_000_000_000L * 1024;
+	private const string MemberAttestation = "member-attestation";
+	private const string AudienceAttestation = "audience-attestation";
 
 	private static readonly string IdToken = Jwt(DeviceId, MemberId);
 
@@ -57,6 +59,10 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal("Pixel", data.GetProperty("label").GetString());
 		Assert.False(data.TryGetProperty("pushToken", out _));
 
+		// The site vouched for the sign-in, and the Function is shown that.
+		Assert.Equal(["google-identity"], _site.MemberAskedWith);
+		Assert.Equal(MemberAttestation, data.GetProperty("attestation").GetString());
+
 		// The directory isn't asked during the sign-in: it held every sign-in up, and
 		// the name is learnt straight afterwards instead.
 		Assert.Empty(_site.DirectoryAskedWith);
@@ -85,6 +91,7 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal("ios", data.GetProperty("platform").GetString());
 		Assert.Equal("New phone", data.GetProperty("label").GetString());
 		Assert.Equal("push", data.GetProperty("pushToken").GetString());
+		Assert.Equal(MemberAttestation, data.GetProperty("attestation").GetString());
 	}
 
 	[Fact]
@@ -117,7 +124,42 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal("Bearer google-identity", enrol.Authorization);
 
 		// Its own new key, not the backup's.
-		Assert.Equal("new-spki", JsonDocument.Parse(enrol.Body).RootElement.GetProperty("data").GetProperty("publicKey").GetString());
+		var data = JsonDocument.Parse(enrol.Body).RootElement.GetProperty("data");
+		Assert.Equal("new-spki", data.GetProperty("publicKey").GetString());
+
+		// The same statement, asked for once, carried to both.
+		Assert.Single(_site.MemberAskedWith);
+		Assert.Equal(MemberAttestation, data.GetProperty("attestation").GetString());
+		Assert.Equal(
+			MemberAttestation,
+			JsonDocument.Parse(_google.Only("/takeOverDevice").Body).RootElement.GetProperty("data").GetProperty("attestation").GetString());
+	}
+
+	[Fact]
+	public async Task ASiteThatWillNotVouchStopsTheSignInWithItsOwnWords()
+	{
+		_google.Enrols();
+		_site.MemberAnswer = Attestation.Refused("That address does not match a member record.");
+
+		var result = await Client().EnrolAsync(TakingOver());
+
+		Assert.False(result.Succeeded);
+		Assert.Equal("That address does not match a member record.", result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/takeOverDevice", StringComparison.Ordinal));
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/enrol", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task ASiteThatCanNotBeReachedDuringSignInSaysSo()
+	{
+		_google.Enrols();
+		_site.MemberAnswer = Attestation.NotReached("Could not reach the intergroup. Check your connection and try again.");
+
+		var result = await Client().EnrolAsync(new EnrolmentRequest { FirebaseToken = "google-identity", PublicKey = "spki", Platform = "android" });
+
+		Assert.False(result.Succeeded);
+		Assert.Contains("Could not reach the intergroup", result.Error, StringComparison.Ordinal);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/enrol", StringComparison.Ordinal));
 	}
 
 	[Fact]
@@ -220,6 +262,7 @@ public sealed class FirebaseFellowshipClientTests
 
 		Assert.True(result.Succeeded);
 		Assert.Equal("Bearer pw-identity", _google.Only("/enrol").Authorization);
+		Assert.Equal(["pw-identity"], _site.MemberAskedWith);
 
 		var carrying = _google.Requests.Where(r => r.Body.Contains("correct horse", StringComparison.Ordinal)).ToList();
 		Assert.Single(carrying);
@@ -628,6 +671,16 @@ public sealed class FirebaseFellowshipClientTests
 		Assert.Equal("steering", data.GetProperty("committees")[0].GetString());
 		Assert.True(data.GetProperty("gsrs").GetBoolean());
 
+		// The site vouched for the audience, asked as this device, and both Functions
+		// are shown that statement.
+		var (asked, audience) = Assert.Single(_site.AudienceAskedWith);
+		Assert.Equal(IdToken, asked);
+		Assert.Equal([8L, 9L], audience.MemberIds);
+		Assert.Equal(AudienceAttestation + "-1", data.GetProperty("attestation").GetString());
+		Assert.Equal(
+			AudienceAttestation + "-1",
+			JsonDocument.Parse(_google.Only("/resolveAudience").Body).RootElement.GetProperty("data").GetProperty("attestation").GetString());
+
 		var envelopes = data.GetProperty("envelopes");
 		Assert.Equal(2, envelopes.GetArrayLength());
 
@@ -673,6 +726,52 @@ public sealed class FirebaseFellowshipClientTests
 
 		Assert.True(result.Succeeded);
 		Assert.Equal(2, _google.Requests.Count(r => r.Url.EndsWith("/resolveAudience", StringComparison.Ordinal)));
+
+		// A fresh statement for the second go, carried to both its calls.
+		Assert.Equal(2, _site.AudienceAskedWith.Count);
+
+		string Carried(string function, int index) => JsonDocument.Parse(
+			_google.Requests.Where(r => r.Url.EndsWith(function, StringComparison.Ordinal)).ElementAt(index).Body)
+			.RootElement.GetProperty("data").GetProperty("attestation").GetString()!;
+
+		Assert.Equal(AudienceAttestation + "-1", Carried("/resolveAudience", 0));
+		Assert.Equal(AudienceAttestation + "-1", Carried("/sendMessage", 0));
+		Assert.Equal(AudienceAttestation + "-2", Carried("/resolveAudience", 1));
+		Assert.Equal(AudienceAttestation + "-2", Carried("/sendMessage", 1));
+	}
+
+	[Fact]
+	public async Task AnAudienceTheSiteWillNotVouchForIsRefusedInItsOwnWords()
+	{
+		using var sue = RSA.Create(Sealing.KeyBits);
+
+		_google.SignedIn();
+		_site.Directory = new FellowshipDirectory { Members = [new DirectoryMember { Id = MemberId, Name = "Dave B" }] };
+		_site.AudienceAnswer = Attestation.Refused("That committee does not take messages from Link.");
+		_google.Resolves(MessageId, ("d_sue", sue));
+		_google.Sends(MessageId);
+
+		var result = await Client().SendAsync(RefreshToken, new SendRequest { Subject = "s", Body = "b", Committees = ["steering"] });
+
+		Assert.Equal("That committee does not take messages from Link.", result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.EndsWith("/resolveAudience", StringComparison.Ordinal));
+		Assert.DoesNotContain(_google.Requests, r => r.Url.EndsWith("/sendMessage", StringComparison.Ordinal));
+	}
+
+	[Fact]
+	public async Task ASiteThatCanNotBeReachedWhileSendingSaysTheMessageWasNotSent()
+	{
+		using var sue = RSA.Create(Sealing.KeyBits);
+
+		_google.SignedIn();
+		_site.Directory = new FellowshipDirectory { Members = [new DirectoryMember { Id = MemberId, Name = "Dave B" }] };
+		_site.AudienceAnswer = Attestation.NotReached("Could not reach the intergroup. Check your connection and try again.");
+		_google.Resolves(MessageId, ("d_sue", sue));
+
+		var result = await Client().SendAsync(RefreshToken, new SendRequest { Subject = "s", Body = "b", MemberIds = [8] });
+
+		Assert.Equal("Could not reach the intergroup. The message has not been sent.", result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.EndsWith("/resolveAudience", StringComparison.Ordinal));
 	}
 
 	[Fact]
@@ -806,6 +905,21 @@ public sealed class FirebaseFellowshipClientTests
 		var data = JsonDocument.Parse(call.Body).RootElement.GetProperty("data");
 		Assert.Equal(DeviceId, data.GetProperty("deviceId").GetString());
 		Assert.Equal("new-key", data.GetProperty("publicKey").GetString());
+		Assert.Equal(["google-identity"], _site.MemberAskedWith);
+		Assert.Equal(MemberAttestation, data.GetProperty("attestation").GetString());
+	}
+
+	[Fact]
+	public async Task AKeyIsNotReplacedWithoutTheSiteVouching()
+	{
+		_google.SignedIn();
+		_google.Routes["/replaceKey"] = _ => FakeGoogle.Json($$$$$$"""{"result":{"deviceId":"{{{{{{DeviceId}}}}}}"}}""");
+		_site.MemberAnswer = Attestation.Refused("Sign in as the member this phone belongs to.");
+
+		var result = await Client().RotateKeyAsync(RefreshToken, new RotateKeyRequest { FirebaseToken = "google-identity", PublicKey = "new-key" });
+
+		Assert.Equal("Sign in as the member this phone belongs to.", result.Error);
+		Assert.DoesNotContain(_google.Requests, r => r.Url.Contains("/replaceKey", StringComparison.Ordinal));
 	}
 
 	[Fact]
@@ -1102,5 +1216,31 @@ public sealed class FirebaseFellowshipClientTests
 
 		public Task<PasswordSetResult> SetPasswordAsync(string code, string password, CancellationToken cancellationToken = default) =>
 			Task.FromResult(PasswordSetResult.Ok());
+
+		/// <summary>What the site answers a member attestation with. Vouches by default.</summary>
+		public Attestation MemberAnswer { get; set; } = Attestation.Ok(MemberAttestation);
+
+		/// <summary>What the site answers an audience attestation with; null numbers each one it vouches for.</summary>
+		public Attestation? AudienceAnswer { get; set; }
+
+		/// <summary>The identity token each member attestation was asked with.</summary>
+		public List<string> MemberAskedWith { get; } = [];
+
+		/// <summary>The device token and audience each audience attestation was asked with.</summary>
+		public List<(string Token, SendRequest Audience)> AudienceAskedWith { get; } = [];
+
+		public Task<Attestation> AttestMemberAsync(string identityToken, CancellationToken cancellationToken = default)
+		{
+			MemberAskedWith.Add(identityToken);
+
+			return Task.FromResult(MemberAnswer);
+		}
+
+		public Task<Attestation> AttestAudienceAsync(string deviceToken, SendRequest audience, CancellationToken cancellationToken = default)
+		{
+			AudienceAskedWith.Add((deviceToken, audience));
+
+			return Task.FromResult(AudienceAnswer ?? Attestation.Ok($"{AudienceAttestation}-{AudienceAskedWith.Count}"));
+		}
 	}
 }

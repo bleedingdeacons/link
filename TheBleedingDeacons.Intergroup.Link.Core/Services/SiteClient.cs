@@ -102,6 +102,75 @@ public sealed class SiteClient : ISiteClient
 		}
 	}
 
+	public Task<Attestation> AttestMemberAsync(string identityToken, CancellationToken cancellationToken = default) =>
+		AttestAsync(
+			"attest/member",
+			identityToken,
+			new Dictionary<string, object>(StringComparer.Ordinal),
+			"Your membership could not be confirmed. Please try again.",
+			cancellationToken);
+
+	public Task<Attestation> AttestAudienceAsync(string deviceToken, SendRequest audience, CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(audience);
+
+		// The audience alone, in the shape the Functions are given it. The subject and
+		// body are still unsealed here, and the site has no business seeing them.
+		var body = new Dictionary<string, object>(StringComparer.Ordinal);
+
+		if (audience.MemberIds.Count > 0)
+		{
+			body["memberIds"] = audience.MemberIds;
+		}
+
+		if (audience.Committees.Count > 0)
+		{
+			body["committees"] = audience.Committees;
+		}
+
+		if (audience.AllGsrs)
+		{
+			body["gsrs"] = true;
+		}
+
+		return AttestAsync("attest/audience", deviceToken, body, "The message could not be sent.", cancellationToken);
+	}
+
+	/// <summary>Ask for a statement, and read either it or the site's words.</summary>
+	private async Task<Attestation> AttestAsync(
+		string route,
+		string bearer,
+		object body,
+		string otherwise,
+		CancellationToken cancellationToken)
+	{
+		using var response = await PostAsync(route, body, cancellationToken, bearer).ConfigureAwait(false);
+		if (response is null)
+		{
+			return Attestation.NotReached("Could not reach the intergroup. Check your connection and try again.");
+		}
+
+		var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
+		var answer = json is { ValueKind: JsonValueKind.Object } read ? read : (JsonElement?)null;
+
+		if (response.IsSuccessStatusCode)
+		{
+			var token = answer is null ? string.Empty : Text(answer.Value, "attestation");
+			if (token.Length > 0)
+			{
+				return Attestation.Ok(token);
+			}
+
+			Log.Warning("POST {Route} answered with no attestation", route);
+		}
+
+		// WordPress's own refusal, written to be read by a member: not a member, a
+		// committee that can't be sent to, nobody to send to.
+		var message = answer is null ? string.Empty : Text(answer.Value, "message");
+
+		return Attestation.Refused(message.Length > 0 ? message : otherwise);
+	}
+
 	private static FellowshipDirectory Parse(JsonElement json)
 	{
 		var members = new List<DirectoryMember>();
@@ -161,7 +230,11 @@ public sealed class SiteClient : ISiteClient
 		};
 	}
 
-	private async Task<HttpResponseMessage?> PostAsync(string route, object body, CancellationToken cancellationToken)
+	private async Task<HttpResponseMessage?> PostAsync(
+		string route,
+		object body,
+		CancellationToken cancellationToken,
+		string? bearer = null)
 	{
 		try
 		{
@@ -169,6 +242,11 @@ public sealed class SiteClient : ISiteClient
 			{
 				Content = JsonContent.Create(body, options: JsonOptions),
 			};
+
+			if (!string.IsNullOrEmpty(bearer))
+			{
+				request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+			}
 
 			// Not disposed here: the caller reads the body and disposes it.
 			var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);

@@ -21,8 +21,10 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// until revoked, so it goes only to Google. Anything else gets a short-lived ID token.</para>
 ///
 /// <para><b>The member list stays in WordPress.</b> So the directory, the password check and
-/// setting a password all go to the site, and sending fails if WordPress is down because a
-/// Function has to ask it who a message reaches. Receiving doesn't touch WordPress at all.</para>
+/// setting a password all go to the site. The Functions can't ask WordPress anything, because
+/// its host turns away Google's servers, so the phone asks the site to vouch for a member or an
+/// audience and carries that signed statement to the Function. Signing in and sending therefore
+/// fail if WordPress is down. Receiving doesn't touch WordPress at all.</para>
 ///
 /// <para><b>What the server no longer knows.</b> Messages are sealed on the phone, so unread
 /// counts and read state can't come from it: <see cref="InboxPage.Unread"/> is always 0,
@@ -139,10 +141,19 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 			return EnrolmentResult.Failed(refusal);
 		}
 
+		// Asked once and carried to both calls below: a takeover refused for its own
+		// reasons enrols as new with the same sign-in and the same statement.
+		var attestation = await _site.AttestMemberAsync(identity, cancellationToken).ConfigureAwait(false);
+		if (!attestation.Succeeded)
+		{
+			return EnrolmentResult.Failed(attestation.Error);
+		}
+
 		var data = new Dictionary<string, object>(StringComparer.Ordinal)
 		{
 			["publicKey"] = request.PublicKey,
 			["platform"] = request.Platform,
+			["attestation"] = attestation.Token,
 		};
 
 		AddIfPresent(data, "label", request.Label);
@@ -422,7 +433,18 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 
 		for (var attempt = 0; attempt < SendAttempts; attempt++)
 		{
-			var resolved = await CallAsync("resolveAudience", user.IdToken, Audience(request), cancellationToken).ConfigureAwait(false);
+			// Asked afresh on every attempt: a stale audience means who it reaches has
+			// changed, and the site has to vouch for the audience as it is now.
+			var attestation = await _site.AttestAudienceAsync(user.IdToken, request, cancellationToken).ConfigureAwait(false);
+			if (!attestation.Succeeded)
+			{
+				return SendResult.Failed(attestation.Arrived ? attestation.Error : NotReached);
+			}
+
+			var asked = Audience(request);
+			asked["attestation"] = attestation.Token;
+
+			var resolved = await CallAsync("resolveAudience", user.IdToken, asked, cancellationToken).ConfigureAwait(false);
 			if (!resolved.Succeeded)
 			{
 				return SendResult.Failed(resolved.Words(resolved.Arrived ? "The message could not be sent." : NotReached));
@@ -447,6 +469,7 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 			var data = Audience(request);
 			data["id"] = id;
 			data["envelopes"] = envelopes.Sealed;
+			data["attestation"] = attestation.Token;
 
 			var sent = await CallAsync("sendMessage", user.IdToken, data, cancellationToken).ConfigureAwait(false);
 
@@ -518,10 +541,17 @@ public sealed class FirebaseFellowshipClient : IFellowshipClient
 			return RotateKeyResult.Failed(refusal);
 		}
 
+		var attestation = await _site.AttestMemberAsync(identity, cancellationToken).ConfigureAwait(false);
+		if (!attestation.Succeeded)
+		{
+			return RotateKeyResult.Failed(attestation.Error);
+		}
+
 		var data = new Dictionary<string, object>(StringComparer.Ordinal)
 		{
 			["deviceId"] = user.DeviceId,
 			["publicKey"] = request.PublicKey,
+			["attestation"] = attestation.Token,
 		};
 
 		var replaced = await CallAsync("replaceKey", identity, data, cancellationToken).ConfigureAwait(false);
