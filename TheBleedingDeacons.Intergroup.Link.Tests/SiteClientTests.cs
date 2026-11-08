@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using TheBleedingDeacons.Intergroup.Link.Models;
 using TheBleedingDeacons.Intergroup.Link.Services;
+using TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 
 using Xunit;
 
@@ -138,6 +139,92 @@ public sealed class SiteClientTests
 		Assert.Contains("Could not reach", result.Error, StringComparison.Ordinal);
 	}
 
+	[Fact]
+	public async Task AMemberIsVouchedForOnTheStrengthOfTheirSignIn()
+	{
+		var handler = new Stub(HttpStatusCode.OK, """{"attestation":"signed.member.statement"}""");
+
+		var attestation = await Client(handler).AttestMemberAsync("identity-token");
+
+		Assert.True(attestation.Succeeded);
+		Assert.Equal("signed.member.statement", attestation.Token);
+		Assert.Equal("POST", handler.Method);
+		Assert.Equal("https://aa-bristol.org/amber/wp-json/fellowship/v1/attest/member", handler.Url);
+		Assert.Equal("Bearer identity-token", handler.Authorization);
+	}
+
+	[Fact]
+	public async Task OnlyTheAudienceIsSentToBeVouchedFor()
+	{
+		var handler = new Stub(HttpStatusCode.OK, """{"attestation":"signed.audience.statement"}""");
+
+		var attestation = await Client(handler).AttestAudienceAsync("device-token", new SendRequest
+		{
+			Subject = "Secret subject",
+			Body = "Secret body",
+			MemberIds = [8, 9],
+			Committees = ["steering"],
+			AllGsrs = true,
+		});
+
+		Assert.Equal("signed.audience.statement", attestation.Token);
+		Assert.Equal("https://aa-bristol.org/amber/wp-json/fellowship/v1/attest/audience", handler.Url);
+		Assert.Equal("Bearer device-token", handler.Authorization);
+
+		var body = System.Text.Json.JsonDocument.Parse(handler.Body).RootElement;
+		Assert.Equal(8, body.GetProperty("memberIds")[0].GetInt64());
+		Assert.Equal(9, body.GetProperty("memberIds")[1].GetInt64());
+		Assert.Equal("steering", body.GetProperty("committees")[0].GetString());
+		Assert.True(body.GetProperty("gsrs").GetBoolean());
+		Assert.DoesNotContain("Secret", handler.Body, StringComparison.Ordinal);
+	}
+
+	[Fact]
+	public async Task AnAudienceLeavesOutWhatItDoesNotAddress()
+	{
+		var handler = new Stub(HttpStatusCode.OK, """{"attestation":"a"}""");
+
+		await Client(handler).AttestAudienceAsync("t", new SendRequest { Subject = "s", Body = "b", MemberIds = [8] });
+
+		Assert.Equal("""{"memberIds":[8]}""", handler.Body);
+	}
+
+	[Theory]
+	[InlineData(HttpStatusCode.Forbidden, """{"code":"fellowship_not_a_member","message":"That address does not match a member record.","data":{"status":403}}""", "That address does not match a member record.")]
+	[InlineData(HttpStatusCode.Forbidden, "<html>blocked</html>", "Your membership could not be confirmed. Please try again.")]
+	[InlineData(HttpStatusCode.OK, "{}", "Your membership could not be confirmed. Please try again.")]
+	[InlineData(HttpStatusCode.OK, "not json", "Your membership could not be confirmed. Please try again.")]
+	public async Task AMemberTheSiteWillNotVouchForGetsTheSitesWords(HttpStatusCode status, string body, string expected)
+	{
+		var attestation = await Client(new Stub(status, body)).AttestMemberAsync("t");
+
+		Assert.False(attestation.Succeeded);
+		Assert.True(attestation.Arrived);
+		Assert.Equal(expected, attestation.Error);
+	}
+
+	[Theory]
+	[InlineData("""{"code":"fellowship_committee_send_disabled","message":"That committee does not take messages from Link.","data":{"status":403}}""", "That committee does not take messages from Link.")]
+	[InlineData("""{"code":"fellowship_no_recipients"}""", "The message could not be sent.")]
+	public async Task AnAudienceTheSiteWillNotVouchForGetsTheSitesWords(string body, string expected)
+	{
+		var attestation = await Client(new Stub(HttpStatusCode.Forbidden, body))
+			.AttestAudienceAsync("t", new SendRequest { Subject = "s", Body = "b", Committees = ["steering"] });
+
+		Assert.False(attestation.Succeeded);
+		Assert.Equal(expected, attestation.Error);
+	}
+
+	[Fact]
+	public async Task NoNetworkWhileAskingToBeVouchedForSaysSo()
+	{
+		var attestation = await Client(new Stub(new HttpRequestException("offline"))).AttestMemberAsync("t");
+
+		Assert.False(attestation.Succeeded);
+		Assert.False(attestation.Arrived);
+		Assert.Contains("Could not reach the intergroup", attestation.Error, StringComparison.Ordinal);
+	}
+
 	private static SiteClient Client(HttpMessageHandler handler) => new(new HttpClient(handler), Config);
 
 	private sealed class Stub : HttpMessageHandler
@@ -158,6 +245,8 @@ public sealed class SiteClientTests
 			_body = string.Empty;
 		}
 
+		public string Method { get; private set; } = string.Empty;
+
 		public string Url { get; private set; } = string.Empty;
 
 		public string Authorization { get; private set; } = string.Empty;
@@ -171,6 +260,7 @@ public sealed class SiteClientTests
 				throw _throws;
 			}
 
+			Method = request.Method.Method;
 			Url = request.RequestUri!.ToString();
 			Authorization = request.Headers.Authorization?.ToString() ?? string.Empty;
 
