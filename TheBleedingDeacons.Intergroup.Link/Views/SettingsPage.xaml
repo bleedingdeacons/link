@@ -366,24 +366,25 @@
 			</VerticalStackLayout>
 
 			<!--
-				The build, last and quiet, exactly as Hand shows it. It is the
-				first thing asked for when a handset misbehaves, and the last
-				thing anybody wants to read otherwise.
+				The build, last, at the same size and fade as on the sign-in
+				page: footnote size, lightly faded. It is the first thing
+				asked for when a handset misbehaves, and the member has to
+				read it out to somebody.
 			-->
 			<Label Text="{Binding Build}"
 			       Margin="0,16,0,0"
-			       FontSize="{StaticResource SmallestFontSize}"
-			       Opacity="0.5"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.7"
 			       HorizontalOptions="Center" />
 
 			<!--
 				When the site's settings for this handset were last retrieved,
-				under the build and just as quiet: a value changed on the site
+				under the build and set the same: a value changed on the site
 				arrives on the next start, so the question is when that was.
 			-->
 			<Label Text="{Binding ConfigRetrieved}"
-			       FontSize="{StaticResource SmallestFontSize}"
-			       Opacity="0.5"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.7"
 			       HorizontalOptions="Center" />
 
 		</VerticalStackLayout>
