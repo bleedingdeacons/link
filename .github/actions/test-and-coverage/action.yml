@@ -1,0 +1,77 @@
+name: Test & coverage
+description: >-
+  Run the xUnit suite over Link.Core with Coverlet coverage, run the Reqnroll
+  specification, and upload the coverage to Coveralls. Needs a checkout and
+  the .NET SDK already set up; nothing else. Used by ci.yml's Android job
+  when it is the only head being built, and by its test job when iOS is
+  built too - one copy of the steps, so the two cannot drift.
+
+inputs:
+  github-token:
+    description: The workflow's GITHUB_TOKEN, which authenticates the Coveralls upload.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Restore local tools (coverlet.console)
+      shell: bash
+      run: dotnet tool restore
+
+    # No MAUI workload and no JDK needed: Link.Core and its test project are
+    # plain net10.0. Building the test project pulls Link.Core in with it.
+    - name: Build tests
+      shell: bash
+      run: >
+        dotnet build TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj
+        -c Debug
+
+    # xUnit v3 runs on Microsoft.Testing.Platform, so the test project is an
+    # executable. coverlet.console instruments Link.Core and runs that test
+    # host, producing a Cobertura report. (coverlet's collector / msbuild
+    # integrations hook VSTest, which MTP does not use - hence the tool.)
+    #
+    # --include narrows the report to Link.Core: the test assembly and the
+    # NuGet dependencies are not what this number is about. The app project
+    # is not in it either, because nothing can reference it - that is what
+    # the split is for, and what the README says the badge covers.
+    #
+    # --exclude-by-attribute Obsolete leaves deprecated code out of the
+    # figure. Writing tests for something already marked for removal would
+    # move the number without improving anything, and leaving it in would
+    # penalise the deprecation instead of the debt.
+    - name: Test with coverage
+      shell: bash
+      run: >
+        dotnet coverlet TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll
+        --target dotnet
+        --targetargs "TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll"
+        --format cobertura
+        --output coverage/coverage.cobertura.xml
+        --include "[TheBleedingDeacons.Intergroup.Link.Core]*"
+        --exclude-by-attribute Obsolete
+
+    # The Reqnroll suite over the same library, run as its own step rather
+    # than folded into the coverage run above. Two reasons: it is a gate in
+    # its own right and should say so in the log when it is what broke, and
+    # the Coveralls figure goes on meaning what the README says it means -
+    # how well the xUnit suite covers Link.Core - rather than quietly
+    # changing the day the specs landed.
+    #
+    # Scenarios tagged @manual @ignore are on-device acceptance criteria.
+    # Reqnroll skips them; nothing here has to filter them out.
+    - name: Run the executable specification
+      shell: bash
+      run: >
+        dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
+        -c Debug
+
+    - name: Upload coverage to Coveralls
+      uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+      with:
+        # Public repo: the built-in GITHUB_TOKEN authenticates the upload,
+        # so no separate Coveralls token/secret is required.
+        github-token: ${{ inputs.github-token }}
+        file: coverage/coverage.cobertura.xml
+        format: cobertura
+        fail-on-error: false
