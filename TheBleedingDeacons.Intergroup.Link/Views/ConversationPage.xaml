@@ -134,17 +134,14 @@
 						<Grid ColumnDefinitions="*,*,*" ColumnSpacing="10" Margin="0,4,0,0">
 							<Button Grid.Column="0"
 							        Text="Reply"
-							        HeightRequest="44"
 							        Clicked="OnReplyClicked" />
 							<Button Grid.Column="1"
 							        Text="Forward"
-							        HeightRequest="44"
 							        Clicked="OnForwardClicked" />
 							<Button Grid.Column="2"
 							        Text="Delete"
 							        BackgroundColor="{StaticResource Warning}"
 							        TextColor="White"
-							        HeightRequest="44"
 							        Clicked="OnDeleteClicked" />
 						</Grid>
 
