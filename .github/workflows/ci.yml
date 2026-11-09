@@ -17,7 +17,10 @@ name: CI
 #               net10.0, which is the entire reason that split exists — see
 #               Link.Core's project file. The coverage figure covers the xUnit
 #               suite only, deliberately; the specs are a gate, not a
-#               contribution to the badge.
+#               contribution to the badge. A job of its own only when iOS
+#               is built too; on an Android-only run - every push to main
+#               and every unlabelled PR - the same steps run inside the
+#               build job instead, from .github/actions/test-and-coverage.
 #  * semgrep  — a job of its own rather than a step, because the other jobs
 #               install a JDK and the MAUI workload and Semgrep needs neither.
 #  * version  — bumps the version, and only after all three have passed.
@@ -235,6 +238,21 @@ jobs:
       # build and its upload roughly doubled this job, and nobody installed
       # the three-day link-apk artifact - a handset gets a local build or
       # Play's. The release job below still builds the APK it attaches.
+
+      # The tests, here rather than in a job of their own whenever Android
+      # is the only head being built - which is every push to main and every
+      # PR without the `ios` label (2026-11-09). A separate job paid for its
+      # own runner, checkout and .NET setup to do two minutes of work; this
+      # job already has all three. When iOS is built as well, the test job
+      # below runs them instead, so they still run once and only once. The
+      # condition is the ios job's own `if`, negated - keep the two in step.
+      - name: Test & coverage
+        if: >-
+          ${{ !((github.event_name == 'workflow_dispatch' && inputs.ios)
+          || contains(github.event.pull_request.labels.*.name, 'ios')) }}
+        uses: ./.github/actions/test-and-coverage
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   ios:
     name: Build & archive (net10.0-ios)
@@ -531,6 +549,14 @@ jobs:
     name: Test & coverage
     runs-on: ubuntu-latest
 
+    # Only when iOS is built too. On an Android-only run the build job runs
+    # these same steps itself (see its Test & coverage step), and the
+    # version job accepts this job being skipped for that reason. The
+    # condition is the ios job's own `if` - keep the two in step.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.ios)
+      || contains(github.event.pull_request.labels.*.name, 'ios')
+
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -540,63 +566,10 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Restore local tools (coverlet.console)
-        run: dotnet tool restore
-
-      # No MAUI workload and no JDK: Link.Core and its test project are plain
-      # net10.0. Building the test project pulls Link.Core in with it.
-      - name: Build tests
-        run: >
-          dotnet build TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj
-          -c Debug
-
-      # xUnit v3 runs on Microsoft.Testing.Platform, so the test project is an
-      # executable. coverlet.console instruments Link.Core and runs that test
-      # host, producing a Cobertura report. (coverlet's collector / msbuild
-      # integrations hook VSTest, which MTP does not use — hence the tool.)
-      #
-      # --include narrows the report to Link.Core: the test assembly and the
-      # NuGet dependencies are not what this number is about. The app project
-      # is not in it either, because nothing can reference it — that is what
-      # the split is for, and what the README says the badge covers.
-      #
-      # --exclude-by-attribute Obsolete leaves deprecated code out of the
-      # figure. Writing tests for something already marked for removal would
-      # move the number without improving anything, and leaving it in would
-      # penalise the deprecation instead of the debt.
-      - name: Test with coverage
-        run: >
-          dotnet coverlet TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll
-          --target dotnet
-          --targetargs "TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll"
-          --format cobertura
-          --output coverage/coverage.cobertura.xml
-          --include "[TheBleedingDeacons.Intergroup.Link.Core]*"
-          --exclude-by-attribute Obsolete
-
-      # The Reqnroll suite over the same library, run as its own step rather
-      # than folded into the coverage run above. Two reasons: it is a gate in
-      # its own right and should say so in the log when it is what broke, and
-      # the Coveralls figure goes on meaning what the README says it means —
-      # how well the xUnit suite covers Link.Core — rather than quietly
-      # changing the day the specs landed.
-      #
-      # Scenarios tagged @manual @ignore are on-device acceptance criteria.
-      # Reqnroll skips them; nothing here has to filter them out.
-      - name: Run the executable specification
-        run: >
-          dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
-          -c Debug
-
-      - name: Upload coverage to Coveralls
-        uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
+      - name: Test & coverage
+        uses: ./.github/actions/test-and-coverage
         with:
-          # Public repo: the built-in GITHUB_TOKEN authenticates the upload,
-          # so no separate Coveralls token/secret is required.
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          file: coverage/coverage.cobertura.xml
-          format: cobertura
-          fail-on-error: false
 
   semgrep:
     name: Semgrep
@@ -653,13 +626,15 @@ jobs:
     # Every gate is named explicitly rather than left to `needs:` alone,
     # because a skipped dependency would otherwise silently end releasing.
     # iOS is built only on request (2026-09-30), so it must not fail —
-    # skipped is fine.
+    # skipped is fine. The test job is skipped whenever iOS is, because the
+    # build job ran the tests itself; a green build then covers them, so
+    # skipped is fine there too.
     if: >-
       ${{ !cancelled()
       && github.ref == 'refs/heads/main'
       && github.event_name == 'push'
       && needs.build.result == 'success'
-      && needs.test.result == 'success'
+      && (needs.test.result == 'success' || needs.test.result == 'skipped')
       && needs.semgrep.result == 'success'
       && needs.ios.result != 'failure' }}
 
