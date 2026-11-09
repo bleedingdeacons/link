@@ -24,12 +24,12 @@
 	<ScrollView x:Name="Scroller">
 		<VerticalStackLayout Padding="24,40" Spacing="16">
 
-			<Label Text="Link"
+			<Label Text="Fellowship Link"
 			       FontSize="{StaticResource DisplayFontSize}"
 			       FontAttributes="Bold"
 			       HorizontalOptions="Center" />
 
-			<Label Text="Messages from your intergroup, and to the members and committees in it."
+			<Label Text="Messages from intergroup, and to the fellows and committees in it."
 			       FontSize="{StaticResource SecondaryFontSize}"
 			       Opacity="0.7"
 			       HorizontalTextAlignment="Center"
@@ -241,22 +241,24 @@
 			</VerticalStackLayout>
 
 			<!--
-				The build, last and quiet, as Settings shows it, and the
-				site it signs in to under it. Settings is out of reach until
-				a member is signed in, and "which version have you got?" is
-				the first question for one who cannot be.
+				The build, last, and the site it signs in to under it.
+				Settings is out of reach until a member is signed in, and
+				"which version have you got?" is the first question for one
+				who cannot be - so here it is footnote size rather than the
+				smallest, and only lightly faded: the member has to read it
+				out to somebody.
 			-->
 			<Label Text="{Binding Build}"
 			       Margin="0,24,0,0"
-			       FontSize="{StaticResource SmallestFontSize}"
-			       Opacity="0.5"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.7"
 			       HorizontalTextAlignment="Center"
 			       HorizontalOptions="Center" />
 
 			<Label Text="{Binding Server}"
 			       IsVisible="{Binding IsConfigured}"
-			       FontSize="{StaticResource SmallestFontSize}"
-			       Opacity="0.5"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.7"
 			       HorizontalTextAlignment="Center"
 			       HorizontalOptions="Center" />
 
