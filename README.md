@@ -756,8 +756,9 @@ first time.
 
 ### What CI produces
 
-`link-apk` on every run, kept for 3 days. The storage is why: a private
-repository on the Free plan gets 500 MB. Releases do not expire.
+**No APK on an ordinary run**, from 2026-11-09: building and uploading
+one roughly doubled the Android job, and nobody installed it. Each release
+still carries one, and releases do not expire.
 
 **`link-ipa-unsigned` only when asked for**, from 2026-09-30: dispatch the
 workflow with `ios` ticked, or put the `ios` label on a pull request.
@@ -767,7 +768,7 @@ gh workflow run ci.yml -R bleedingdeacons/link --ref <branch> -f ios=true
 gh pr edit <n> -R bleedingdeacons/link --add-label ios
 ```
 
-When it runs, it builds in parallel with the APK, and the release job waits
+When it runs, it builds in parallel with the Android job, and the release job waits
 for it and is stopped if it fails; when it is not asked for, releases go out
 without it. The iOS job runs on **GitHub's own `macos-26` by default** — free on this
 public repository, and around eleven minutes once a runner picks it up.

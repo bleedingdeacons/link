@@ -6,7 +6,8 @@ name: CI
 #  * build    — compile the Android head and run the StyleCop / Meziantou /
 #               Sonar analyzers. Rules escalated to "error" in .editorconfig
 #               fail the build, so this is a real quality gate rather than a
-#               compile check. Then builds a Release APK and uploads it.
+#               compile check. It builds no APK; the version job builds
+#               the one it attaches to the release.
 #  * ios      — the same for the iOS head, on macOS because nothing else can
 #               build one, and archives an unsigned .ipa.
 #  * test     — run the xUnit v3 suite over Link.Core (the MAUI-free half of
@@ -35,7 +36,7 @@ name: CI
 #    Program membership, a distribution certificate and a provisioning
 #    profile, none of which exist. It is a compile gate and a re-signable
 #    input, and it installs on nothing as it stands.
-#  * The APK is signed with the runner's throwaway debug keystore, which is
+#  * The release's APK is signed with the runner's throwaway debug keystore, which is
 #    generated fresh and is not the one on any developer machine. It will
 #    therefore refuse to install over a locally built Link with
 #    INSTALL_FAILED_UPDATE_INCOMPATIBLE, and getting past that means
@@ -230,33 +231,10 @@ jobs:
           -p:LinkAndroidOnly=true
           -p:ContinuousIntegrationBuild=true
 
-      # A separate Release build rather than uploading the Debug output.
-      # Debug means Fast Deployment, which leaves the managed assemblies out
-      # of the APK unless EmbedAssembliesIntoApk is forced — an artifact that
-      # installs, launches and immediately aborts. Release embeds them by
-      # default and strips to one ABI (see the csproj), so it is both correct
-      # and a third the size.
-      - name: Build the APK
-        run: >
-          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
-          -c Release
-          -p:LinkAndroidOnly=true
-          -p:ContinuousIntegrationBuild=true
-
-      # -Signed.apk is the one to keep: .NET Android emits an unsigned
-      # intermediate alongside it, and uploading both would leave whoever
-      # downloads them to guess.
-      - name: Upload the APK
-        # Three days, because a private repository on the Free plan stores 500 MB
-        # of artifacts. An APK is about 20 MB on every run, and the release job
-        # rebuilds its own, so a full quota must not fail the build either.
-        continue-on-error: true
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: link-apk
-          path: TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-android/*-Signed.apk
-          if-no-files-found: error
-          retention-days: 3
+      # No APK is built or uploaded here any more (2026-11-09): the Release
+      # build and its upload roughly doubled this job, and nobody installed
+      # the three-day link-apk artifact - a handset gets a local build or
+      # Play's. The release job below still builds the APK it attaches.
 
   ios:
     name: Build & archive (net10.0-ios)
