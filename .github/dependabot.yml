@@ -28,6 +28,20 @@
 
 version: 2
 
+# The bleedingdeacons feed on GitHub Packages, where Inventory and
+# Freedom.Client come from (see nuget.config). It wants a token even for a
+# public package, and Dependabot does not read nuget.config's credentials:
+# without this its NuGet run got a 403 on every first-party package and
+# failed outright (2026-11-10). PACKAGES_READ_TOKEN is the Dependabot secret
+# - a classic PAT with read:packages, the same token CI restores with. The
+# username is not checked; it only has to be non-empty.
+registries:
+  bleedingdeacons:
+    type: nuget-feed
+    url: https://nuget.pkg.github.com/bleedingdeacons/index.json
+    username: bleedingdeacons
+    password: ${{secrets.PACKAGES_READ_TOKEN}}
+
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -50,6 +64,8 @@ updates:
 
   - package-ecosystem: "nuget"
     directory: "/"
+    registries:
+      - bleedingdeacons
     schedule:
       interval: "monthly"
     cooldown:
