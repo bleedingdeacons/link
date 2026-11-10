@@ -748,6 +748,7 @@ jobs:
       # Only now, with the build and the tests green, does anything leave
       # the runner.
       - name: Commit the new version
+        id: commit
         if: steps.bump.outputs.changed == 'true'
         run: |
           git config user.name  "github-actions[bot]"
@@ -794,9 +795,33 @@ jobs:
               git rebase --abort || true
               exit 1
             fi
+            # Main moved, so HEAD is no longer the tree built and tested
+            # above. Say so, and the steps below build and test it again
+            # before anything is tagged or published.
+            echo "rebased=true" >> "$GITHUB_OUTPUT"
           done
           echo "Could not push the version commit after 3 attempts." >&2
           exit 1
+
+      # Only when the push above had to rebase. The build and the tests
+      # earlier in this job ran on the tree as it was before main moved;
+      # the tag goes on HEAD, which now carries whatever landed meanwhile.
+      # Without this, the release's APK would be older code than the tag it
+      # is attached to (caught in review on #109). Rare - it needs a merge
+      # during the few minutes this job runs - so it costs nothing usually.
+      - name: Rebuild after main moved
+        if: steps.commit.outputs.rebased == 'true'
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Release
+          -p:LinkAndroidOnly=true
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Retest after main moved
+        if: steps.commit.outputs.rebased == 'true'
+        uses: ./.github/actions/test-and-coverage
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The tag is not decoration: it is how bump-version.sh knows whether
       # anything has shipped, which is what lets the first release keep the
