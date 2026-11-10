@@ -6,8 +6,8 @@ name: CI
 #  * build    — compile the Android head and run the StyleCop / Meziantou /
 #               Sonar analyzers. Rules escalated to "error" in .editorconfig
 #               fail the build, so this is a real quality gate rather than a
-#               compile check. It builds no APK; the version job builds
-#               the one it attaches to the release.
+#               compile check. Pull requests and dispatches only: on a push
+#               to main the version job's release build is the analysis.
 #  * ios      — the same for the iOS head, on macOS because nothing else can
 #               build one, and archives an unsigned .ipa.
 #  * test     — run the xUnit v3 suite over Link.Core (the MAUI-free half of
@@ -23,7 +23,10 @@ name: CI
 #               build job instead, from .github/actions/test-and-coverage.
 #  * semgrep  — a job of its own rather than a step, because the other jobs
 #               install a JDK and the MAUI workload and Semgrep needs neither.
-#  * version  — bumps the version, and only after all three have passed.
+#  * version  — main only. Builds the Android head once, in Release and
+#               at the bumped version, which runs the same analyzers; runs
+#               the tests; and only when both pass, pushes the version,
+#               tags it and publishes the release with that build's APK.
 #
 # <b>Both heads are built, and both produce something installable-shaped.</b>
 # This file used to say there was no iOS job because there was no iOS head;
@@ -131,6 +134,12 @@ env:
 jobs:
   build:
     name: Build & analyze (net10.0-android)
+
+    # Not on a push to main (2026-11-10). There the version job builds the
+    # app once, in Release and at the bumped version, and that build runs
+    # the same analyzers - so building it here first as well only doubled
+    # the time from merge to release.
+    if: github.event_name != 'push'
 
     # GitHub-hosted, unlike the iOS job below, and x64 on purpose.
     # Namespace was tried here on 2026-09-24 and the Android head cannot
@@ -268,8 +277,8 @@ jobs:
     # batches rather than on the commit that caused it — which is exactly
     # what happened next: a workload update made every iOS build fail on
     # 2026-09-30, and it surfaced only because this job ran. That is the
-    # trade being made again, knowingly. The version job no longer waits
-    # for iOS, but a requested iOS build that fails still stops a release.
+    # trade being made again, knowingly. It never runs on a push to main,
+    # so it never holds up a release.
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.ios)
       || contains(github.event.pull_request.labels.*.name, 'ios')
@@ -550,9 +559,9 @@ jobs:
     runs-on: ubuntu-latest
 
     # Only when iOS is built too. On an Android-only run the build job runs
-    # these same steps itself (see its Test & coverage step), and the
-    # version job accepts this job being skipped for that reason. The
-    # condition is the ios job's own `if` - keep the two in step.
+    # these same steps itself (see its Test & coverage step); on a push to
+    # main the version job does. The condition is the ios job's own `if` -
+    # keep the two in step.
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.ios)
       || contains(github.event.pull_request.labels.*.name, 'ios')
@@ -608,35 +617,26 @@ jobs:
 
   version:
     name: Bump version & publish the release
-    # The whole point of this change: the bump now waits on every gate. Before,
-    # this lived in its own workflow triggered by `push` with no `needs:` at
-    # all, so a version was cut whether or not the build, the tests or Semgrep
-    # had passed. `needs:` makes a version something only green code gets.
+    # The release, and on main the gate as well. Until 2026-11-10 the build
+    # job compiled and analysed the app in Debug, then this job built it all
+    # over again in Release for the APK. Now this job is the only build on a
+    # push to main: Release, after the bump, with the analyzers running as
+    # part of it, followed by the tests. Nothing is pushed, tagged or
+    # published until both have passed, so a version is still something only
+    # green code gets.
     #
-    # `ios` stays in `needs` so a requested iOS build is waited for, but it
-    # is only required not to *fail* (see the `if` below): a push to main
-    # does not build iOS, and a skipped head must not stop an Android
-    # release. A compile error in Link.Core still stops one through the
-    # Android build and the tests.
-    needs: [build, ios, test, semgrep]
+    # Semgrep stays a job of its own and is waited for. The build, test and
+    # ios jobs never run on a push to main, so there is nothing to wait for
+    # from them.
+    needs: [semgrep]
 
     # main only, and only for a real push - not for pull_request runs of this
     # same workflow, and not for workflow_dispatch.
-    #
-    # Every gate is named explicitly rather than left to `needs:` alone,
-    # because a skipped dependency would otherwise silently end releasing.
-    # iOS is built only on request (2026-09-30), so it must not fail —
-    # skipped is fine. The test job is skipped whenever iOS is, because the
-    # build job ran the tests itself; a green build then covers them, so
-    # skipped is fine there too.
     if: >-
       ${{ !cancelled()
       && github.ref == 'refs/heads/main'
       && github.event_name == 'push'
-      && needs.build.result == 'success'
-      && (needs.test.result == 'success' || needs.test.result == 'skipped')
-      && needs.semgrep.result == 'success'
-      && needs.ios.result != 'failure' }}
+      && needs.semgrep.result == 'success' }}
 
     runs-on: ubuntu-latest
 
@@ -681,6 +681,72 @@ jobs:
           fi
           bash .github/scripts/bump-version.sh "${before}..HEAD"
 
+      # ---------------------------------------------------------------
+      # Build once, at the version being released.
+      #
+      # After the bump, so the APK's manifest carries the version it is
+      # released as - an APK built before it would disagree with its own
+      # tag. Release rather than Debug: Debug means Fast Deployment, which
+      # leaves the managed assemblies out of the APK. The analyzers are not
+      # tied to a configuration, so this build is the analysis too, and an
+      # .editorconfig error stops the release here.
+      #
+      # Every step up to the tests runs whether or not there is a version:
+      # on main this job is the only build, so it is the gate even for a
+      # push with nothing to release.
+      - name: Setup JDK 21
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      # Same file, same rules, and the same silence when unset as the build
+      # job — see the long comment there for why this is a variable and not a
+      # secret. Repeated rather than shared: a composite action for four
+      # lines would hide the one thing worth reading.
+      - name: Write appsettings.json
+        env:
+          BASE_URL: ${{ vars.LINK_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_URL:-}" ]; then
+            echo 'LINK_BASE_URL is not set; releasing an unconfigured build.'
+            echo 'It will run, and its sign-in screen will say it is not set up.'
+            exit 0
+          fi
+          case "$BASE_URL" in
+            https://*) ;;
+            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
+          esac
+          case "$BASE_URL" in
+            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
+          esac
+          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
+            > TheBleedingDeacons.Intergroup.Link/appsettings.json
+
+      - name: Build & analyze the release APK
+        run: >
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
+          -c Release
+          -p:LinkAndroidOnly=true
+          -p:ContinuousIntegrationBuild=true
+
+      - name: Test & coverage
+        uses: ./.github/actions/test-and-coverage
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ---------------------------------------------------------------
+      # Only now, with the build and the tests green, does anything leave
+      # the runner.
       - name: Commit the new version
         if: steps.bump.outputs.changed == 'true'
         run: |
@@ -753,81 +819,12 @@ jobs:
           git push origin "$tag"
 
       # ---------------------------------------------------------------
-      # Publish a GitHub Release, with an APK built at the version it names.
+      # Publish a GitHub Release, with the APK built above. A workflow
+      # artifact expires after 30 days; a release does not, so every version
+      # keeps something downloadable. Android only: the .ipa is built on
+      # macOS, and it is unsigned, so it installs on nothing until somebody
+      # re-signs it.
       #
-      # Until now this job tagged and stopped. A tag is enough for
-      # bump-version.sh to do its arithmetic, but it is not something anyone
-      # can download: every build this repo has ever produced lived in a
-      # workflow artifact that expires after 30 days, so a version older than
-      # a month had nothing to show for itself at all. Hand is in the same
-      # state — this is new for both apps rather than Link catching up.
-      #
-      # THE REBUILD IS THE POINT, and it is why this is not a
-      # download-artifact from the build job. That artifact was built from
-      # the commit *before* the bump, so its manifest carries the previous
-      # version; attaching it to a tag naming the new one would ship an APK
-      # that disagrees with its own release. That is precisely the drift the
-      # AssemblyVersion change removed from the csproj, reintroduced one
-      # level up. Fellowship's release job pays the same cost for the same
-      # reason — it re-runs its production build after writing the version
-      # rather than reusing anything earlier in the run.
-      #
-      # Android only. The .ipa is built on macOS and this job is ubuntu, and
-      # plumbing it across would buy nothing: it is unsigned, so it installs
-      # on precisely nothing until somebody with an Apple Developer Program
-      # certificate re-signs it.
-      - name: Setup JDK 21
-        if: steps.bump.outputs.version != ''
-        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Setup .NET
-        if: steps.bump.outputs.version != ''
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-
-      - name: Install MAUI Android workload
-        if: steps.bump.outputs.version != ''
-        run: dotnet workload install maui-android
-
-      # Same file, same rules, and the same silence when unset as the build
-      # job — see the long comment there for why this is a variable and not a
-      # secret. Repeated rather than shared: a composite action for four
-      # lines would hide the one thing worth reading.
-      - name: Write appsettings.json
-        if: steps.bump.outputs.version != ''
-        env:
-          BASE_URL: ${{ vars.LINK_BASE_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${BASE_URL:-}" ]; then
-            echo 'LINK_BASE_URL is not set; releasing an unconfigured build.'
-            echo 'It will run, and its sign-in screen will say it is not set up.'
-            exit 0
-          fi
-          case "$BASE_URL" in
-            https://*) ;;
-            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
-          esac
-          case "$BASE_URL" in
-            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
-          esac
-          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
-            > TheBleedingDeacons.Intergroup.Link/appsettings.json
-
-      # Builds the working tree, which by this point carries the bumped
-      # csproj written by the commit step above.
-      - name: Build the release APK
-        if: steps.bump.outputs.version != ''
-        run: >
-          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj
-          -c Release
-          -p:LinkAndroidOnly=true
-          -p:ContinuousIntegrationBuild=true
-
       # -Signed.apk is the one to keep: .NET Android emits an unsigned
       # intermediate alongside it. Renamed for the version so a downloaded
       # file still says what it is once it is sitting in somebody's downloads
