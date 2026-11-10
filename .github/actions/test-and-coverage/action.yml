@@ -18,14 +18,23 @@ runs:
       shell: bash
       run: dotnet tool restore
 
-    # No MAUI workload and no JDK needed: Link.Core and its test project are
-    # plain net10.0. Building the test project pulls Link.Core in with it.
-    - name: Build tests
+    # No MAUI workload and no JDK needed: Link.Core and both test projects
+    # are plain net10.0. Both are built here, one after the other, so the
+    # step below can run them at the same time without two builds racing
+    # over Link.Core's obj folder.
+    - name: Build the tests and the specification
       shell: bash
-      run: >
-        dotnet build TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj
-        -c Debug
+      run: |
+        dotnet build TheBleedingDeacons.Intergroup.Link.Tests/TheBleedingDeacons.Intergroup.Link.Tests.csproj -c Debug
+        dotnet build TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj -c Debug
 
+    # The xUnit suite with coverage, and the Reqnroll specification, run at
+    # the same time (2026-11-10): neither reads anything the other writes,
+    # and run one after the other they took about forty seconds each. Each
+    # one's output goes to its own file and is printed whole, in its own
+    # group, once both have finished - so the log still reads one suite at
+    # a time - and each failure is reported by name.
+    #
     # xUnit v3 runs on Microsoft.Testing.Platform, so the test project is an
     # executable. coverlet.console instruments Link.Core and runs that test
     # host, producing a Cobertura report. (coverlet's collector / msbuild
@@ -40,31 +49,45 @@ runs:
     # figure. Writing tests for something already marked for removal would
     # move the number without improving anything, and leaving it in would
     # penalise the deprecation instead of the debt.
-    - name: Test with coverage
-      shell: bash
-      run: >
-        dotnet coverlet TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll
-        --target dotnet
-        --targetargs "TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll"
-        --format cobertura
-        --output coverage/coverage.cobertura.xml
-        --include "[TheBleedingDeacons.Intergroup.Link.Core]*"
-        --exclude-by-attribute Obsolete
-
-    # The Reqnroll suite over the same library, run as its own step rather
-    # than folded into the coverage run above. Two reasons: it is a gate in
-    # its own right and should say so in the log when it is what broke, and
-    # the Coveralls figure goes on meaning what the README says it means -
-    # how well the xUnit suite covers Link.Core - rather than quietly
-    # changing the day the specs landed.
     #
-    # Scenarios tagged @manual @ignore are on-device acceptance criteria.
-    # Reqnroll skips them; nothing here has to filter them out.
-    - name: Run the executable specification
+    # The specification stays out of the coverage run, so the Coveralls
+    # figure goes on meaning what the README says it means - how well the
+    # xUnit suite covers Link.Core. Scenarios tagged @manual @ignore are
+    # on-device acceptance criteria; Reqnroll skips them.
+    - name: Run the tests and the specification side by side
       shell: bash
-      run: >
-        dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj
-        -c Debug
+      run: |
+        set -uo pipefail
+        tests=TheBleedingDeacons.Intergroup.Link.Tests/bin/Debug/net10.0/TheBleedingDeacons.Intergroup.Link.Tests.dll
+
+        dotnet coverlet "$tests" \
+          --target dotnet \
+          --targetargs "$tests" \
+          --format cobertura \
+          --output coverage/coverage.cobertura.xml \
+          --include "[TheBleedingDeacons.Intergroup.Link.Core]*" \
+          --exclude-by-attribute Obsolete \
+          > unit-tests.log 2>&1 &
+        unit=$!
+
+        dotnet test --project TheBleedingDeacons.Intergroup.Link.Specs/TheBleedingDeacons.Intergroup.Link.Specs.csproj \
+          -c Debug --no-build \
+          > specification.log 2>&1 &
+        spec=$!
+
+        wait "$unit"; unit_rc=$?
+        wait "$spec"; spec_rc=$?
+
+        echo "::group::Unit tests with coverage (exit $unit_rc)"
+        cat unit-tests.log
+        echo "::endgroup::"
+        echo "::group::Executable specification (exit $spec_rc)"
+        cat specification.log
+        echo "::endgroup::"
+
+        [ "$unit_rc" -eq 0 ] || echo "::error::The unit tests failed (exit $unit_rc). Open the 'Unit tests with coverage' group above."
+        [ "$spec_rc" -eq 0 ] || echo "::error::The executable specification failed (exit $spec_rc). Open the 'Executable specification' group above."
+        [ "$unit_rc" -eq 0 ] && [ "$spec_rc" -eq 0 ]
 
     - name: Upload coverage to Coveralls
       uses: coverallsapp/github-action@8d6379e14d29928660c4ba802d8e85393440b329 # v2.3.8
