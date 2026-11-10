@@ -47,8 +47,11 @@ name: CI
 #    therefore refuse to install over a locally built Link with
 #    INSTALL_FAILED_UPDATE_INCOMPATIBLE, and getting past that means
 #    uninstalling — which destroys the handset's private key and takes every
-#    message ever sealed to it with it, permanently. Use a local build for a
-#    handset that is already enrolled.
+#    message ever sealed to it with it. Messages are sealed per device when
+#    they are sent and the server keeps only that ciphertext, so nothing can
+#    re-seal them; only a backup restored at sign-in, which carries the key,
+#    brings them back. Use a local build for a handset that is already
+#    enrolled.
 #
 # Ported from Hand's ci.yml, deliberately: the two apps are maintained by the
 # same people, share .editorconfig, stylecop.json and Directory.Build.props,
@@ -147,10 +150,16 @@ jobs:
     # Microsoft.Android.Sdk.Linux pack ships an x64-only aapt2, so the
     # build dies with "Exec format error" and XA0111 rather than anything
     # this file can fix. An AMD64 profile would work, but this repo is
-    # public, ubuntu-latest is free, and the job takes three to four
-    # minutes either way — the queue this change set out to kill was the
-    # macOS one.
-    runs-on: ubuntu-latest
+    # public, GitHub's Ubuntu runners are free, and the job takes three to
+    # four minutes either way — the queue this change set out to kill was
+    # the macOS one.
+    #
+    # Every Linux job here is pinned to ubuntu-24.04 rather than
+    # ubuntu-latest (2026-11-10). GitHub moves `latest` to Ubuntu 26 from
+    # 2026-10-19, and a new image under a release build is a change to make
+    # on purpose, in a PR of its own - not one to find out about from a
+    # failed version job.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
@@ -494,7 +503,7 @@ jobs:
           || (github.event.pull_request.head.repo.full_name == github.repository
               && github.actor != 'dependabot[bot]')) }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: write
@@ -556,7 +565,7 @@ jobs:
 
   test:
     name: Test & coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # Only when iOS is built too. On an Android-only run the build job runs
     # these same steps itself (see its Test & coverage step); on a push to
@@ -582,7 +591,7 @@ jobs:
 
   semgrep:
     name: Semgrep
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # A job of its own, rather than a step inside the build as the PHP plugins
     # do it. There the scan is a step because it has to fail before
@@ -638,7 +647,7 @@ jobs:
       && github.event_name == 'push'
       && needs.semgrep.result == 'success' }}
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # The workflow default is contents: read; pushing the version commit needs
     # write, asked for here so nothing else in this file gets it. packages:
@@ -893,10 +902,12 @@ jobs:
           `INSTALL_FAILED_UPDATE_INCOMPATIBLE`.
 
           **Do not uninstall to get past that.** Link's device token and its RSA
-          private key live in `SecureStorage`, and Fellowship holds only the
-          public half — so uninstalling makes every message already sealed to
-          that handset permanently unreadable, by everyone, with no way back.
-          The encrypted local history goes with it. Build locally instead.
+          private key live in `SecureStorage`. Each message is sealed to that
+          handset's key when it is sent, and the server keeps only the sealed
+          copy — so uninstalling makes every message already sent to that
+          handset unreadable, and the local history goes with it. The only way
+          back is a Link backup taken beforehand, restored on the sign-in
+          screen. Build locally instead.
 
           ### iOS
 

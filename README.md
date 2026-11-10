@@ -831,9 +831,11 @@ a fork gets.
   machine. It will refuse to install over a locally built Link with
   `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, and the only way past that is
   `adb uninstall` — **which destroys the handset's private key**, and with
-  it every message ever sealed to that handset, permanently. Nobody can
-  re-seal them: Fellowship holds only the public half. Use a local build
-  for a handset that is already enrolled.
+  it every message ever sealed to that handset. Nobody can re-seal them:
+  each message is sealed per device when it is sent, and the server keeps
+  only that ciphertext. Only a backup taken beforehand and restored on the
+  sign-in screen brings them back (see *Moving to a new phone*). Use a
+  local build for a handset that is already enrolled.
 
 ## Google sign-in
 
