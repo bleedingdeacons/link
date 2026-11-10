@@ -20,8 +20,11 @@
 # Monthly and grouped on purpose: one reviewer, and a weekly ungrouped
 # schedule is a great deal of noise for a volunteer-maintained app.
 #
-# Note: merging a Dependabot PR cuts a version like any other change — the
+# Note: merging a nuget PR cuts a version like any other change — the
 # version job in ci.yml bumps on a push to main, once every gate has passed.
+# A github-actions PR touches only .github, which ci.yml ignores: it runs
+# no CI and cuts no version, and the new pin is first exercised by the next
+# change to the app. Dispatch ci.yml on its branch to prove it first.
 
 version: 2
 

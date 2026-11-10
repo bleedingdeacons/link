@@ -93,11 +93,25 @@ name: CI
 # every call, because nothing had ever needed CI's output to be a working
 # app before.
 
+# A change that touches only .github - this workflow, the shared test
+# action, Dependabot's config, a Dependabot bump of an action's pinned SHA -
+# runs nothing (2026-11-10). It builds no app code, so a run would only
+# re-prove the last one, and on main it would cut a version whose app is
+# identical to the one before. The cost is that such a change is untested
+# until the next change that does touch the app runs it. A dispatch still
+# runs everything, for when a workflow change wants proving first:
+#
+#   gh workflow run ci.yml -R bleedingdeacons/link --ref <branch>
+#
+# paths-ignore skips only when every changed file matches, so a change to
+# .github alongside anything else runs as normal.
 on:
   push:
     branches: [ main ]
+    paths-ignore: [ '.github/**' ]
   pull_request:
     branches: [ main ]
+    paths-ignore: [ '.github/**' ]
     # `labeled` as well as the defaults, so putting the `ios` label on a PR
     # starts a run that builds the iOS head. Any other label starts a run
     # too; the concurrency group below cancels the one it supersedes.
