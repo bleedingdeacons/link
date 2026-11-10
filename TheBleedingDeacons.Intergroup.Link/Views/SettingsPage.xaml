@@ -387,6 +387,12 @@
 			       Opacity="0.7"
 			       HorizontalOptions="Center" />
 
+			<!-- The MAUI version, last, set the same as the build. -->
+			<Label Text="{Binding Maui}"
+			       FontSize="{StaticResource FootnoteFontSize}"
+			       Opacity="0.7"
+			       HorizontalOptions="Center" />
+
 		</VerticalStackLayout>
 	</ScrollView>
 
