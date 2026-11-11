@@ -20,17 +20,22 @@
         The type scale: every text size in the app, named for what it is,
         and taken from each platform's own scale rather than invented.
 
-        <b>iPhone uses Apple's text styles</b> at their default (Large)
-        sizes: Large Title 34, Title 1 28, Title 3 20, Headline and Body
-        17, Subheadline 15, Footnote 13, Caption 1 12, Caption 2 11.
+        <b>iPhone starts from Apple's text styles</b> at their default
+        (Large) sizes: Large Title 34, Title 1 28, Title 3 20, Headline and
+        Body 17, Subheadline 15, Footnote 13, Caption 1 12, Caption 2 11.
         <b>Android starts from Material 3's</b> (Headline Large 32,
         Headline Small 24, Title Large 22, Title Medium and Body Large 16,
-        Body Medium 14, Body Small 12, Label Small 11) <b>one step up</b>:
-        body 18, supporting text 16, captions 14. At Material's own sizes,
-        in Open Sans and especially in the condensed Antonio, Link's text
+        Body Medium 14, Body Small 12, Label Small 11) one step up: body
+        18, supporting text 16, captions 14. At Material's own sizes, in
+        Open Sans and especially in the condensed Antonio, Link's text
         read too small on a real handset - and most of it is supporting
-        text, at 14. iPhone stays on Apple's sizes until someone looks at
-        one there.
+        text, at 14.
+
+        <b>Then both are 2 larger again, every role</b> (2026-11-11):
+        Android body 20, supporting text 18, captions 16;
+        iPhone body 19, footnote 15, captions 14. Link is read by members
+        of every age, often at arm's length, and the platform defaults
+        are tuned for neither.
 
         <b>These are the sizes at the phone's default text size, not
         fixed sizes.</b> MAUI leaves FontAutoScalingEnabled on for every
@@ -48,34 +53,34 @@
         Glyphs used as icons (the ⋮ menu, a recipient's ×) keep literal
         sizes: they are drawings, sized to their touch targets, not text.
     -->
-    <OnPlatform x:Key="DisplayFontSize" x:TypeArguments="x:Double" Default="36">
-        <On Platform="iOS" Value="34" />
+    <OnPlatform x:Key="DisplayFontSize" x:TypeArguments="x:Double" Default="38">
+        <On Platform="iOS" Value="36" />
     </OnPlatform>
 
     <!-- A page's own title: iOS's Large Title, Material's top app bar. -->
-    <OnPlatform x:Key="TitleFontSize" x:TypeArguments="x:Double" Default="24">
-        <On Platform="iOS" Value="34" />
+    <OnPlatform x:Key="TitleFontSize" x:TypeArguments="x:Double" Default="26">
+        <On Platform="iOS" Value="36" />
     </OnPlatform>
 
-    <OnPlatform x:Key="HeadlineFontSize" x:TypeArguments="x:Double" Default="28">
-        <On Platform="iOS" Value="28" />
+    <OnPlatform x:Key="HeadlineFontSize" x:TypeArguments="x:Double" Default="30">
+        <On Platform="iOS" Value="30" />
     </OnPlatform>
 
-    <OnPlatform x:Key="SectionFontSize" x:TypeArguments="x:Double" Default="24">
-        <On Platform="iOS" Value="20" />
+    <OnPlatform x:Key="SectionFontSize" x:TypeArguments="x:Double" Default="26">
+        <On Platform="iOS" Value="22" />
     </OnPlatform>
 
-    <OnPlatform x:Key="SubheadFontSize" x:TypeArguments="x:Double" Default="18">
-        <On Platform="iOS" Value="17" />
+    <OnPlatform x:Key="SubheadFontSize" x:TypeArguments="x:Double" Default="20">
+        <On Platform="iOS" Value="19" />
     </OnPlatform>
 
     <!-- Body text, and the size every implicit style below starts from. -->
-    <OnPlatform x:Key="BodyFontSize" x:TypeArguments="x:Double" Default="18">
-        <On Platform="iOS" Value="17" />
+    <OnPlatform x:Key="BodyFontSize" x:TypeArguments="x:Double" Default="20">
+        <On Platform="iOS" Value="19" />
     </OnPlatform>
 
-    <OnPlatform x:Key="SecondaryFontSize" x:TypeArguments="x:Double" Default="16">
-        <On Platform="iOS" Value="15" />
+    <OnPlatform x:Key="SecondaryFontSize" x:TypeArguments="x:Double" Default="18">
+        <On Platform="iOS" Value="17" />
     </OnPlatform>
 
     <!--
@@ -84,16 +89,16 @@
         which is where Material sets supporting text: this is text a
         member has to read rather than glance at.
     -->
-    <OnPlatform x:Key="FootnoteFontSize" x:TypeArguments="x:Double" Default="16">
+    <OnPlatform x:Key="FootnoteFontSize" x:TypeArguments="x:Double" Default="18">
+        <On Platform="iOS" Value="15" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="CaptionFontSize" x:TypeArguments="x:Double" Default="16">
+        <On Platform="iOS" Value="14" />
+    </OnPlatform>
+
+    <OnPlatform x:Key="SmallestFontSize" x:TypeArguments="x:Double" Default="14">
         <On Platform="iOS" Value="13" />
-    </OnPlatform>
-
-    <OnPlatform x:Key="CaptionFontSize" x:TypeArguments="x:Double" Default="14">
-        <On Platform="iOS" Value="12" />
-    </OnPlatform>
-
-    <OnPlatform x:Key="SmallestFontSize" x:TypeArguments="x:Double" Default="12">
-        <On Platform="iOS" Value="11" />
     </OnPlatform>
 
     <!--
