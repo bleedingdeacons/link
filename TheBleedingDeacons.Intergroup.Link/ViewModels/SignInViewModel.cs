@@ -137,9 +137,9 @@ public sealed partial class SignInViewModel : ObservableObject
 	/// <summary>
 	/// Whether to offer Sign in with Apple at all.
 	///
-	/// <para>False on Android, and false on an iOS build without the
-	/// entitlement — which a sideloaded build cannot have, because that
-	/// entitlement needs a paid Apple Developer Program team. Hidden
+	/// <para>False on Android, and false on an iOS installation whose
+	/// signature lacks the entitlement — which only a paid Apple Developer
+	/// Program team can grant, so a free-team sideload never has it. Hidden
 	/// rather than shown-and-broken: a button that always fails teaches a
 	/// member that the app is unreliable, which is a worse lie than not
 	/// offering the choice.</para>

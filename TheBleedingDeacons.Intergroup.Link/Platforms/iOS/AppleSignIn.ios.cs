@@ -1,5 +1,7 @@
 using AuthenticationServices;
 using Foundation;
+using Serilog;
+using TheBleedingDeacons.Intergroup.Link.Support;
 using UIKit;
 
 namespace TheBleedingDeacons.Intergroup.Link.Services;
@@ -10,16 +12,14 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// <para><b>Written against ASAuthorization directly, not MAUI's
 /// AppleSignInAuthenticator, and the reason is the nonce.</b> The MAUI
 /// helper's AuthenticateAsync takes no options of any kind — there is
-/// nowhere to put one. Fellowship issues a nonce at
-/// <c>/auth/device/start</c>, stores it against the state and compares
-/// the token's <c>nonce</c> claim to what it stored, so a token minted
-/// without one is rejected every single time. It would have looked like a
-/// server bug from the app and an app bug from the server.</para>
+/// nowhere to put one. Firebase compares the token's <c>nonce</c> claim
+/// with the hash of the raw nonce it is given at <c>signInWithIdp</c>, so
+/// a token minted without one is refused every single time.</para>
 ///
-/// <para>The nonce is passed through <b>unhashed</b>. Apple copies the
-/// value it is given straight into the claim; hashing it first is a
-/// convention some flows require (Firebase's does) and would break this
-/// one, because Fellowship compares against what it issued.</para>
+/// <para>The nonce is passed through <b>as given</b>. It arrives already
+/// hashed (see <c>FirebaseFellowshipClient.StartSignInAsync</c>); Apple
+/// copies it straight into the claim, and hashing it again here would
+/// break the comparison.</para>
 ///
 /// <para>Full name is not requested. Apple returns it once, on the very
 /// first authorisation for an app, and never again — so anything relying
@@ -30,17 +30,66 @@ namespace TheBleedingDeacons.Intergroup.Link.Services;
 /// </summary>
 public sealed partial class AppleSignIn
 {
-	private static partial bool PlatformIsAvailable() =>
+	private const bool CompiledIn =
 #if LINK_APPLE_SIGNIN
-		OperatingSystem.IsIOSVersionAtLeast(13);
+		true;
 #else
-		// No com.apple.developer.applesignin entitlement in this build, so
-		// the sheet would raise and fail. See the csproj: the entitlement
-		// needs a paid Apple Developer Program team, and a free personal
-		// team cannot sign an app that asks for it — which is what a
-		// sideloaded build is signed with.
 		false;
 #endif
+
+	/// <summary>
+	/// Whether this installation was signed with the entitlement.
+	///
+	/// <para>Read once, from the executable's own signature, because the
+	/// same .ipa can go either way: CI builds it unsigned, and whoever
+	/// signs it decides. Signed by the paid team, whose App ID has Sign in
+	/// with Apple switched on, the signature carries
+	/// <c>com.apple.developer.applesignin</c> and the button shows. Signed
+	/// by a free personal team it cannot, and the button stays hidden
+	/// rather than raising a sheet that always fails.</para>
+	///
+	/// <para>A build with no readable signature — the simulator, or a file
+	/// this cannot parse — falls back to what it was compiled to assume:
+	/// <c>-p:LinkPaidTeam=true</c> defines <c>LINK_APPLE_SIGNIN</c>.</para>
+	/// </summary>
+	private static readonly Lazy<bool> Entitled = new(ReadEntitlement);
+
+	private static partial bool PlatformIsAvailable() =>
+		OperatingSystem.IsIOSVersionAtLeast(13) && Entitled.Value;
+
+	private static bool ReadEntitlement()
+	{
+		var keys = SignedEntitlementKeys();
+		var entitled = keys?.Contains(CodeSignature.AppleSignIn) ?? CompiledIn;
+
+		Log.Information(
+			"Sign in with Apple {AppleSignInState} ({AppleSignInSource})",
+			entitled ? "offered" : "not offered",
+			keys is null ? "no readable signature; build default" : "from the signature");
+
+		return entitled;
+	}
+
+	private static IReadOnlySet<string>? SignedEntitlementKeys()
+	{
+		var path = NSBundle.MainBundle.ExecutablePath;
+		if (string.IsNullOrEmpty(path))
+		{
+			return null;
+		}
+
+		try
+		{
+			using var executable = File.OpenRead(path);
+
+			return CodeSignature.EntitlementKeys(executable);
+		}
+		catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+		{
+			Log.Warning(ex, "Could not read this app's own signature");
+			return null;
+		}
+	}
 
 	private partial Task<string?> PlatformGetIdTokenAsync(string nonce, CancellationToken cancellationToken)
 	{

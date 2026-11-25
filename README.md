@@ -475,45 +475,54 @@ binding is **`AdamE.Firebase.iOS.CloudMessaging`**, not
 its newest version targets `net6.0-ios15.4`, so it cannot restore against
 this project at all.
 
-**Sign in with Apple is written, and compiled out of every build anybody
-can currently install.**
+**Sign in with Apple shows itself when the app is signed for it.**
 
-This entry used to say the app never raised the platform sheet. It does,
-and has for a while: `SignInPage` offers a *Continue with Apple* button,
-`SignInViewModel` binds it to `DeviceAuthService.SignInWithAppleAsync`,
-that asks Fellowship for a nonce at `/auth/device/start`,
+`SignInPage` offers a *Continue with Apple* button, `SignInViewModel` binds
+it to `DeviceAuthService.SignInWithAppleAsync`,
 `Platforms/iOS/AppleSignIn.ios.cs` raises Apple's own
-`ASAuthorizationController` with it, and Fellowship's
-`AppleProvider::verifyIdToken` checks the returned token against Apple's
-JWKS and compares its `nonce` claim with what it issued.
+`ASAuthorizationController`, and the token goes to Firebase's
+`signInWithIdp` as `apple.com`. The Functions then treat it like Google:
+a verified address that has to be a member's.
 
 It is written against `ASAuthorization` directly rather than MAUI's
-`AppleSignInAuthenticator`, and the nonce is the reason. The MAUI
-helper's `AuthenticateAsync` takes no options of any kind, so there is
-nowhere to put one, and Fellowship rejects a token minted without it
-every single time — which would have looked like a server bug from the
-app and an app bug from the server. The nonce is passed **unhashed**:
-Apple copies the value it is given straight into the claim, and hashing
-it first, which some flows require, would break the comparison against
-what Fellowship stored.
+`AppleSignInAuthenticator`, and the nonce is the reason. The MAUI helper's
+`AuthenticateAsync` takes no options of any kind, so there is nowhere to put
+one, and Firebase refuses a token minted without it. Apple is given the
+SHA-256 of a random value and Firebase the value itself
+(`FirebaseFellowshipClient.StartSignInAsync`), which is the way round
+Firebase requires.
 
-What is not done is shipping it. `PlatformIsAvailable()` answers `false`
-unless `LINK_APPLE_SIGNIN` is defined, and only `-p:LinkPaidTeam=true`
-defines it — the same flag that applies `Platforms/iOS/Entitlements.plist`.
-`com.apple.developer.applesignin` is grantable only to a paid Apple
-Developer Program team, and a free personal team — which is what signs a
-sideloaded build, currently the only way Link reaches an iPhone at all —
-cannot sign an app that requests it. The install fails outright rather
-than degrading, so asking for it unconditionally would trade a working
-sideload for a feature that still would not work.
+**Whether the button shows is read from the app's own signature**, not
+from how it was built. `com.apple.developer.applesignin` is grantable only
+by a paid Apple Developer Program team, and an app signed by a free
+personal team that asks for it will not install at all. CI builds one
+unsigned `.ipa` and whoever signs it decides, so at launch
+`Support/CodeSignature.cs` reads the entitlements out of the executable's
+code signature. Signed by the paid team, with Sign in with Apple switched
+on for the App ID, the entitlement is there and the button shows. Signed
+by a free team it is not, and the button is hidden rather than raising a
+sheet that always fails. A build with no readable signature, such as a
+simulator build, falls back to `LINK_APPLE_SIGNIN`, which
+`-p:LinkPaidTeam=true` defines along with applying
+`Platforms/iOS/Entitlements.plist` for a build signed on a Mac.
 
-The default build therefore hides the button rather than offering one
-that always fails, and an iOS member signs in with Google, which needs no
-paid team.
+What it needs outside the code:
 
-That flag now gates `aps-environment` as well, for the same paid-team
-reason, which is why it is no longer called `LinkAppleSignIn`. See the
-push entry above.
+* **Apple Developer, Identifiers:** the App ID
+  `org.thebleedingdeacons.intergroup.link` on the paid team, with *Sign in
+  with Apple* (and *Push Notifications*) ticked. The profile the build is
+  signed with must be issued after that, so it carries the entitlement.
+* **Firebase console, Authentication → Sign-in method:** *Apple* enabled.
+  A native iOS sign-in needs no Services ID or key there; those are for
+  the web flow.
+* **Sideloading with the paid Apple ID:** keep the bundle id
+  (`--keep-bundle-id`). The token's audience is the bundle id, and
+  Firebase accepts only the one registered for the iOS app, so a
+  team-suffixed install signs in with Google but is refused by Apple.
+* **Hide My Email.** A member who picks it hands over a
+  `privaterelay.appleid.com` address, which is no member's, and is refused
+  like any unknown address. They need to share their real one, or use
+  Google or their password.
 
 **A signed .ipa.** CI archives an unsigned one. Making it installable
 needs an Apple Developer Program membership, a distribution certificate

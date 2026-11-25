@@ -157,10 +157,18 @@ Feature: What only a phone can answer
       # build no push token. Firebase still starts, so signing in works.
 
     Scenario: Sign in with Apple is hidden rather than offered and broken
-      Given a build made without -p:LinkPaidTeam=true
+      Given an iOS build signed by a free personal team
       When the sign-in screen is shown
       Then there is no Continue with Apple button
       And Google sign-in works through its account picker
+      # The entitlement is read from the app's own signature, and a free
+      # team cannot grant it.
+
+    Scenario: Sign in with Apple is offered when the paid team signs the app
+      Given an iOS build signed by the paid team, with Sign in with Apple on its App ID
+      When the sign-in screen is shown
+      Then there is a Continue with Apple button
+      And signing in with it enrols the handset like Google does
 
     Scenario: A sideloaded build stops working after seven days
       Given an .ipa re-signed with a free Apple ID

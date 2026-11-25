@@ -130,9 +130,8 @@
 				A plain Button, not Apple's ASAuthorizationAppleIDButton.
 				Apple's guidelines require their own button's exact
 				appearance for an App Store release, so this needs
-				revisiting if Link ever goes to the store — which it
-				cannot until there is a paid team anyway, and that is the
-				same purchase that makes this button appear at all.
+				revisiting before Link goes to the store or TestFlight.
+				A sideloaded build is not reviewed, so it is fine as is.
 			-->
 			<Button Text="Continue with Apple"
 			        HeightRequest="50"
