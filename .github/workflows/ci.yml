@@ -27,6 +27,9 @@ name: CI
 #               at the bumped version, which runs the same analyzers; runs
 #               the tests; and only when both pass, pushes the version,
 #               tags it and publishes the release with that build's APK.
+#  * testflight — after version has tagged a release, or on a dispatch with
+#               `testflight` ticked: the iOS head signed for App Store
+#               Connect and uploaded to TestFlight. See the job.
 #
 # <b>Both heads are built, and both produce something installable-shaped.</b>
 # This file used to say there was no iOS job because there was no iOS head;
@@ -38,10 +41,10 @@ name: CI
 # <b>Neither artifact is a shipping artifact, and both are easy to mistake for
 # one.</b>
 #
-#  * The .ipa is unsigned. An installable one needs an Apple Developer
-#    Program membership, a distribution certificate and a provisioning
-#    profile, none of which exist. It is a compile gate and a re-signable
-#    input, and it installs on nothing as it stands.
+#  * The ios job's .ipa is unsigned. It is a compile gate and a
+#    re-signable input, and it installs on nothing as it stands. The signed
+#    build is the testflight job's, which goes to App Store Connect rather
+#    than to an artifact.
 #  * The release's APK is signed with the runner's throwaway debug keystore, which is
 #    generated fresh and is not the one on any developer machine. It will
 #    therefore refuse to install over a locally built Link with
@@ -122,6 +125,10 @@ on:
     inputs:
       ios:
         description: 'Also build and archive the iOS head'
+        type: boolean
+        default: false
+      testflight:
+        description: 'Sign this ref for the App Store and upload it to TestFlight'
         type: boolean
         default: false
 
@@ -343,93 +350,14 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Pinned rather than left to the image default, which is 26.6 today
-      # and is not promised to stay there. The .NET for iOS SDK refuses an
-      # Xcode older than it expects, so the day the image moves this job
-      # either keeps working or says exactly which version it wanted --
-      # `xcodebuild -version` in the log is what makes that readable.
-      #
-      # Falls back to the newest installed Xcode rather than failing, so an
-      # image that has moved on gets one honest attempt before the .NET SDK
-      # gives its own verdict.
-      - name: Select Xcode
-        run: |
-          set -euo pipefail
-          wanted=/Applications/Xcode_26.6.app
-          if [ ! -d "$wanted" ]; then
-            echo "Xcode 26.6 is not on this image; falling back to the newest installed."
-            ls -d /Applications/Xcode*.app || true
-            wanted=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
-          fi
-          echo "Selecting $wanted"
-          sudo xcode-select -s "$wanted"
-          xcodebuild -version
-
-      # maui-ios, not maui: the full workload would pull in the Android SDK
-      # and MacCatalyst for a job that builds neither.
-      # Pinned to a workload set, not left to take the newest. On 2026-09-30
-      # the newest set for this SDK band, 10.0.401.1, moved the iOS SDK to
-      # 27.0, which refuses to build with anything older than Xcode 27 --
-      # and the image's newest Xcode is 26.6. Every iOS build, main's
-      # included, failed on "requires Xcode 27.0", and with the iOS head a
-      # gate on the version job, nothing released. 10.0.401 carries iOS
-      # 26.5.10318, which builds with 26.6.
-      #
-      # Move the pin when the image has Xcode 27:
-      #   dotnet workload search version <set>   # lists each set's iOS SDK
-      - name: Install MAUI iOS workload
-        run: dotnet workload install maui-ios --version 10.0.401
-
-      # appsettings.json is git-ignored, so a checkout never has one, and
-      # until now neither did any artifact CI produced. That was correct for
-      # a build nobody installed and wrong the moment these artifacts became
-      # something to put on a phone: the app came up with no idea which
-      # intergroup it belonged to, and every call that needed a server URL
-      # failed after sign-in rather than before it.
-      #
-      # Written from a repository *variable*, not a secret. The test bed's
-      # address is public and appears in this repo's README; pretending
-      # otherwise would buy nothing and make it harder to change. What the
-      # variable buys is that the file still never enters git -- which is the
-      # actual rule, because appsettings.json is where a credential naturally
-      # gets typed and Hand published a Better Stack token exactly that way.
-      #
-      # Only BaseUrl is written. PollSeconds defaults to 120 in
-      # FellowshipConfiguration.
-      #
-      # Unset is not a failure. A fork, or this repo before the variable
-      # existed, builds exactly as it did before and produces an artifact
-      # whose sign-in screen says the app has not been set up.
-      - name: Write appsettings.json
-        env:
-          BASE_URL: ${{ vars.LINK_BASE_URL }}
-        run: |
-          set -euo pipefail
-          if [ -z "${BASE_URL:-}" ]; then
-            echo 'LINK_BASE_URL is not set; building unconfigured.'
-            echo 'The artifact will run, and its sign-in screen will say so.'
-            exit 0
-          fi
-          case "$BASE_URL" in
-            https://*) ;;
-            *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
-          esac
-          case "$BASE_URL" in
-            *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
-          esac
-          printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
-            > TheBleedingDeacons.Intergroup.Link/appsettings.json
-          echo 'Wrote:'
-          cat TheBleedingDeacons.Intergroup.Link/appsettings.json
-
-      # Without this the .ipa builds and polls, silently — and the .ipa this
-      # job archives is the one Sideloadly puts on the iPhone, so that is the
-      # only iOS build there is. See the script for why the Android job has
-      # no matching step yet.
-      - name: Write GoogleService-Info.plist
-        env:
-          GOOGLE_SERVICES_PLIST: ${{ secrets.GOOGLE_SERVICES_PLIST }}
-        run: bash .github/scripts/write-google-services-plist.sh
+      # Xcode, the workload, appsettings.json and GoogleService-Info.plist,
+      # shared with the testflight job below. The comments that explain
+      # each pin live with the steps, in the action.
+      - name: Prepare the iOS head
+        uses: ./.github/actions/prepare-ios
+        with:
+          base-url: ${{ vars.LINK_BASE_URL }}
+          google-services-plist: ${{ secrets.GOOGLE_SERVICES_PLIST }}
 
       # Release for a device (ios-arm64), unsigned.
       #
@@ -663,6 +591,10 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    # What the testflight job follows: the release tag, once it exists.
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
     # The workflow default is contents: read; pushing the version commit needs
     # write, asked for here so nothing else in this file gets it. packages:
     # read because a job's permissions replace the workflow's rather than add
@@ -853,18 +785,26 @@ jobs:
       #
       # Guarded against existing, so a re-run of a green release is a no-op
       # rather than a failure.
+      # The tag is also the job's `tag` output, which is what the testflight
+      # job follows - set once the tag exists, whether this run made it or
+      # found it. Not the GitHub Release below: that step talks to GitHub's
+      # API, which answered 502 on 2026-11-25, and a release page that
+      # failed to publish is no reason to hold back a build that tagged.
       - name: Tag the release
+        id: tag
         if: steps.bump.outputs.version != ''
         run: |
           tag="v${{ steps.bump.outputs.version }}"
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
             echo "$tag already exists; nothing to tag."
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$tag" -m "$tag"
           git push origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       # ---------------------------------------------------------------
       # Publish a GitHub Release, with the APK built above. A workflow
@@ -961,3 +901,193 @@ jobs:
             echo "### Version unchanged" >> "$GITHUB_STEP_SUMMARY"
             echo "Nothing to version in this push." >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # -----------------------------------------------------------------------
+  # TestFlight: the iOS head signed for App Store Connect, and uploaded.
+  #
+  # Every release from main goes up, once the version job has tagged it
+  # (2026-11-25). A dispatch with `testflight` ticked uploads whatever ref it
+  # ran on, which is how a change here gets proved before it merges, and how
+  # a release whose upload failed gets a second attempt.
+  #
+  # Testers are internal for now: users on the App Store Connect team, in a
+  # TestFlight group with automatic distribution. A build reaches them once
+  # Apple has processed it, usually 10-30 minutes after this job ends. No
+  # Beta App Review is involved until external testing is switched on.
+  #
+  # Signing needs six secrets, all made by hand once and described in the
+  # README's TestFlight section:
+  #
+  #   IOS_DIST_CERT_P12       the Apple Distribution certificate and key, base64
+  #   IOS_DIST_CERT_PASSWORD  that .p12's password
+  #   IOS_APPSTORE_PROFILE    the App Store Connect provisioning profile, base64
+  #   ASC_KEY_ID              the App Store Connect API key's id
+  #   ASC_ISSUER_ID           the team's issuer id for that key
+  #   ASC_KEY_P8              the key itself, the .p8's text
+  #
+  # The build number App Store Connect insists rises on every upload is
+  # ApplicationVersion, which the version job already bumps by one per
+  # release. So a dispatch can upload a ref only once per value of it.
+  # -----------------------------------------------------------------------
+  testflight:
+    name: Sign & upload to TestFlight
+    needs: [version]
+
+    # !cancelled() because on a dispatch the version job is skipped, and a
+    # job whose needs were skipped is skipped too unless its condition says
+    # otherwise.
+    if: >-
+      ${{ !cancelled()
+      && ((github.event_name == 'push' && needs.version.outputs.tag != '')
+      || (github.event_name == 'workflow_dispatch' && inputs.testflight)) }}
+
+    # The same runner choice as the ios job, for the same reasons.
+    runs-on: ${{ vars.IOS_RUNNER || 'macos-26' }}
+
+    # One upload at a time. Two releases in quick succession would
+    # otherwise race to App Store Connect, and the loser's build number
+    # may already be taken.
+    concurrency:
+      group: testflight
+      cancel-in-progress: false
+
+    steps:
+      # The release tag, not main: main has moved on by one version commit
+      # at least, and the tag is what the version job built and tested.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.version.outputs.tag || github.ref }}
+
+      # Before anything slow, so a missing secret fails in seconds with its
+      # name rather than after ten minutes of building.
+      - name: Check the signing secrets are set
+        env:
+          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+          IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          missing=0
+          for name in IOS_DIST_CERT_P12 IOS_DIST_CERT_PASSWORD IOS_APPSTORE_PROFILE ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Secret $name is not set. See the README's TestFlight section."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Prepare the iOS head
+        uses: ./.github/actions/prepare-ios
+        with:
+          base-url: ${{ vars.LINK_BASE_URL }}
+          google-services-plist: ${{ secrets.GOOGLE_SERVICES_PLIST }}
+
+      # A keychain of the job's own, made the search list for the build and
+      # deleted at the end. The partition list is what lets codesign use the
+      # key without a password prompt nobody is there to answer - a build
+      # that hangs at signing is a build missing that line.
+      - name: Import the distribution certificate
+        env:
+          IOS_DIST_CERT_P12: ${{ secrets.IOS_DIST_CERT_P12 }}
+          IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/link-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+          printf '%s' "$IOS_DIST_CERT_P12" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$IOS_DIST_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/dist.p12"
+          echo "Signing identities:"
+          security find-identity -v -p codesigning "$keychain"
+
+      # Installed under its own UUID, which is the file name both places the
+      # tooling looks expect, and its Name handed to the build - so the
+      # profile can be renamed in the portal without a commit here.
+      - name: Install the provisioning profile
+        id: profile
+        env:
+          IOS_APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROFILE }}
+        run: |
+          set -euo pipefail
+          file="$RUNNER_TEMP/link.mobileprovision"
+          printf '%s' "$IOS_APPSTORE_PROFILE" | base64 --decode > "$file"
+          security cms -D -i "$file" > "$RUNNER_TEMP/profile.plist"
+          uuid=$(plutil -extract UUID raw "$RUNNER_TEMP/profile.plist")
+          name=$(plutil -extract Name raw "$RUNNER_TEMP/profile.plist")
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$file" "$dir/$uuid.mobileprovision"
+          done
+          echo "Installed '$name' ($uuid)"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
+      # The same build as the ios job's, signed instead of unsigned, and
+      # BuildIpa makes the .ipa as part of it. Build rather than publish
+      # because LinkIosOnly keeps TargetFrameworks plural, and publish
+      # refuses a cross-targeting project without -f - which this project
+      # forbids, for the NU1105 reason the csproj gives.
+      - name: Build the signed .ipa
+        env:
+          PROFILE_NAME: ${{ steps.profile.outputs.name }}
+        run: |
+          set -euo pipefail
+          dotnet build TheBleedingDeacons.Intergroup.Link/TheBleedingDeacons.Intergroup.Link.csproj \
+            -c Release \
+            -p:LinkIosOnly=true \
+            -p:LinkAppStore=true \
+            "-p:LinkProvisioningProfile=$PROFILE_NAME" \
+            -p:RuntimeIdentifier=ios-arm64 \
+            -p:BuildIpa=true \
+            -p:ContinuousIntegrationBuild=true
+
+      - name: Find the .ipa
+        id: ipa
+        run: |
+          set -euo pipefail
+          ipa=$(find TheBleedingDeacons.Intergroup.Link/bin/Release/net10.0-ios -name '*.ipa' | head -1)
+          if [ -z "$ipa" ]; then
+            echo '::error::The build produced no .ipa.' >&2
+            exit 1
+          fi
+          ls -la "$ipa"
+          echo "path=$ipa" >> "$GITHUB_OUTPUT"
+
+      # altool with an App Store Connect API key: no Apple ID, no password
+      # and no 2FA, which is the whole reason this can run unattended where
+      # a sideload cannot. altool looks for the key in ~/private_keys under
+      # exactly this name.
+      - name: Upload to TestFlight
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          IPA: ${{ steps.ipa.outputs.path }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/private_keys"
+          printf '%s\n' "$ASC_KEY_P8" > "$HOME/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          xcrun altool --upload-app --type ios \
+            --file "$IPA" \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: Remove the signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/link-signing.keychain-db" 2>/dev/null || true
+          rm -f "$HOME"/private_keys/AuthKey_*.p8
+          rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision
+          rm -f "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles/"*.mobileprovision

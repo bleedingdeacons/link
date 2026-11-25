@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+		The entitlements for a build signed for App Store Connect, which is
+		what TestFlight installs. Applied only by -p:LinkAppStore=true; see
+		the csproj.
+
+		A copy of Entitlements.plist rather than a switch inside it, because
+		the one value that differs cannot be computed by the build: plist
+		files are not MSBuild, and a distribution profile refuses a signature
+		that asks for anything other than what it grants.
+	-->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+
+	<!--
+		"production", where Entitlements.plist says "development". An App
+		Store Connect profile grants only production, and a TestFlight build
+		that asks for development is refused at upload. It also means APNs
+		tokens from a TestFlight install are production tokens, so the
+		Firebase project needs an APNs auth key for push to reach them.
+	-->
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>
