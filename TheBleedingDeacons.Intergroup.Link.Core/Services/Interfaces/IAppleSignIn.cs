@@ -9,24 +9,23 @@ namespace TheBleedingDeacons.Intergroup.Link.Services.Interfaces;
 /// <see cref="IFellowshipClient"/>'s callers from having to know which
 /// head they are on.</para>
 ///
-/// <para><b>The nonce goes through untouched.</b> Fellowship issues it at
-/// <c>/auth/device/start</c>, stores it against the state, and compares
-/// the token's <c>nonce</c> claim to what it stored. Apple copies the
-/// value it is given into that claim verbatim, so hashing it here — a
-/// common convention, and what Firebase's flow asks for — would make
-/// every token fail verification for a reason neither side could see.
-/// </para>
+/// <para><b>The nonce goes through untouched.</b> It arrives already
+/// hashed — <c>FirebaseFellowshipClient.StartSignInAsync</c> gives Apple
+/// the hash and keeps the raw value for Firebase — and Apple copies what
+/// it is given into the token's <c>nonce</c> claim verbatim. Hashing it
+/// again here would make every token fail verification for a reason
+/// neither side could see.</para>
 /// </summary>
 public interface IAppleSignIn
 {
 	/// <summary>
 	/// Whether this build can raise the sheet at all.
 	///
-	/// <para>False on Android, and false on an iOS build without the
-	/// <c>com.apple.developer.applesignin</c> entitlement — which is most
-	/// of them, because that entitlement needs a paid Apple Developer
-	/// Program team and a free personal team cannot sign an app that asks
-	/// for it. The button is hidden rather than shown-and-broken.</para>
+	/// <para>False on Android, and false on an iOS installation whose
+	/// signature lacks the <c>com.apple.developer.applesignin</c>
+	/// entitlement. Only a paid Apple Developer Program team can grant it,
+	/// so an app signed by a free personal team never has it. The button
+	/// is hidden rather than shown-and-broken.</para>
 	/// </summary>
 	bool IsAvailable { get; }
 

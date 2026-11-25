@@ -183,10 +183,11 @@
 		is the kind of thing that is discovered from behaviour rather than
 		read from the file. Nothing outside this file referenced it.
 
-		LINK_APPLE_SIGNIN is still defined here and still means only what
-		it says: whether AppleSignIn reports itself available, so the
-		button is absent from a build that could not honour it rather than
-		present and permanently broken.
+		LINK_APPLE_SIGNIN is now only a fallback. AppleSignIn reads the
+		entitlement from the app's own code signature at launch, so the
+		same unsigned CI .ipa offers the button when the paid team signs it
+		and hides it when a free team does. The constant decides only when
+		there is no readable signature, as in a simulator build.
 
 		Push needs no matching constant. FirebasePush decides at runtime,
 		from whether a GoogleService-Info.plist was bundled and Firebase
