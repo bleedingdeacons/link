@@ -518,7 +518,7 @@ What it needs outside the code:
 * **Sideloading with the paid Apple ID:** keep the bundle id
   (`--keep-bundle-id`). The token's audience is the bundle id, and
   Firebase accepts only the one registered for the iOS app, so a
-  team-suffixed install signs in with Google but is refused by Apple.
+  team-suffixed install is refused by Apple.
 * **Hide My Email.** A member who picks it hands over a
   `privaterelay.appleid.com` address, which is no member's, and is refused
   like any unknown address. They need to share their real one, or use
@@ -918,9 +918,14 @@ Settle it, with advice, before external testing or the App Store.
 
 ## Google sign-in
 
-On Android and iOS, **Continue with Google** — at sign-in and when
-replacing a key — uses the platform's own account picker (Credential Manager
-on Android, GoogleSignIn on iOS), then Firebase Auth. The resulting Firebase
+**Google on Android, Apple on an iPhone** (2026-11-26): each phone is
+offered its own platform's account, and a member whose address isn't that
+account uses their password. `DeviceAuthService.IsGoogleOffered` is the
+one switch. The iOS Google code is still built, just not offered.
+
+On Android, **Continue with Google** — at sign-in and when replacing a key —
+uses Credential Manager's account picker (GoogleSignIn on iOS, were it
+offered there), then Firebase Auth. The resulting Firebase
 ID token goes to the `enrol` Function, which checks the member against
 WordPress and gives this phone its own Firebase identity. See
 `NativeGoogleSignIn`.

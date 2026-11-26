@@ -90,6 +90,12 @@ public static class MauiProgram
 				// The silo terminal's: fixed-width, under the same licence,
 				// and regular only for the same reason.
 				fonts.AddFont("IBMPlexMono-Regular.ttf", "IBMPlexMonoRegular");
+			})
+			.ConfigureMauiHandlers(handlers =>
+			{
+				// Apple's own Sign in with Apple button on iOS, an empty
+				// view on Android. See AppleSignInButton.
+				handlers.AddHandler<AppleSignInButton, AppleSignInButtonHandler>();
 			});
 
 		// ── Logging ───────────────────────────────────────────────────
