@@ -328,6 +328,12 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// </summary>
 #pragma warning disable S2325 // See above: static breaks the binding.
 	public string Build => BuildInfo.Summary;
+
+	/// <summary>
+	/// The MAUI version, on its own line at the foot of the page. Instance
+	/// for the same reason as <see cref="Build"/>.
+	/// </summary>
+	public string Maui => BuildInfo.Maui;
 #pragma warning restore S2325
 
 	/// <summary>

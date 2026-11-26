@@ -43,6 +43,20 @@ public static class BuildInfo
     public static string Framework => RuntimeInformation.FrameworkDescription;
 
     /// <summary>
+    /// The .NET MAUI version the app is running on — e.g. "MAUI 10.0.120".
+    /// Read from the Controls assembly actually loaded, like <see cref="Framework"/>,
+    /// so it reports what shipped rather than what the csproj asked for: a MAUI
+    /// update changes nothing else a member can see, and is the next question
+    /// after the runtime when a handset misbehaves.
+    /// </summary>
+    /// <remarks>
+    /// The informational version carries the MAUI repo's commit after a '+'
+    /// ("10.0.120+3f5c…"), which nobody reading it aloud needs; only the version
+    /// before it is kept. "MAUI unknown" if the attribute is missing.
+    /// </remarks>
+    public static string Maui { get; } = ReadMauiVersion();
+
+    /// <summary>
     /// When this build was produced, in the device's local time, to the second —
     /// e.g. "2026/08/14 05:33.58", or "unknown" if the stamp is absent or malformed.
     /// </summary>
@@ -73,6 +87,19 @@ public static class BuildInfo
     /// Used verbatim by the Settings page and the startup log banner so both always agree.
     /// </summary>
     public static string Summary => $"{Version} (build {Build}) · {BuildTimestamp} · {Framework}";
+
+    private static string ReadMauiVersion()
+    {
+        var informational = typeof(Microsoft.Maui.Controls.Application).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        if (string.IsNullOrEmpty(informational))
+            return "MAUI unknown";
+
+        var plus = informational.IndexOf('+', StringComparison.Ordinal);
+        return "MAUI " + (plus < 0 ? informational : informational[..plus]);
+    }
 
     private static string ReadBuildTimestamp()
     {

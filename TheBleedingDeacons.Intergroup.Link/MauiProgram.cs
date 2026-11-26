@@ -138,13 +138,14 @@ public static class MauiProgram
 		// so the aggregator can filter on it directly — the quickest way to
 		// tell one runtime from another across a fleet.
 		Log.Information(
-			"Application {AppName} v{Version} (build {Build}, built {Built}) starting on {Platform} under {Framework}; server {Server}",
+			"Application {AppName} v{Version} (build {Build}, built {Built}) starting on {Platform} under {Framework} and {Maui}; server {Server}",
 			appName,
 			BuildInfo.Version,
 			BuildInfo.Build,
 			BuildInfo.BuildTimestamp,
 			DeviceInfo.Platform,
 			BuildInfo.Framework,
+			BuildInfo.Maui,
 			LinkServices.Configuration.IsConfigured ? LinkServices.Configuration.BaseUrl : "(not configured)");
 
 		// The singletons come from LinkServices rather than being
