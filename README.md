@@ -908,10 +908,13 @@ not `Entitlements.plist`: a distribution profile grants `aps-environment`
 **production** only. Push to a TestFlight install also needs an APNs auth
 key on the Firebase project; without one, those installs poll.
 
-**Export compliance.** Link does its own end-to-end encryption, so App
-Store Connect asks about encryption for each build until
-`ITSAppUsesNonExemptEncryption` is set in `Info.plist`. Until then a build
-waits under *Missing Compliance* until somebody answers.
+**Export compliance.** `Info.plist` sets `ITSAppUsesNonExemptEncryption`
+to `false`, matching the answer given for build 97, so builds go straight to
+testers instead of waiting under *Missing Compliance*. That is the answer
+for internal testing only. Link seals messages itself with RSA-OAEP and
+AES-256-GCM, beyond HTTPS, which usually counts as standard encryption
+and is recorded as *Yes*. The source being public may change that.
+Settle it, with advice, before external testing or the App Store.
 
 ## Google sign-in
 

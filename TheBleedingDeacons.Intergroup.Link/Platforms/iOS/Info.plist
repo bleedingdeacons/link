@@ -55,6 +55,22 @@
 	-->
 	<key>NSFaceIDUsageDescription</key>
 	<string>Link uses Face ID to let you back in after you sign out, without signing in again.</string>
+	<!--
+		Export compliance, answered here so App Store Connect stops holding
+		each TestFlight build under "Missing Compliance" until somebody
+		fills in its encryption form.
+
+		false matches the answer Dave gave in App Store Connect for build
+		97 on 2026-11-26 ("App Uses Non-Exempt Encryption: No"), and is the
+		answer for internal testing only. Revisit it before external
+		testing or the App Store. Link does its own message sealing,
+		RSA-OAEP and AES-256-GCM, beyond HTTPS, and that usually counts as
+		"standard encryption algorithms", which Apple records as Yes. The
+		source being public on GitHub may change that. It is a legal
+		declaration, so whoever submits decides, ideally with advice.
+	-->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 
 	<!--
 		App Transport Security: deliberately left at its defaults, and
