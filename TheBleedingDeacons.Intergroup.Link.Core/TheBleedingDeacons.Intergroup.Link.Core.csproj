@@ -54,7 +54,7 @@
 	-->
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.13" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.14" />
 		<PackageReference Include="Serilog" Version="4.4.0" />
 		<!-- Logging: the Better Stack configuration, the log shipper and
 		     ShippingSettings, shared with Register. The app references
