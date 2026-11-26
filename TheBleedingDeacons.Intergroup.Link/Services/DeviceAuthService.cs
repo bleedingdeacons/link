@@ -598,9 +598,24 @@ public sealed class DeviceAuthService
 		_client.StartSignInAsync("apple", cancellationToken);
 
 	/// <summary>
-	/// Whether this build can offer Sign in with Apple at all.
+	/// Whether this build can offer Sign in with Apple at all. Never on
+	/// Android: AppleSignIn's Android half always answers false.
 	/// </summary>
 	public bool IsAppleAvailable => _apple.IsAvailable;
+
+	/// <summary>
+	/// Whether to offer Google sign-in: on Android only.
+	///
+	/// <para>A choice, not a limitation. Native Google sign-in works on
+	/// iOS too, but Dave asked on 2026-11-26 for each phone to be offered
+	/// its own platform's account: Google on Android, Apple on an iPhone.
+	/// An iPhone member whose Apple ID address is not the one the
+	/// intergroup holds signs in with their password instead.</para>
+	///
+	/// <para>The Google code stays in the iOS head. Showing the button there
+	/// again is this one line.</para>
+	/// </summary>
+	public bool IsGoogleOffered => DeviceInfo.Current.Platform == DevicePlatform.Android;
 
 	/// <summary>
 	/// Sign out the whole way: tell the server, then forget everything.

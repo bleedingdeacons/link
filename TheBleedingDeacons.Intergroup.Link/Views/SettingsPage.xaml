@@ -4,6 +4,7 @@
              xmlns:models="clr-namespace:TheBleedingDeacons.Intergroup.Link.Models;assembly=TheBleedingDeacons.Intergroup.Link.Core"
              xmlns:services="clr-namespace:TheBleedingDeacons.Intergroup.Link.Services;assembly=TheBleedingDeacons.Intergroup.Link.Core"
              xmlns:vm="clr-namespace:TheBleedingDeacons.Intergroup.Link.ViewModels"
+             xmlns:views="clr-namespace:TheBleedingDeacons.Intergroup.Link.Views"
              x:Class="TheBleedingDeacons.Intergroup.Link.Views.SettingsPage"
              x:DataType="vm:SettingsViewModel"
              Title="Settings">
@@ -289,13 +290,15 @@
 					       Opacity="0.7"
 					       Text="Sign in again to prove this phone is yours." />
 
+					<!-- Google on Android, Apple on an iPhone, as on the sign-in page. -->
 					<Button Text="Continue with Google"
 					        HeightRequest="50"
+					        IsVisible="{Binding IsGoogleOffered}"
 					        Command="{Binding ReplaceKeyWithGoogleCommand}" />
-					<Button Text="Continue with Apple"
-					        HeightRequest="50"
-					        IsVisible="{Binding IsAppleAvailable}"
-					        Command="{Binding ReplaceKeyWithAppleCommand}" />
+					<!-- Apple's own button; see AppleSignInButton. -->
+					<views:AppleSignInButton HeightRequest="50"
+					                         IsVisible="{Binding IsAppleAvailable}"
+					                         Command="{Binding ReplaceKeyWithAppleCommand}" />
 
 					<Label Text="or with a password"
 					       FontSize="{StaticResource FootnoteFontSize}"

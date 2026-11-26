@@ -132,6 +132,9 @@ public sealed partial class SettingsViewModel : ObservableObject
 	/// <summary>Whether this build can raise Apple's sheet at all.</summary>
 	public bool IsAppleAvailable => _auth.IsAppleAvailable;
 
+	/// <summary>Whether to offer Google: on Android only, as on the sign-in page.</summary>
+	public bool IsGoogleOffered => _auth.IsGoogleOffered;
+
 	/// <summary>The address, for the password route into recovery.</summary>
 	[ObservableProperty]
 	private string _keyEmail = string.Empty;

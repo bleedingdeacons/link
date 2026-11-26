@@ -160,15 +160,23 @@ Feature: What only a phone can answer
       Given an iOS build signed by a free personal team
       When the sign-in screen is shown
       Then there is no Continue with Apple button
-      And Google sign-in works through its account picker
+      And there is no Continue with Google button either
+      And the password route is the way in
       # The entitlement is read from the app's own signature, and a free
-      # team cannot grant it.
+      # team cannot grant it. Google is Android's alone (2026-11-26).
 
     Scenario: Sign in with Apple is offered when the paid team signs the app
       Given an iOS build signed by the paid team, with Sign in with Apple on its App ID
       When the sign-in screen is shown
-      Then there is a Continue with Apple button
-      And signing in with it enrols the handset like Google does
+      Then there is a Continue with Apple button, drawn by iOS itself
+      And there is no Continue with Google button
+      And signing in with it enrols the handset as Google does on Android
+
+    Scenario: Each phone is offered its own platform's account
+      Given an Android phone
+      When the sign-in screen is shown
+      Then there is a Continue with Google button
+      And there is no Continue with Apple button
 
     Scenario: A sideloaded build stops working after seven days
       Given an .ipa re-signed with a free Apple ID

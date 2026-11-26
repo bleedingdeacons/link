@@ -10,11 +10,11 @@ namespace TheBleedingDeacons.Intergroup.Link.ViewModels;
 /// <summary>
 /// The sign-in screen.
 ///
-/// <para>Three ways in, in a deliberate order. Google and Apple first,
-/// because they ask a member to invent or remember nothing. A password
-/// underneath, for the member whose intergroup address is neither a Google
-/// nor an Apple account and who would otherwise have no way in at all.
-/// </para>
+/// <para>Two ways in, in a deliberate order. The phone's own account first,
+/// Google on Android and Apple on an iPhone, because it asks a member to
+/// invent or remember nothing. A password underneath, for the member whose
+/// intergroup address is not that account and who would otherwise have no
+/// way in at all.</para>
 ///
 /// <para>Sign-in fails most often for a member whose address the
 /// intergroup does not hold, and telling them that plainly — rather than
@@ -151,6 +151,13 @@ public sealed partial class SignInViewModel : ObservableObject
 	/// <i>and</i> this build knows which intergroup to enrol against.
 	/// </summary>
 	public bool CanOfferApple => IsConfigured && IsAppleAvailable;
+
+	/// <summary>
+	/// Whether the Google button is shown: on Android only (see
+	/// <c>DeviceAuthService.IsGoogleOffered</c>), and only when this build
+	/// knows which intergroup to enrol against.
+	/// </summary>
+	public bool CanOfferGoogle => IsConfigured && _auth.IsGoogleOffered;
 
 	/// <summary>
 	/// Which build is running, exactly as Settings shows it: version, build
