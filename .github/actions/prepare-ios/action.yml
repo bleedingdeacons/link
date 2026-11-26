@@ -1,0 +1,115 @@
+name: Prepare the iOS head
+description: >-
+  Everything an iOS build of Link needs before `dotnet build` or `dotnet
+  publish`: the pinned Xcode, the pinned maui-ios workload, appsettings.json
+  and GoogleService-Info.plist. Needs a checkout and the .NET SDK already set
+  up, on a macOS runner. Used by ci.yml's ios job (the unsigned .ipa) and its
+  testflight job (the signed one) - one copy of the steps, so the two cannot
+  drift.
+
+# Inputs rather than vars and secrets: a composite action can read neither,
+# so the calling job passes them in.
+inputs:
+  base-url:
+    description: The LINK_BASE_URL repository variable. Empty builds unconfigured.
+    required: false
+    default: ''
+  google-services-plist:
+    description: The GOOGLE_SERVICES_PLIST secret. Empty builds an app that polls.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # Pinned rather than left to the image default, which is 26.6 today
+    # and is not promised to stay there. The .NET for iOS SDK refuses an
+    # Xcode older than it expects, so the day the image moves this job
+    # either keeps working or says exactly which version it wanted --
+    # `xcodebuild -version` in the log is what makes that readable.
+    #
+    # Falls back to the newest installed Xcode rather than failing, so an
+    # image that has moved on gets one honest attempt before the .NET SDK
+    # gives its own verdict.
+    - name: Select Xcode
+      shell: bash
+      run: |
+        set -euo pipefail
+        wanted=/Applications/Xcode_26.6.app
+        if [ ! -d "$wanted" ]; then
+          echo "Xcode 26.6 is not on this image; falling back to the newest installed."
+          ls -d /Applications/Xcode*.app || true
+          wanted=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+        fi
+        echo "Selecting $wanted"
+        sudo xcode-select -s "$wanted"
+        xcodebuild -version
+
+    # maui-ios, not maui: the full workload would pull in the Android SDK
+    # and MacCatalyst for a job that builds neither.
+    # Pinned to a workload set, not left to take the newest. On 2026-09-30
+    # the newest set for this SDK band, 10.0.401.1, moved the iOS SDK to
+    # 27.0, which refuses to build with anything older than Xcode 27 --
+    # and the image's newest Xcode is 26.6. Every iOS build, main's
+    # included, failed on "requires Xcode 27.0", and with the iOS head a
+    # gate on the version job, nothing released. 10.0.401 carries iOS
+    # 26.5.10318, which builds with 26.6.
+    #
+    # Move the pin when the image has Xcode 27:
+    #   dotnet workload search version <set>   # lists each set's iOS SDK
+    - name: Install MAUI iOS workload
+      shell: bash
+      run: dotnet workload install maui-ios --version 10.0.401
+
+    # appsettings.json is git-ignored, so a checkout never has one, and
+    # until now neither did any artifact CI produced. That was correct for
+    # a build nobody installed and wrong the moment these artifacts became
+    # something to put on a phone: the app came up with no idea which
+    # intergroup it belonged to, and every call that needed a server URL
+    # failed after sign-in rather than before it.
+    #
+    # Written from a repository *variable*, not a secret. The test bed's
+    # address is public and appears in this repo's README; pretending
+    # otherwise would buy nothing and make it harder to change. What the
+    # variable buys is that the file still never enters git -- which is the
+    # actual rule, because appsettings.json is where a credential naturally
+    # gets typed and Hand published a Better Stack token exactly that way.
+    #
+    # Only BaseUrl is written. PollSeconds defaults to 120 in
+    # FellowshipConfiguration.
+    #
+    # Unset is not a failure. A fork, or this repo before the variable
+    # existed, builds exactly as it did before and produces an artifact
+    # whose sign-in screen says the app has not been set up.
+    - name: Write appsettings.json
+      env:
+        BASE_URL: ${{ inputs.base-url }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${BASE_URL:-}" ]; then
+          echo 'LINK_BASE_URL is not set; building unconfigured.'
+          echo 'The artifact will run, and its sign-in screen will say so.'
+          exit 0
+        fi
+        case "$BASE_URL" in
+          https://*) ;;
+          *) echo "LINK_BASE_URL must start with https:// -- got '$BASE_URL'" >&2; exit 1 ;;
+        esac
+        case "$BASE_URL" in
+          *'"'*|*'\'*) echo 'LINK_BASE_URL must not contain quotes or backslashes.' >&2; exit 1 ;;
+        esac
+        printf '{\n  "Fellowship": {\n    "BaseUrl": "%s"\n  }\n}\n' "$BASE_URL" \
+          > TheBleedingDeacons.Intergroup.Link/appsettings.json
+        echo 'Wrote:'
+        cat TheBleedingDeacons.Intergroup.Link/appsettings.json
+
+    # Without this the .ipa builds and polls, silently — and the .ipa this
+    # job archives is the one Sideloadly puts on the iPhone, so that is the
+    # only iOS build there is. See the script for why the Android job has
+    # no matching step yet.
+    - name: Write GoogleService-Info.plist
+      env:
+        GOOGLE_SERVICES_PLIST: ${{ inputs.google-services-plist }}
+      shell: bash
+      run: bash .github/scripts/write-google-services-plist.sh

@@ -524,11 +524,12 @@ What it needs outside the code:
   like any unknown address. They need to share their real one, or use
   Google or their password.
 
-**A signed .ipa.** CI archives an unsigned one. Making it installable
-needs an Apple Developer Program membership, a distribution certificate
-and a provisioning profile; the csproj's `LinkUnsigned` property is the
-switch, and turning it off means supplying those to the build rather than
-rearranging anything.
+**External testers and the App Store.** Every release now goes to
+TestFlight for *internal* testers (see *TestFlight* below). Opening it to
+external testers needs a privacy policy URL and a beta description in App
+Store Connect, and Beta App Review, which may want Apple's own button style
+(`ASAuthorizationAppleIDButton`) for *Continue with Apple* rather than the
+plain `Button` the sign-in page draws.
 
 **Hardware-backed keys.** `DeviceKeyStore` generates the keypair in
 managed code and keeps the private half in `SecureStorage`, which on
@@ -778,7 +779,9 @@ gh pr edit <n> -R bleedingdeacons/link --add-label ios
 ```
 
 When it runs, it builds in parallel with the Android job. It never runs on a
-push to `main`, so releases never wait for it. The iOS job runs on **GitHub's own `macos-26` by default** — free on this
+push to `main`, so releases never wait for it. (The `testflight` job does
+build the iOS head on a release, after the version is cut; see
+*TestFlight*.) The iOS job runs on **GitHub's own `macos-26` by default** — free on this
 public repository, and around eleven minutes once a runner picks it up.
 Setting the **`IOS_RUNNER`** repository variable to a
 [Namespace](https://namespace.so) macOS label
@@ -845,6 +848,73 @@ a fork gets.
   only that ciphertext. Only a backup taken beforehand and restored on the
   sign-in screen brings them back (see *Moving to a new phone*). Use a
   local build for a handset that is already enrolled.
+
+### TestFlight
+
+**Every release from `main` is signed for App Store Connect and uploaded
+to TestFlight**, from 2026-11-25. CI's `testflight` job follows the tag the
+version job pushes, builds the iOS head with `-p:LinkAppStore=true`, and
+uploads it with `xcrun altool` and an App Store Connect API key. Nothing
+here needs a Mac, an Apple ID password or a 2FA code. The app is called
+**Fellowship Link** in App Store Connect, because plain *Link* is taken
+across the store; the icon on the phone still says *Link*.
+
+Testers are **internal** for now: people who are users on the App Store
+Connect team, in a TestFlight group with automatic distribution. Each
+build reaches them once Apple has processed it, usually 10-30 minutes
+after the job ends, and they install it from the TestFlight app. It points
+at whatever `LINK_BASE_URL` says, which is the test site today.
+
+To upload a ref without a release (to prove a change here before it
+merges, or to retry a failed upload):
+
+```bash
+gh workflow run ci.yml -R bleedingdeacons/link --ref <branch> -f testflight=true
+```
+
+App Store Connect refuses a build number it has seen, and the build number
+is `ApplicationVersion`, which only a release bumps. So a dispatch of a ref
+already uploaded fails at the upload.
+
+**Six repository secrets**, made once by hand:
+
+| Secret | What it is |
+| --- | --- |
+| `IOS_DIST_CERT_P12` | The Apple Distribution certificate and its private key, as a base64 `.p12` |
+| `IOS_DIST_CERT_PASSWORD` | That `.p12`'s password |
+| `IOS_APPSTORE_PROFILE` | The App Store Connect provisioning profile for `org.thebleedingdeacons.intergroup.link`, base64 |
+| `ASC_KEY_ID` | The App Store Connect API key's id |
+| `ASC_ISSUER_ID` | The team's issuer id, shown above the list of API keys |
+| `ASC_KEY_P8` | The API key itself, the text of the `.p8` |
+
+The originals live in `C:\Data\dev\auth\apple\`, which is not a repository.
+Where each comes from, on developer.apple.com and appstoreconnect.apple.com:
+
+1. **Identifiers**: the App ID needs **Sign in with Apple** and **Push
+   Notifications** ticked *before* the profile is made, because a profile
+   carries only what the App ID had when it was issued.
+2. **Certificates → Apple Distribution**, from a CSR made with `openssl`
+   (`link-distribution.key` and `.csr`). The downloaded `.cer` and the key
+   become the `.p12`. The certificate lasts a year.
+3. **Profiles → App Store Connect**, for the App ID and that certificate.
+   CI reads the profile's name out of the file, so any name works. Remake it
+   whenever the certificate is renewed or a capability is added.
+4. **App Store Connect → Users and Access → Integrations → App Store
+   Connect API**: a team key with the **App Manager** role. Apple offers the
+   `.p8` for download once only.
+
+The entitlements come from `Platforms/iOS/Entitlements.AppStore.plist`,
+not `Entitlements.plist`: a distribution profile grants `aps-environment`
+**production** only. Push to a TestFlight install also needs an APNs auth
+key on the Firebase project; without one, those installs poll.
+
+**Export compliance.** `Info.plist` sets `ITSAppUsesNonExemptEncryption`
+to `false`, matching the answer given for build 97, so builds go straight to
+testers instead of waiting under *Missing Compliance*. That is the answer
+for internal testing only. Link seals messages itself with RSA-OAEP and
+AES-256-GCM, beyond HTTPS, which usually counts as standard encryption
+and is recorded as *Yes*. The source being public may change that.
+Settle it, with advice, before external testing or the App Store.
 
 ## Google sign-in
 

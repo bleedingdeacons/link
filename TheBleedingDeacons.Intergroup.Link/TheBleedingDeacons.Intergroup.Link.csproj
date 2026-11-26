@@ -201,6 +201,32 @@
 	</PropertyGroup>
 
 	<!--
+		A build signed for App Store Connect, which is what TestFlight
+		installs. Set by CI's testflight job; see ci.yml.
+
+		Signed with the team's Apple Distribution certificate against an App
+		Store Connect provisioning profile, found by name. The job imports
+		both on the runner before building, so neither is in the repo; the
+		name defaults to the one the README tells you to give the profile,
+		and LinkProvisioningProfile overrides it.
+
+		Its own entitlements file, because a distribution profile grants
+		aps-environment "production" only, and Entitlements.plist says
+		"development" for the sideloaded builds LinkPaidTeam signs.
+
+		LINK_APPLE_SIGNIN is defined for the same reason as above. It is a
+		fallback only: AppleSignIn reads the entitlement from the signature,
+		and a TestFlight build always has one.
+	-->
+	<PropertyGroup Condition="'$(LinkAppStore)' == 'true' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'ios'">
+		<LinkProvisioningProfile Condition="'$(LinkProvisioningProfile)' == ''">Link App Store</LinkProvisioningProfile>
+		<CodesignKey>Apple Distribution</CodesignKey>
+		<CodesignProvision>$(LinkProvisioningProfile)</CodesignProvision>
+		<CodesignEntitlements>Platforms\iOS\Entitlements.AppStore.plist</CodesignEntitlements>
+		<DefineConstants>$(DefineConstants);LINK_APPLE_SIGNIN</DefineConstants>
+	</PropertyGroup>
+
+	<!--
 		Firebase Cloud Messaging for the iOS head.
 
 		<b>AdamE, not Xamarin.</b> Microsoft archived the
